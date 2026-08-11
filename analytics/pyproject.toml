@@ -7,7 +7,12 @@ name = "football-intelligence-analytics"
 version = "0.1.0"
 description = "Batch ingestion and analytics for Football Intelligence."
 requires-python = ">=3.13,<3.14"
-dependencies = []
+dependencies = [
+  "psycopg[binary]>=3.3,<4",
+]
+
+[project.scripts]
+football-intelligence-audit = "football_intelligence.jobs.audit_provider:main"
 
 [dependency-groups]
 dev = [
@@ -30,10 +35,14 @@ indent-style = "space"
 [tool.pytest.ini_options]
 addopts = "-ra -q"
 testpaths = ["tests"]
+markers = [
+  "integration: requires a PostgreSQL DATABASE_URL",
+]
 
 [tool.mypy]
 python_version = "3.13"
 strict = true
 packages = ["football_intelligence"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/football_intelligence"]

@@ -71,6 +71,7 @@ jobs:
       PGUSER: postgres
       PGPASSWORD: postgres
       PGDATABASE: football_intelligence_test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_test
     steps:
       - uses: actions/checkout@v6.0.2
       - name: Apply data foundation migration
@@ -85,3 +86,14 @@ jobs:
         run: >-
           psql -v ON_ERROR_STOP=1
           -f database/tests/001_schema_contract.sql
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - working-directory: analytics
+        run: uv sync --dev --locked
+      - name: Verify provider persistence integration
+        working-directory: analytics
+        run: uv run pytest tests/integration/test_provider_persistence.py

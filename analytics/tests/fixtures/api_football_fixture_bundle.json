@@ -1,0 +1,289 @@
+{
+  "get": "fixtures",
+  "parameters": {
+    "ids": "1001"
+  },
+  "errors": [],
+  "results": 1,
+  "paging": {
+    "current": 1,
+    "total": 1
+  },
+  "response": [
+    {
+      "fixture": {
+        "id": 1001,
+        "date": "2026-05-24T15:00:00+00:00",
+        "venue": {
+          "id": 1,
+          "name": "Example Stadium",
+          "city": "London"
+        },
+        "status": {
+          "long": "Match Finished",
+          "short": "FT",
+          "elapsed": 90
+        }
+      },
+      "league": {
+        "id": 39,
+        "name": "Premier League",
+        "country": "England",
+        "season": 2025,
+        "round": "Regular Season - 38"
+      },
+      "teams": {
+        "home": {
+          "id": 10,
+          "name": "Home FC",
+          "code": "HOM",
+          "winner": true
+        },
+        "away": {
+          "id": 20,
+          "name": "Away FC",
+          "code": "AWY",
+          "winner": false
+        }
+      },
+      "goals": {
+        "home": 2,
+        "away": 0
+      },
+      "statistics": [
+        {
+          "team": {
+            "id": 10,
+            "name": "Home FC"
+          },
+          "statistics": [
+            {
+              "type": "Shots on Goal",
+              "value": 6
+            },
+            {
+              "type": "Shots off Goal",
+              "value": 4
+            },
+            {
+              "type": "Shots insidebox",
+              "value": 8
+            },
+            {
+              "type": "Shots outsidebox",
+              "value": 3
+            },
+            {
+              "type": "Total Shots",
+              "value": 11
+            },
+            {
+              "type": "Blocked Shots",
+              "value": 1
+            },
+            {
+              "type": "Fouls",
+              "value": 9
+            },
+            {
+              "type": "Corner Kicks",
+              "value": 5
+            },
+            {
+              "type": "Offsides",
+              "value": 2
+            },
+            {
+              "type": "Ball Possession",
+              "value": "58%"
+            },
+            {
+              "type": "Yellow Cards",
+              "value": 1
+            },
+            {
+              "type": "Red Cards",
+              "value": 0
+            },
+            {
+              "type": "Goalkeeper Saves",
+              "value": 3
+            },
+            {
+              "type": "Total passes",
+              "value": 520
+            },
+            {
+              "type": "Passes accurate",
+              "value": 458
+            },
+            {
+              "type": "Passes %",
+              "value": "88%"
+            }
+          ]
+        },
+        {
+          "team": {
+            "id": 20,
+            "name": "Away FC"
+          },
+          "statistics": [
+            {
+              "type": "Shots on Goal",
+              "value": 3
+            },
+            {
+              "type": "Total Shots",
+              "value": 7
+            },
+            {
+              "type": "Ball Possession",
+              "value": "42%"
+            },
+            {
+              "type": "Red Cards",
+              "value": 0
+            },
+            {
+              "type": "Total passes",
+              "value": 380
+            },
+            {
+              "type": "Passes accurate",
+              "value": 300
+            }
+          ]
+        }
+      ],
+      "players": [
+        {
+          "team": {
+            "id": 10,
+            "name": "Home FC"
+          },
+          "players": [
+            {
+              "player": {
+                "id": 101,
+                "name": "Home Striker",
+                "photo": null
+              },
+              "statistics": [
+                {
+                  "games": {
+                    "minutes": 90,
+                    "number": 9,
+                    "position": "F",
+                    "captain": false,
+                    "substitute": false
+                  },
+                  "shots": {
+                    "total": 4,
+                    "on": 3
+                  },
+                  "goals": {
+                    "total": 2,
+                    "conceded": 0,
+                    "assists": 0,
+                    "saves": null
+                  },
+                  "passes": {
+                    "total": 25,
+                    "key": 2,
+                    "accuracy": "80%"
+                  },
+                  "tackles": {
+                    "total": 1,
+                    "blocks": 0,
+                    "interceptions": 0
+                  },
+                  "duels": {
+                    "total": 8,
+                    "won": 5
+                  },
+                  "dribbles": {
+                    "attempts": 3,
+                    "success": 2,
+                    "past": null
+                  },
+                  "fouls": {
+                    "drawn": 2,
+                    "committed": 1
+                  },
+                  "cards": {
+                    "yellow": 0,
+                    "red": 0
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "team": {
+            "id": 20,
+            "name": "Away FC"
+          },
+          "players": [
+            {
+              "player": {
+                "id": 201,
+                "name": "Away Keeper",
+                "photo": null
+              },
+              "statistics": [
+                {
+                  "games": {
+                    "minutes": 90,
+                    "number": 1,
+                    "position": "G",
+                    "captain": true,
+                    "substitute": false
+                  },
+                  "shots": {
+                    "total": 0,
+                    "on": 0
+                  },
+                  "goals": {
+                    "total": 0,
+                    "conceded": 2,
+                    "assists": 0,
+                    "saves": 4
+                  },
+                  "passes": {
+                    "total": 35,
+                    "key": 0,
+                    "accuracy": "71%"
+                  },
+                  "tackles": {
+                    "total": 0,
+                    "blocks": 0,
+                    "interceptions": 0
+                  },
+                  "duels": {
+                    "total": 1,
+                    "won": 1
+                  },
+                  "dribbles": {
+                    "attempts": 0,
+                    "success": 0,
+                    "past": null
+                  },
+                  "fouls": {
+                    "drawn": 0,
+                    "committed": 0
+                  },
+                  "cards": {
+                    "yellow": 0,
+                    "red": 0
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
