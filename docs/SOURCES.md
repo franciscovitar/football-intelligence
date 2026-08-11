@@ -12,18 +12,27 @@ and never become Football Intelligence primary keys.
 
 ### Block 3 audit strategy
 
-The provider audit uses Premier League (`league=39`) season `2025` as a stable,
-completed sample.
+The certification audit uses Premier League (`league=39`) season `2024`, a
+completed season available to the Free plan during Block 3 verification.
 
-The audit intentionally uses few requests:
+The live audit intentionally stays small:
 
-1. `GET /leagues?id=39&season=2025` to inspect provider-declared coverage.
-2. `GET /fixtures?league=39&season=2025` to obtain fixture IDs.
-3. `GET /fixtures?ids=...` for up to three recent completed fixtures.
+1. `GET /leagues?id=39&season=2024` to inspect provider-declared coverage.
+2. `GET /fixtures?league=39&season=2024` to obtain completed fixture IDs.
+3. Three `GET /fixtures?id=FIXTURE_ID` requests for the sampled matches.
 
-API-Football documents that the multi-ID fixture request can return embedded
-events, lineups, fixture statistics, and player statistics for up to 20 fixture
-IDs in one call. This is preferred over multiplying endpoint-specific calls.
+This is five provider requests total for a three-match sample.
+
+API-Football documents that a single `fixtures?id=FIXTURE_ID` response includes
+the fixture's embedded events, lineups, fixture statistics, and player
+statistics. The API also supports a multi-fixture `ids` parameter on plans where
+that parameter is available; the Free plan used during certification rejected
+`ids`, so Football Intelligence deliberately uses the portable single-`id`
+path for this audit.
+
+The season is passed explicitly. During Block 3 verification the Free plan also
+rejected season `2025` and reported historical access through `2024`; this is a
+provider-plan limitation, not a domain assumption.
 
 ### Coverage rule
 
@@ -43,10 +52,8 @@ Known V1 examples from the documented fixture-player shape:
 ### Raw data
 
 Block 3 stores live audit payloads as deterministic gzip-compressed JSON through
-`LocalRawStore`. PostgreSQL stores the corresponding traceability metadata when
+`LocalRawStore`. PostgreSQL stores corresponding traceability metadata when
 persistence is enabled.
 
 The production Supabase Storage adapter is deferred to Block 4, where scheduled
-sync and live infrastructure are introduced together. This keeps the Block 3
-provider audit independent from cloud provisioning while preserving the raw
-storage contract.
+sync and live infrastructure are introduced together.

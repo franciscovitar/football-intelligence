@@ -1,0 +1,285 @@
+{
+  "competition_code": "ENG_PL",
+  "league_id": 39,
+  "normalized_counts": {
+    "matches": 3,
+    "player_appearances": 120,
+    "player_match_stats": 120,
+    "players": 120,
+    "team_match_stats": 6,
+    "teams": 6
+  },
+  "normalized_coverage": {
+    "player_match_stats": {
+      "assists": {
+        "availability": "partial",
+        "coverage_pct": 77.5,
+        "non_null_count": 93,
+        "sample_size": 120
+      },
+      "blocks": {
+        "availability": "partial",
+        "coverage_pct": 15.83,
+        "non_null_count": 19,
+        "sample_size": 120
+      },
+      "clearances": {
+        "availability": "unavailable",
+        "coverage_pct": 0.0,
+        "non_null_count": 0,
+        "sample_size": 120
+      },
+      "dribbles_attempted": {
+        "availability": "partial",
+        "coverage_pct": 40.0,
+        "non_null_count": 48,
+        "sample_size": 120
+      },
+      "dribbles_successful": {
+        "availability": "partial",
+        "coverage_pct": 26.67,
+        "non_null_count": 32,
+        "sample_size": 120
+      },
+      "duels_total": {
+        "availability": "partial",
+        "coverage_pct": 70.0,
+        "non_null_count": 84,
+        "sample_size": 120
+      },
+      "duels_won": {
+        "availability": "partial",
+        "coverage_pct": 66.67,
+        "non_null_count": 80,
+        "sample_size": 120
+      },
+      "fouls_committed": {
+        "availability": "partial",
+        "coverage_pct": 31.67,
+        "non_null_count": 38,
+        "sample_size": 120
+      },
+      "fouls_drawn": {
+        "availability": "partial",
+        "coverage_pct": 29.17,
+        "non_null_count": 35,
+        "sample_size": 120
+      },
+      "goals": {
+        "availability": "partial",
+        "coverage_pct": 7.5,
+        "non_null_count": 9,
+        "sample_size": 120
+      },
+      "interceptions": {
+        "availability": "partial",
+        "coverage_pct": 21.67,
+        "non_null_count": 26,
+        "sample_size": 120
+      },
+      "key_passes": {
+        "availability": "partial",
+        "coverage_pct": 35.0,
+        "non_null_count": 42,
+        "sample_size": 120
+      },
+      "passes_accurate": {
+        "availability": "unavailable",
+        "coverage_pct": 0.0,
+        "non_null_count": 0,
+        "sample_size": 120
+      },
+      "passes_total": {
+        "availability": "partial",
+        "coverage_pct": 75.83,
+        "non_null_count": 91,
+        "sample_size": 120
+      },
+      "red_cards": {
+        "availability": "available",
+        "coverage_pct": 100.0,
+        "non_null_count": 120,
+        "sample_size": 120
+      },
+      "saves": {
+        "availability": "partial",
+        "coverage_pct": 5.0,
+        "non_null_count": 6,
+        "sample_size": 120
+      },
+      "shots_on_target": {
+        "availability": "partial",
+        "coverage_pct": 19.17,
+        "non_null_count": 23,
+        "sample_size": 120
+      },
+      "shots_total": {
+        "availability": "partial",
+        "coverage_pct": 31.67,
+        "non_null_count": 38,
+        "sample_size": 120
+      },
+      "tackles": {
+        "availability": "partial",
+        "coverage_pct": 50.0,
+        "non_null_count": 60,
+        "sample_size": 120
+      },
+      "yellow_cards": {
+        "availability": "available",
+        "coverage_pct": 100.0,
+        "non_null_count": 120,
+        "sample_size": 120
+      }
+    },
+    "team_match_stats": {
+      "blocked_shots": {
+        "availability": "available",
+        "coverage_pct": 100.0,
+        "non_null_count": 6,
+        "sample_size": 6
+      },
+      "corners": {
+        "availability": "available",
+        "coverage_pct": 100.0,
+        "non_null_count": 6,
+        "sample_size": 6
+      },
+      "fouls": {
+        "availability": "available",
+        "coverage_pct": 100.0,
+        "non_null_count": 6,
+        "sample_size": 6
+      },
+      "goalkeeper_saves": {
+        "availability": "available",
+        "coverage_pct": 100.0,
+        "non_null_count": 6,
+        "sample_size": 6
+      },
+      "offsides": {
+        "availability": "available",
+        "coverage_pct": 100.0,
+        "non_null_count": 6,
+        "sample_size": 6
+      },
+      "passes_accurate": {
+        "availability": "available",
+        "coverage_pct": 100.0,
+        "non_null_count": 6,
+        "sample_size": 6
+      },
+      "passes_total": {
+        "availability": "available",
+        "coverage_pct": 100.0,
+        "non_null_count": 6,
+        "sample_size": 6
+      },
+      "possession_pct": {
+        "availability": "available",
+        "coverage_pct": 100.0,
+        "non_null_count": 6,
+        "sample_size": 6
+      },
+      "red_cards": {
+        "availability": "unavailable",
+        "coverage_pct": 0.0,
+        "non_null_count": 0,
+        "sample_size": 6
+      },
+      "shots_inside_box": {
+        "availability": "available",
+        "coverage_pct": 100.0,
+        "non_null_count": 6,
+        "sample_size": 6
+      },
+      "shots_on_target": {
+        "availability": "available",
+        "coverage_pct": 100.0,
+        "non_null_count": 6,
+        "sample_size": 6
+      },
+      "shots_outside_box": {
+        "availability": "available",
+        "coverage_pct": 100.0,
+        "non_null_count": 6,
+        "sample_size": 6
+      },
+      "shots_total": {
+        "availability": "available",
+        "coverage_pct": 100.0,
+        "non_null_count": 6,
+        "sample_size": 6
+      },
+      "yellow_cards": {
+        "availability": "partial",
+        "coverage_pct": 66.67,
+        "non_null_count": 4,
+        "sample_size": 6
+      }
+    }
+  },
+  "persistence": {
+    "mode": "not_requested"
+  },
+  "provider": "api-football",
+  "provider_declared_coverage": {
+    "fixtures": {
+      "events": true,
+      "lineups": true,
+      "statistics_fixtures": true,
+      "statistics_players": true
+    },
+    "injuries": true,
+    "odds": false,
+    "players": true,
+    "predictions": true,
+    "standings": true,
+    "top_assists": true,
+    "top_cards": true,
+    "top_scorers": true
+  },
+  "quota": {
+    "limit": 100,
+    "remaining": 91
+  },
+  "raw_objects": [
+    {
+      "bucket": "local-audit",
+      "byte_size": 372,
+      "path": "api-football/leagues/5d52a32dcae7c7cc3b877b7de4f1b9893285df2e3f237d567b896856bc685af4-e45d3dc949d1cb3ec155f5576bbe32cb1d98c824525684e4e3443be6f8d0b0ef.json.gz",
+      "sha256": "e45d3dc949d1cb3ec155f5576bbe32cb1d98c824525684e4e3443be6f8d0b0ef"
+    },
+    {
+      "bucket": "local-audit",
+      "byte_size": 15139,
+      "path": "api-football/fixtures/2e9a2caffcc3004c23d00c2ba168908225be91ffdfdd8dfcceaa5b993ed385b2-b8cd15e5d83522aca0f0a8bae5109787690a93400c901ea53acee01d3eab0c8e.json.gz",
+      "sha256": "b8cd15e5d83522aca0f0a8bae5109787690a93400c901ea53acee01d3eab0c8e"
+    },
+    {
+      "bucket": "local-audit",
+      "byte_size": 4028,
+      "path": "api-football/fixtures/04cefadebfea56401719529fb782c2e2ddac913c4b0c29ec3d988e912ec68487-bff3c7d5169e5b51b80e06f0d73dda8ed157f777c39c051fb6d3e3fd91e75c63.json.gz",
+      "sha256": "bff3c7d5169e5b51b80e06f0d73dda8ed157f777c39c051fb6d3e3fd91e75c63"
+    },
+    {
+      "bucket": "local-audit",
+      "byte_size": 4155,
+      "path": "api-football/fixtures/c42bd12bf6f18c2e6edecdf66724ef010a7b7d0ee2627f14721ede911c175e8f-439cb4c0760d2edef300063534aa1f6b6403fc9114413875f0a2921aee034ca8.json.gz",
+      "sha256": "439cb4c0760d2edef300063534aa1f6b6403fc9114413875f0a2921aee034ca8"
+    },
+    {
+      "bucket": "local-audit",
+      "byte_size": 3969,
+      "path": "api-football/fixtures/d2051f0b882e8128d780226c5a76f2f3c9524eef77772aa56d3f27fe5ff6c7c8-a96212e4864775d4e1454452614d0c7aea05d7263a763f3327a5d51a1f11ab52.json.gz",
+      "sha256": "a96212e4864775d4e1454452614d0c7aea05d7263a763f3327a5d51a1f11ab52"
+    }
+  ],
+  "request_count": 5,
+  "sample_fixture_ids": [
+    "1208402",
+    "1208401",
+    "1208400"
+  ],
+  "season": 2024
+}
