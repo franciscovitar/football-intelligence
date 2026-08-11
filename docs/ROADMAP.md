@@ -4,7 +4,7 @@ Each block ends with focused verification and a checkpoint. A block is not compl
 
 ## Progress
 
-- [ ] **Block 1 — Foundation** — IN PROGRESS: source/config complete; dependency-backed validation pending
+- [x] **Block 1 — Foundation** — PASS
 - [ ] **Block 2 — Data Foundation**
 - [ ] **Block 3 — Provider + Data Audit**
 - [ ] **Block 4 — Core League Sync**

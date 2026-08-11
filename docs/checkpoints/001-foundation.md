@@ -2,7 +2,7 @@
 
 ## Status
 
-**PARTIAL**
+**PASS**
 
 ## Objective
 
@@ -13,45 +13,53 @@ Establish a healthy, low-complexity repository foundation for the Football Intel
 - canonical `AGENTS.md` and `WORKFLOW.md` instructions;
 - `CLAUDE.md` pointer to canonical instructions;
 - Next.js/TypeScript web skeleton;
-- Python analytics package skeleton;
+- Python 3.13 analytics package skeleton;
+- explicit Hatch wheel mapping for the `src` layout;
+- explicit Next.js generated type includes;
+- generated Next/TypeScript artifacts excluded from version control;
 - root workspace commands;
 - environment templates/version hints;
+- npm and uv lockfiles;
 - CI quality workflow;
 - architecture and 12-block roadmap documentation;
 - three initial architecture decision records;
-- database/research placeholders only where immediately useful;
-- local Git repository and checkpoint commit.
+- database/research placeholders only where immediately useful.
 
 ## Verified
 
-- JSON configuration parsing: PASS;
-- GitHub Actions YAML parsing: PASS;
-- Python source syntax compilation: PASS;
-- Python foundation test with available pytest: PASS;
-- Git index whitespace check for project-authored files: PASS;
-- repository working tree after checkpoint commit: clean.
+- npm dependency installation and lockfile generation: PASS;
+- Next.js ESLint: PASS;
+- Next.js TypeScript check: PASS;
+- production Next.js build: PASS;
+- second local quality pass leaves working tree clean: PASS;
+- uv lock and locked environment sync on Python 3.13: PASS;
+- Hatch editable package build/install: PASS;
+- Ruff lint + format check: PASS;
+- mypy strict typecheck: PASS;
+- pytest: PASS;
+- repository whitespace check: PASS;
+- GitHub Actions `Quality` workflow: PASS.
 
-## Not yet verified
+## Evidence
 
-The execution environment currently cannot resolve external package registries. Therefore the following evidence-backed gates have **not** been claimed as passing:
+- verified code commit: `cf5095d0d8f2bc9ce1c58123392b07841c7ab8ce`;
+- CI run: https://github.com/franciscovitar/football-intelligence/actions/runs/31535810236.
 
-- `npm install` / npm lockfile generation;
-- Next.js ESLint using installed project dependencies;
-- Next.js TypeScript check using installed project dependencies;
-- production `next build`;
-- `uv lock` / Python lockfile generation;
-- Ruff with the project-pinned version;
-- mypy with the project-pinned version;
-- GitHub Actions execution.
+## Repository recovery note
 
-## External access state
+The valid initial foundation remained available in Git history. A later commit that removed it was reversed with a normal `git revert` rather than rewriting history.
 
-The GitHub connector can identify the authenticated profile, but currently reports no GitHub App installations and no accessible repositories. It therefore cannot publish this new repository or run CI yet.
+## Foundation corrections
+
+Dependency-backed verification exposed two reproducibility issues and both were corrected before certification:
+
+1. Hatch could not infer the import package from the distribution name, so the wheel package is explicitly mapped to `src/football_intelligence`.
+2. Next.js/TypeScript generated development route types and incremental build metadata during the quality pass. Their expected generated-file behavior is represented explicitly in configuration and ignore rules.
 
 ## Risk
 
-Low. No production systems, credentials, databases, or paid services have been touched.
+Low. No production systems, real credentials, databases, paid services, destructive history rewrites, or force pushes were introduced.
 
 ## Next action
 
-Complete dependency-backed validation in an environment with package registry access, generate both lockfiles, run the full `npm run check`, publish the repository, and confirm CI before changing this checkpoint to PASS.
+Start Block 2 — Data Foundation from this verified checkpoint. Do not repeat Block 1 validation unless later changes can affect it or contradictory evidence appears.
