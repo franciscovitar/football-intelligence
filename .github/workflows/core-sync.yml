@@ -1,0 +1,57 @@
+name: Core League Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * *"
+
+concurrency:
+  group: core-league-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Incremental core leagues
+    runs-on: ubuntu-latest
+    env:
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      CORE_SYNC_SEASON: ${{ vars.CORE_SYNC_SEASON }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Validate runtime configuration
+        shell: bash
+        run: |
+          test -n "$API_FOOTBALL_KEY" || { echo "API_FOOTBALL_KEY secret is required"; exit 1; }
+          test -n "$DATABASE_URL" || { echo "DATABASE_URL secret is required"; exit 1; }
+          test -n "$CORE_SYNC_SEASON" || { echo "CORE_SYNC_SEASON repository variable is required"; exit 1; }
+      - working-directory: analytics
+        run: uv sync --locked
+      - name: Synchronize core leagues
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-sync
+          --season "$CORE_SYNC_SEASON"
+          --lookback-days 3
+          --max-fixtures-per-league 8
+          --raw-dir "$RUNNER_TEMP/core-sync-raw"
+          --report "$RUNNER_TEMP/core-sync-report.json"
+      - name: Upload sync evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: core-sync-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/core-sync-report.json
+            ${{ runner.temp }}/core-sync-raw
+          if-no-files-found: warn
+          retention-days: 30
