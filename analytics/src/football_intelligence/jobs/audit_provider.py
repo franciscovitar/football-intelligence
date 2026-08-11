@@ -25,7 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Audit live API-Football coverage")
     parser.add_argument("--league-id", type=int, default=39)
     parser.add_argument("--competition-code", default="ENG_PL")
-    parser.add_argument("--season", type=int, default=2025)
+    parser.add_argument("--season", type=int, default=2024)
     parser.add_argument("--sample-fixtures", type=int, default=3)
     parser.add_argument("--raw-dir", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
@@ -70,11 +70,18 @@ def main() -> None:
     if not fixture_ids:
         raise SystemExit("No completed fixtures were returned for the requested league/season")
 
-    details_response = client.get("fixtures", {"ids": "-".join(fixture_ids)})
-    responses.append(details_response)
-    raw_refs.append(_store_response(raw_store, details_response))
+    detail_items: list[Any] = []
+    for fixture_id in fixture_ids:
+        detail_response = client.get("fixtures", {"id": fixture_id})
+        responses.append(detail_response)
+        raw_refs.append(_store_response(raw_store, detail_response))
 
-    batch = normalize_fixture_bundle(details_response.payload)
+        response_items = detail_response.payload.get("response")
+        if not isinstance(response_items, list) or len(response_items) != 1:
+            raise SystemExit(f"Fixture {fixture_id} detail response was unavailable")
+        detail_items.extend(response_items)
+
+    batch = normalize_fixture_bundle({"response": detail_items})
     coverage = build_normalized_coverage(
         team_stats=batch.team_match_stats,
         player_stats=batch.player_match_stats,
