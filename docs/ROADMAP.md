@@ -5,7 +5,7 @@ Each block ends with focused verification and a checkpoint. A block is not compl
 ## Progress
 
 - [x] **Block 1 — Foundation** — PASS
-- [ ] **Block 2 — Data Foundation**
+- [x] **Block 2 — Data Foundation** — PASS
 - [ ] **Block 3 — Provider + Data Audit**
 - [ ] **Block 4 — Core League Sync**
 - [ ] **Block 5 — Player Analytics V1**
