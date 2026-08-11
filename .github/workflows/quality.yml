@@ -47,3 +47,41 @@ jobs:
         run: uv run mypy src
       - working-directory: analytics
         run: uv run pytest
+
+  database:
+    name: Database
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: football_intelligence_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: football_intelligence_test
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - name: Apply data foundation migration
+        run: >-
+          psql -v ON_ERROR_STOP=1
+          -f database/migrations/20260811181000_create_data_foundation.sql
+      - name: Apply core seeds
+        run: >-
+          psql -v ON_ERROR_STOP=1
+          -f database/seeds/001_core_catalog.sql
+      - name: Verify schema contracts
+        run: >-
+          psql -v ON_ERROR_STOP=1
+          -f database/tests/001_schema_contract.sql
