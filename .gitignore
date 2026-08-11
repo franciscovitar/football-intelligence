@@ -28,3 +28,6 @@ Thumbs.db
 
 # Misc
 *.log
+# TypeScript / Next.js generated
+*.tsbuildinfo
+apps/web/next-env.d.ts

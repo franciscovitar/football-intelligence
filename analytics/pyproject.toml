@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "football-intelligence-analytics"
 version = "0.1.0"
 description = "Batch ingestion and analytics for Football Intelligence."
-requires-python = ">=3.12"
+requires-python = ">=3.13,<3.14"
 dependencies = []
 
 [dependency-groups]
@@ -17,7 +17,7 @@ dev = [
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 line-length = 100
 
 [tool.ruff.lint]
@@ -32,6 +32,8 @@ addopts = "-ra -q"
 testpaths = ["tests"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 strict = true
 packages = ["football_intelligence"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/football_intelligence"]
