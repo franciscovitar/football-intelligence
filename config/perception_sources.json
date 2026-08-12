@@ -1,0 +1,18 @@
+[
+  {
+    "code": "guardian-football",
+    "display_name": "The Guardian · Football",
+    "source_kind": "media",
+    "homepage_url": "https://www.theguardian.com/football",
+    "feed_url": "https://www.theguardian.com/football/rss",
+    "is_active": true
+  },
+  {
+    "code": "espn-soccer",
+    "display_name": "ESPN · Soccer",
+    "source_kind": "media",
+    "homepage_url": "https://www.espn.com/soccer/",
+    "feed_url": "https://www.espn.com/espn/rss/soccer/news",
+    "is_active": true
+  }
+]

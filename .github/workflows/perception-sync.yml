@@ -1,0 +1,48 @@
+name: Perception Evidence Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 7 * * *"
+
+concurrency:
+  group: perception-evidence-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Public feed evidence
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Validate runtime configuration
+        shell: bash
+        run: |
+          test -n "$DATABASE_URL" || { echo "DATABASE_URL secret is required"; exit 1; }
+      - working-directory: analytics
+        run: uv sync --locked
+      - name: Ingest perception evidence
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-perception-ingest
+          --trigger-kind schedule
+          --report "$RUNNER_TEMP/perception-report.json"
+      - name: Upload perception evidence report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: perception-sync-${{ github.run_id }}
+          path: ${{ runner.temp }}/perception-report.json
+          if-no-files-found: warn
+          retention-days: 30

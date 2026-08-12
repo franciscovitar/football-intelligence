@@ -164,6 +164,14 @@ jobs:
           grep -q "Web Smoke Forward" "$RUNNER_TEMP/player.html"
           grep -q "Performance vs Forma" "$RUNNER_TEMP/player.html"
           grep -q "Expectativa histórica" "$RUNNER_TEMP/player.html"
+          grep -q "Percepción externa" "$RUNNER_TEMP/player.html"
+          grep -q "Web Smoke Perception" "$RUNNER_TEMP/player.html"
+
+          curl -fsS \
+            "http://127.0.0.1:3000/perception?kind=media&q=Web%20Smoke" \
+            > "$RUNNER_TEMP/perception.html"
+          grep -q "Web Smoke Perception" "$RUNNER_TEMP/perception.html"
+          grep -q "Evidencia, no" "$RUNNER_TEMP/perception.html"
 
           curl -fsS \
             "http://127.0.0.1:3000/meta?role=forward&confidence=0" \

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 
+import { PerceptionEvidenceCard } from "@/features/perception/evidence-card";
 import { DataNotice } from "@/features/players/data-notice";
 import { formatSigned, SURPRISE_LABELS, TREND_LABELS, WATCHLIST_LABELS } from "@/lib/meta-display";
 import {
@@ -16,6 +17,7 @@ import {
   WINDOW_LABELS,
 } from "@/lib/player-display";
 import { getPlayerMeta } from "@/lib/queries/meta-analytics";
+import { getPlayerPerceptionEvidence } from "@/lib/queries/perception";
 import {
   getPlayerDetail,
   type AnalyticsWindow,
@@ -55,9 +57,10 @@ export default async function PlayerPage({
     notFound();
   }
 
-  const [result, metaResult] = await Promise.all([
+  const [result, metaResult, perceptionResult] = await Promise.all([
     getPlayerDetail(playerId),
     getPlayerMeta(playerId),
+    getPlayerPerceptionEvidence(playerId),
   ]);
 
   if (result.status !== "ready") {
@@ -176,6 +179,29 @@ export default async function PlayerPage({
               <small>{WATCHLIST_LABELS[metaResult.data.watchlistSignal] ?? metaResult.data.watchlistSignal}</small>
             </article>
           </div>
+        </section>
+      ) : null}
+
+      {perceptionResult.status === "ready" ? (
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">PERCEPTION INTELLIGENCE</p>
+              <h2>Percepción externa</h2>
+            </div>
+            <p>Evidencia externa con provenance. No es un score ni implica consenso.</p>
+          </div>
+          {perceptionResult.data.length === 0 ? (
+            <p className="ranking-summary">
+              Todavía no hay evidencia externa vinculada de forma inequívoca.
+            </p>
+          ) : (
+            <div className="ranking-list">
+              {perceptionResult.data.map((item) => (
+                <PerceptionEvidenceCard evidence={item} key={item.evidenceId} />
+              ))}
+            </div>
+          )}
         </section>
       ) : null}
 
