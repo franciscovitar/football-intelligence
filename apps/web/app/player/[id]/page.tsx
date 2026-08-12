@@ -18,6 +18,8 @@ import {
 } from "@/lib/player-display";
 import { getPlayerMeta } from "@/lib/queries/meta-analytics";
 import { getPlayerPerceptionEvidence } from "@/lib/queries/perception";
+import { getPlayerRating } from "@/lib/queries/rating-intelligence";
+import { RATING_SIGNAL_LABELS } from "@/lib/rating-display";
 import {
   getPlayerDetail,
   type AnalyticsWindow,
@@ -57,10 +59,11 @@ export default async function PlayerPage({
     notFound();
   }
 
-  const [result, metaResult, perceptionResult] = await Promise.all([
+  const [result, metaResult, perceptionResult, ratingResult] = await Promise.all([
     getPlayerDetail(playerId),
     getPlayerMeta(playerId),
     getPlayerPerceptionEvidence(playerId),
+    getPlayerRating(playerId),
   ]);
 
   if (result.status !== "ready") {
@@ -205,6 +208,54 @@ export default async function PlayerPage({
         </section>
       ) : null}
 
+      {ratingResult.status === "ready" && ratingResult.data ? (
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">RATING INTELLIGENCE</p>
+              <h2>Rendimiento vs percepción</h2>
+            </div>
+            <p>
+              {RATING_SIGNAL_LABELS[ratingResult.data.ratingSignal] ??
+                ratingResult.data.ratingSignal}. No es valor de mercado.
+            </p>
+          </div>
+          <div className="window-grid">
+            <article className="window-card">
+              <span>Nivel estable</span>
+              <strong>{formatScore(ratingResult.data.performanceScore)}</strong>
+              <small>conf. {formatConfidence(ratingResult.data.performanceConfidence)}</small>
+            </article>
+            <article className="window-card">
+              <span>Percepción</span>
+              <strong>
+                {ratingResult.data.perceptionScore === null
+                  ? "—"
+                  : formatScore(ratingResult.data.perceptionScore)}
+              </strong>
+              <small>conf. {formatConfidence(ratingResult.data.perceptionConfidence)}</small>
+            </article>
+            <article className="window-card">
+              <span>Gap</span>
+              <strong>{formatSigned(ratingResult.data.ratingGap)}</strong>
+              <small>conf. {formatConfidence(ratingResult.data.ratingConfidence)}</small>
+            </article>
+            <article className="window-card">
+              <span>Consenso / polarización</span>
+              <strong>
+                {ratingResult.data.consensusScore === null
+                  ? "—"
+                  : formatScore(ratingResult.data.consensusScore)}
+              </strong>
+              <small>
+                pol. {ratingResult.data.polarizationScore === null
+                  ? "—"
+                  : formatScore(ratingResult.data.polarizationScore)}
+              </small>
+            </article>
+          </div>
+        </section>
+      ) : null}
       <section className="player-analysis-grid">
         <div className="panel">
           <div className="section-heading">

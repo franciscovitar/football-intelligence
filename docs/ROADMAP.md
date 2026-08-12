@@ -12,7 +12,7 @@ Each block ends with focused verification and a checkpoint. A block is not compl
 - [x] **Block 6 — First Usable Web** — PASS
 - [x] **Block 7 — Team Intelligence** — PASS
 - [x] **Block 8 — Expectation & Meta Intelligence** — PASS
-- [ ] **Block 9 — Perception Intelligence**
+- [x] **Block 9 — Perception Intelligence** — PASS
 - [ ] **Block 10 — Overrated / Underrated Intelligence**
 - [ ] **Block 11 — Tactical Intelligence**
 - [ ] **Block 12 — World Radar + Calibration + V1 Hardening**
@@ -73,6 +73,10 @@ signals; `/meta` and player detail pass real PostgreSQL CI smoke.
 ## Block 9 — Perception Intelligence
 
 Create a source registry and structured qualitative pipeline for expert, media, fan, and other supported web evidence with provenance and deduplication.
+
+**PASS:** `perception-v1.0` persists auditable source/evidence provenance,
+cross-source deduplication, and conservative player mentions; `/perception` and
+player detail pass real PostgreSQL CI smoke. Perception scoring remains Block 10 work.
 
 ## Block 10 — Overrated / Underrated Intelligence
 

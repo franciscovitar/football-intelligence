@@ -18,6 +18,7 @@ football-intelligence-player-analytics = "football_intelligence.jobs.calculate_p
 football-intelligence-team-analytics = "football_intelligence.jobs.calculate_team_analytics:main"
 football-intelligence-meta-analytics = "football_intelligence.jobs.calculate_meta_analytics:main"
 football-intelligence-perception-ingest = "football_intelligence.jobs.ingest_perception:main"
+football-intelligence-rating-analytics = "football_intelligence.jobs.calculate_rating_intelligence:main"
 
 [dependency-groups]
 dev = [

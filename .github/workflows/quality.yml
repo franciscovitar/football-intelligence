@@ -117,6 +117,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Seed deterministic rating smoke evidence
+        run: >-
+          psql -v ON_ERROR_STOP=1
+          -f database/fixtures/002_rating_smoke.sql
+      - name: Calculate deterministic rating smoke
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-rating-analytics
+          --season web-smoke
+          --report "$RUNNER_TEMP/rating-smoke-report.json"
       - name: Verify Next.js PostgreSQL read path
         shell: bash
         run: |
@@ -179,6 +189,14 @@ jobs:
           grep -q "Web Smoke Forward" "$RUNNER_TEMP/meta.html"
           grep -q "Sorpresas" "$RUNNER_TEMP/meta.html"
 
+          grep -q "Rendimiento vs percepción" "$RUNNER_TEMP/player.html"
+          grep -q "Infravalorado" "$RUNNER_TEMP/player.html"
+
+          curl -fsS \
+            "http://127.0.0.1:3000/ratings?role=forward&confidence=0" \
+            > "$RUNNER_TEMP/ratings.html"
+          grep -q "Web Smoke Forward" "$RUNNER_TEMP/ratings.html"
+          grep -q "Infravalorados" "$RUNNER_TEMP/ratings.html"
           curl -fsS \
             "http://127.0.0.1:3000/teams?competition=ENG_PL&window=season&confidence=0" \
             > "$RUNNER_TEMP/teams.html"
