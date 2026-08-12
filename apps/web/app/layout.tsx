@@ -32,6 +32,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
             <nav className="site-nav" aria-label="Navegación principal">
               <Link href="/">Inicio</Link>
               <Link href="/rankings">Rankings</Link>
+              <Link href="/teams">Equipos</Link>
               <Link href="/lab">Lab</Link>
             </nav>
           </header>
