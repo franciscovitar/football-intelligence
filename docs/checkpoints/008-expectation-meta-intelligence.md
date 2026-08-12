@@ -1,4 +1,4 @@
-# Checkpoint 008 ? Expectation & Meta Intelligence
+# Checkpoint 008 — Expectation & Meta Intelligence
 
 ## Status
 
@@ -53,4 +53,4 @@ baselines into forecasts or causal claims.
 
 ## Next action
 
-Start Block 9 ? Perception Intelligence.
+Start Block 9 — Perception Intelligence.
