@@ -19,6 +19,7 @@ from football_intelligence.normalization.models import (
     PlayerAppearanceRecord,
     PlayerMatchStatsRecord,
     PlayerRecord,
+    TeamLineupRecord,
     TeamMatchStatsRecord,
     TeamRecord,
 )
@@ -161,6 +162,9 @@ class ProviderRepository:
                 match=match,
             )
 
+        for lineup in batch.team_lineups:
+            self._upsert_team_lineup(match_ids, team_ids, lineup)
+
         for team_stats in batch.team_match_stats:
             self._upsert_team_stats(match_ids, team_ids, team_stats)
 
@@ -174,6 +178,7 @@ class ProviderRepository:
             len(batch.teams)
             + len(batch.players)
             + len(batch.matches)
+            + len(batch.team_lineups)
             + len(batch.team_match_stats)
             + len(batch.appearances)
             + len(batch.player_match_stats)
@@ -458,6 +463,32 @@ class ProviderRepository:
             (*values, match_id),
         )
         return match_id
+
+    def _upsert_team_lineup(
+        self,
+        match_ids: dict[str, int],
+        team_ids: dict[str, int],
+        lineup: TeamLineupRecord,
+    ) -> None:
+        self._connection.execute(
+            """
+            insert into football.team_match_lineups (
+                match_id, team_id, formation, coach_name
+            )
+            values (%s, %s, %s, %s)
+            on conflict (match_id, team_id) do update
+            set
+                formation = excluded.formation,
+                coach_name = excluded.coach_name,
+                updated_at = now()
+            """,
+            (
+                match_ids[lineup.match_external_id],
+                team_ids[lineup.team_external_id],
+                lineup.formation,
+                lineup.coach_name,
+            ),
+        )
 
     def _upsert_team_stats(
         self,

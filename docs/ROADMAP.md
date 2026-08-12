@@ -13,7 +13,7 @@ Each block ends with focused verification and a checkpoint. A block is not compl
 - [x] **Block 7 — Team Intelligence** — PASS
 - [x] **Block 8 — Expectation & Meta Intelligence** — PASS
 - [x] **Block 9 — Perception Intelligence** — PASS
-- [ ] **Block 10 — Overrated / Underrated Intelligence**
+- [x] **Block 10 — Overrated / Underrated Intelligence** — PASS
 - [ ] **Block 11 — Tactical Intelligence**
 - [ ] **Block 12 — World Radar + Calibration + V1 Hardening**
 
@@ -81,6 +81,11 @@ player detail pass real PostgreSQL CI smoke. Perception scoring remains Block 10
 ## Block 10 — Overrated / Underrated Intelligence
 
 Compare performance with sufficiently supported perception to calculate Underrated, Overrated, Consensus, and Polarization with strong confidence gates.
+
+**PASS:** `rating-v1.0` source-balances deterministic perception evidence,
+applies strong breadth/confidence/polarization gates, persists Rating Gap,
+Consensus and Polarization, and exposes `/ratings` plus player-detail context;
+PR and merged-main PostgreSQL CI passed.
 
 ## Block 11 — Tactical Intelligence
 

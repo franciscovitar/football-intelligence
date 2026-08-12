@@ -11,6 +11,7 @@ from football_intelligence.normalization.models import (
     PlayerAppearanceRecord,
     PlayerMatchStatsRecord,
     PlayerRecord,
+    TeamLineupRecord,
     TeamMatchStatsRecord,
     TeamRecord,
 )
@@ -35,6 +36,7 @@ def normalize_fixture_bundle(payload: JsonObject) -> NormalizedFixtureBatch:
     players: dict[str, PlayerRecord] = {}
     matches: list[MatchRecord] = []
     team_stats: list[TeamMatchStatsRecord] = []
+    team_lineups: list[TeamLineupRecord] = []
     appearances: list[PlayerAppearanceRecord] = []
     player_stats: list[PlayerMatchStatsRecord] = []
 
@@ -79,6 +81,21 @@ def normalize_fixture_bundle(payload: JsonObject) -> NormalizedFixtureBatch:
                 away_score=_optional_int(goals.get("away")),
             )
         )
+
+        for lineup_group in _list_of_mappings(item.get("lineups")):
+            team = _mapping(lineup_group.get("team"))
+            team_id = _required_external_id(team.get("id"), "lineups.team.id")
+            if team_id not in {home_id, away_id}:
+                continue
+            coach = _mapping(lineup_group.get("coach"))
+            team_lineups.append(
+                TeamLineupRecord(
+                    match_external_id=fixture_id,
+                    team_external_id=team_id,
+                    formation=_optional_text(lineup_group.get("formation")),
+                    coach_name=_optional_text(coach.get("name")),
+                )
+            )
 
         for stats_group in _list_of_mappings(item.get("statistics")):
             team = _mapping(stats_group.get("team"))
@@ -203,6 +220,7 @@ def normalize_fixture_bundle(payload: JsonObject) -> NormalizedFixtureBatch:
         team_match_stats=tuple(team_stats),
         appearances=tuple(appearances),
         player_match_stats=tuple(player_stats),
+        team_lineups=tuple(team_lineups),
     )
 
 

@@ -57,6 +57,12 @@ jobs:
           uv run football-intelligence-team-analytics
           --season "$CORE_SYNC_SEASON"
           --report "$RUNNER_TEMP/team-analytics-report.json"
+      - name: Calculate tactical intelligence
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-tactical-analytics
+          --season "$CORE_SYNC_SEASON"
+          --report "$RUNNER_TEMP/tactical-analytics-report.json"
       - name: Calculate expectation and meta analytics
         working-directory: analytics
         run: >-
@@ -78,6 +84,7 @@ jobs:
             ${{ runner.temp }}/core-sync-report.json
             ${{ runner.temp }}/player-analytics-report.json
             ${{ runner.temp }}/team-analytics-report.json
+            ${{ runner.temp }}/tactical-analytics-report.json
             ${{ runner.temp }}/meta-analytics-report.json
             ${{ runner.temp }}/rating-analytics-report.json
             ${{ runner.temp }}/core-sync-raw
