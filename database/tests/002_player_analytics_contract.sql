@@ -22,7 +22,7 @@ begin
     insert into analytics.player_feature_snapshots (
         player_id,
         scope_key,
-        window,
+        window_key,
         role,
         metric_name,
         minutes,
@@ -53,7 +53,7 @@ begin
     insert into analytics.player_score_snapshots (
         player_id,
         scope_key,
-        window,
+        window_key,
         role,
         role_confidence,
         minutes,
@@ -85,7 +85,7 @@ begin
         insert into analytics.player_score_snapshots (
             player_id,
             scope_key,
-            window,
+            window_key,
             role,
             role_confidence,
             minutes,
@@ -123,7 +123,7 @@ begin
         insert into analytics.player_feature_snapshots (
             player_id,
             scope_key,
-            window,
+            window_key,
             role,
             metric_name,
             minutes,

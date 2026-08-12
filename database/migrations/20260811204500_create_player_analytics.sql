@@ -10,7 +10,7 @@ create table analytics.player_feature_snapshots (
     player_id bigint not null
         references football.players(id) on delete cascade,
     scope_key text not null,
-    window text not null,
+    window_key text not null,
     role text not null,
     metric_name text not null,
     minutes integer not null,
@@ -24,14 +24,14 @@ create table analytics.player_feature_snapshots (
     primary key (
         player_id,
         scope_key,
-        window,
+        window_key,
         metric_name,
         model_version
     ),
     constraint player_feature_snapshots_scope_not_blank_check
         check (btrim(scope_key) <> ''),
-    constraint player_feature_snapshots_window_check
-        check (window in ('last_3', 'last_5', 'last_10', 'season')),
+    constraint player_feature_snapshots_window_key_check
+        check (window_key in ('last_3', 'last_5', 'last_10', 'season')),
     constraint player_feature_snapshots_role_check
         check (role in ('goalkeeper', 'defender', 'midfielder', 'forward')),
     constraint player_feature_snapshots_metric_not_blank_check
@@ -51,7 +51,7 @@ create table analytics.player_feature_snapshots (
 create index player_feature_snapshots_lookup_idx
     on analytics.player_feature_snapshots (
         scope_key,
-        window,
+        window_key,
         role,
         model_version,
         metric_name,
@@ -62,7 +62,7 @@ create table analytics.player_score_snapshots (
     player_id bigint not null
         references football.players(id) on delete cascade,
     scope_key text not null,
-    window text not null,
+    window_key text not null,
     role text not null,
     role_confidence numeric(6, 5) not null,
     minutes integer not null,
@@ -76,13 +76,13 @@ create table analytics.player_score_snapshots (
     primary key (
         player_id,
         scope_key,
-        window,
+        window_key,
         model_version
     ),
     constraint player_score_snapshots_scope_not_blank_check
         check (btrim(scope_key) <> ''),
-    constraint player_score_snapshots_window_check
-        check (window in ('last_3', 'last_5', 'last_10', 'season')),
+    constraint player_score_snapshots_window_key_check
+        check (window_key in ('last_3', 'last_5', 'last_10', 'season')),
     constraint player_score_snapshots_role_check
         check (role in ('goalkeeper', 'defender', 'midfielder', 'forward')),
     constraint player_score_snapshots_role_confidence_check
@@ -106,7 +106,7 @@ create table analytics.player_score_snapshots (
 create index player_score_snapshots_ranking_idx
     on analytics.player_score_snapshots (
         scope_key,
-        window,
+        window_key,
         role,
         model_version,
         overall_score desc,
