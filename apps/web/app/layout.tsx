@@ -34,6 +34,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
               <Link href="/rankings">Rankings</Link>
               <Link href="/teams">Equipos</Link>
               <Link href="/meta">Meta</Link>
+              <Link href="/perception">Percepción</Link>
               <Link href="/lab">Lab</Link>
             </nav>
           </header>

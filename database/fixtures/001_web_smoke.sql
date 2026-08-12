@@ -10,6 +10,8 @@ declare
     team_home_id bigint;
     team_away_id bigint;
     team_match_id bigint;
+    perception_source_id bigint;
+    perception_evidence_id bigint;
 begin
     insert into football.players (display_name, nationality_code)
     values ('Web Smoke Forward', 'ARG')
@@ -22,6 +24,39 @@ begin
     insert into football.players (display_name, nationality_code)
     values ('Web Smoke Defender', 'ITA')
     returning id into defender_id;
+
+    insert into perception.sources (
+        code, display_name, source_kind, homepage_url, feed_url
+    )
+    values (
+        'web-smoke-media',
+        'Web Smoke Media',
+        'media',
+        'https://example.com',
+        'https://example.com/feed.xml'
+    )
+    returning id into perception_source_id;
+
+    insert into perception.evidence_items (
+        source_id, external_id, canonical_url, title, excerpt,
+        published_at, content_sha256, raw_metadata, ingestion_version
+    )
+    values (
+        perception_source_id, 'web-smoke-perception-1',
+        'https://example.com/web-smoke-perception',
+        'Web Smoke Perception: Web Smoke Forward earns praise',
+        'Web Smoke Forward is highlighted in deterministic external evidence.',
+        now(), repeat('b', 64), '{"fixture":true}'::jsonb, 'perception-v1.0'
+    )
+    returning id into perception_evidence_id;
+
+    insert into perception.player_evidence_mentions (
+        evidence_id, player_id, matched_text, match_method, context_excerpt
+    )
+    values (
+        perception_evidence_id, forward_id, 'Web Smoke Forward',
+        'display_name_exact', 'Web Smoke Forward earns praise'
+    );
 
     insert into analytics.player_score_snapshots (
         player_id,
