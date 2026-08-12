@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      CORE_SYNC_SEASON: ${{ vars.CORE_SYNC_SEASON }}
     steps:
       - uses: actions/checkout@v6.0.2
       - uses: actions/setup-python@v6.2.0
@@ -30,6 +31,7 @@ jobs:
         shell: bash
         run: |
           test -n "$DATABASE_URL" || { echo "DATABASE_URL secret is required"; exit 1; }
+          test -n "$CORE_SYNC_SEASON" || { echo "CORE_SYNC_SEASON repository variable is required"; exit 1; }
       - working-directory: analytics
         run: uv sync --locked
       - name: Ingest perception evidence
@@ -38,11 +40,19 @@ jobs:
           uv run football-intelligence-perception-ingest
           --trigger-kind schedule
           --report "$RUNNER_TEMP/perception-report.json"
+      - name: Recalculate rating intelligence
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-rating-analytics
+          --season "$CORE_SYNC_SEASON"
+          --report "$RUNNER_TEMP/rating-analytics-report.json"
       - name: Upload perception evidence report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: perception-sync-${{ github.run_id }}
-          path: ${{ runner.temp }}/perception-report.json
+          path: |
+            ${{ runner.temp }}/perception-report.json
+            ${{ runner.temp }}/rating-analytics-report.json
           if-no-files-found: warn
           retention-days: 30
