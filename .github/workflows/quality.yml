@@ -72,6 +72,7 @@ jobs:
       PGPASSWORD: postgres
       PGDATABASE: football_intelligence_test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_test
+      INTERNAL_LAB_ENABLED: "true"
     steps:
       - uses: actions/checkout@v6.0.2
       - name: Apply migrations
@@ -105,3 +106,63 @@ jobs:
       - name: Verify PostgreSQL integrations
         working-directory: analytics
         run: uv run pytest tests/integration
+      - name: Seed deterministic web smoke data
+        run: >-
+          psql -v ON_ERROR_STOP=1
+          -f database/fixtures/001_web_smoke.sql
+      - uses: actions/setup-node@v6.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify Next.js PostgreSQL read path
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          npm --workspace @football-intelligence/web run dev -- \
+            --hostname 127.0.0.1 \
+            --port 3000 \
+            > "$RUNNER_TEMP/web-smoke.log" 2>&1 &
+          WEB_PID=$!
+
+          cleanup() {
+            kill "$WEB_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          READY=0
+          for attempt in $(seq 1 45); do
+            if curl -fsS "http://127.0.0.1:3000/" > "$RUNNER_TEMP/home.html"; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$READY" -ne 1 ]; then
+            cat "$RUNNER_TEMP/web-smoke.log"
+            exit 1
+          fi
+
+          grep -q "Web Smoke Forward" "$RUNNER_TEMP/home.html"
+
+          curl -fsS \
+            "http://127.0.0.1:3000/rankings?window=season&role=forward&confidence=0.5" \
+            > "$RUNNER_TEMP/rankings.html"
+          grep -q "Web Smoke Forward" "$RUNNER_TEMP/rankings.html"
+
+          PLAYER_ID="$(psql -Atc \
+            "select id from football.players where display_name = 'Web Smoke Forward' order by id desc limit 1")"
+          test -n "$PLAYER_ID"
+
+          curl -fsS \
+            "http://127.0.0.1:3000/player/$PLAYER_ID" \
+            > "$RUNNER_TEMP/player.html"
+          grep -q "Web Smoke Forward" "$RUNNER_TEMP/player.html"
+          grep -q "Performance vs Forma" "$RUNNER_TEMP/player.html"
+
+          curl -fsS \
+            "http://127.0.0.1:3000/lab" \
+            > "$RUNNER_TEMP/lab.html"
+          grep -q "core:web-smoke" "$RUNNER_TEMP/lab.html"
