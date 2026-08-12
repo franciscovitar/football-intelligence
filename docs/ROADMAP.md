@@ -10,7 +10,7 @@ Each block ends with focused verification and a checkpoint. A block is not compl
 - [x] **Block 4 — Core League Sync** — PASS
 - [x] **Block 5 — Player Analytics V1** — PASS
 - [x] **Block 6 — First Usable Web** — PASS
-- [ ] **Block 7 — Team Intelligence**
+- [x] **Block 7 — Team Intelligence** — PASS
 - [ ] **Block 8 — Expectation & Meta Intelligence**
 - [ ] **Block 9 — Perception Intelligence**
 - [ ] **Block 10 — Overrated / Underrated Intelligence**
@@ -57,6 +57,10 @@ Expose real rankings, player detail, trends, score explanations, filters, and an
 ## Block 7 — Team Intelligence
 
 Implement team features, ELO, Attack, Chance Generation, Finishing Proxy, Defense, Control, Process, Results, Form, and Results-vs-Process diagnostics.
+
+**PASS:** `team-v1.0` persists competition-and-season-relative features, scores,
+confidence, diagnostics, and match-level Elo history; `/teams`, `/team/[id]`, and
+team `/lab` diagnostics pass real PostgreSQL CI smoke.
 
 ## Block 8 — Expectation & Meta Intelligence
 

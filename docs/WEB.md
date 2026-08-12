@@ -7,7 +7,12 @@ Block 6 turns the persisted Player Analytics V1 read model into the first produc
 - `/` — dashboard with Performance leaders, Form leaders, and Form-vs-Performance movers.
 - `/rankings` — role/window/confidence/name filters over real persisted score snapshots.
 - `/player/[id]` — player trend, skill dimensions, confidence, and metric evidence.
-- `/lab` — internal diagnostics for snapshot scopes, populations, and feature coverage.
+- `/teams` — competition-relative Team Performance/Form explorer with confidence,
+  Elo, and Results-vs-Process context.
+- `/team/[id]` — team windows, Elo history, score dimensions, diagnostics, and
+  underlying metric evidence.
+- `/lab` — internal diagnostics for player and team snapshot scopes, populations,
+  and feature coverage.
 
 ## Read path
 
@@ -16,6 +21,9 @@ The web reads PostgreSQL server-side only.
 ```text
 analytics.player_score_snapshots
 analytics.player_feature_snapshots
+analytics.team_score_snapshots
+analytics.team_feature_snapshots
+analytics.team_elo_history
           |
           v
 Next.js Server Components
@@ -71,6 +79,20 @@ The page exposes:
 
 The page describes the latest team as the **latest team registered**, not as a guaranteed team inside the active historical scope.
 
+## Team Intelligence
+
+Team rankings are scoped to one competition and season. The `/teams` filters
+select competition, window, minimum confidence, and team name; no global
+cross-league Elo sort is exposed.
+
+The `/team/[id]` page shows season Performance, recent Form windows, Elo and
+five-match trend, score dimensions, Results-vs-Process language, confidence, and
+raw/stabilized feature evidence. It explicitly describes generation as volume
+rather than xG and control as a proxy rather than tactical dominance.
+
+All team scores are read from `team-v1.0` snapshots. See
+`docs/TEAM_ANALYTICS.md` for exact formulas and model boundaries.
+
 ## Diagnostics Lab
 
 `/lab` intentionally exposes only model/read-model diagnostics, never secrets or database connection details.
@@ -91,7 +113,8 @@ CI uses its ephemeral PostgreSQL 17 service to:
 2. run database contracts and Python integrations;
 3. insert deterministic web smoke snapshots;
 4. start the real Next.js app in development mode against that database;
-5. verify `/`, `/rankings`, `/player/[id]`, and `/lab` return expected persisted data.
+5. verify `/`, `/rankings`, `/player/[id]`, `/teams`, `/team/[id]`, and `/lab`
+   return expected persisted data.
 
 The normal Web job still runs lint, TypeScript checking, and a production build without requiring `DATABASE_URL`.
 
