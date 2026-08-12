@@ -16,6 +16,7 @@ football-intelligence-audit = "football_intelligence.jobs.audit_provider:main"
 football-intelligence-sync = "football_intelligence.jobs.sync_core_leagues:main"
 football-intelligence-player-analytics = "football_intelligence.jobs.calculate_player_analytics:main"
 football-intelligence-team-analytics = "football_intelligence.jobs.calculate_team_analytics:main"
+football-intelligence-meta-analytics = "football_intelligence.jobs.calculate_meta_analytics:main"
 
 [dependency-groups]
 dev = [

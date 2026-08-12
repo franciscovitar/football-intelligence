@@ -86,6 +86,12 @@ begin
             450, 5, 85.0, 0.81,
             '{"defending": 95.0, "creation": 62.0, "carrying": 60.0}'::jsonb,
             22, 'player-v1.0', now()
+        ),
+        (
+            forward_id, 'core:web-smoke-history', 'season', 'forward', 1.0,
+            1800, 20, 68.0, 0.88,
+            '{"scoring": 72.0, "creation": 65.0}'::jsonb,
+            20, 'player-v1.0', now() - interval '1 year'
         );
 
     insert into analytics.player_feature_snapshots (
@@ -116,6 +122,48 @@ begin
         (midfielder_id, 'core:web-smoke', 'season', 'midfielder', 'assists', 1080, 12, 0.45, 0.45, 88, 24, 'player-v1.0', now()),
         (defender_id, 'core:web-smoke', 'season', 'defender', 'tackles', 990, 11, 2.80, 3.10, 95, 22, 'player-v1.0', now()),
         (defender_id, 'core:web-smoke', 'season', 'defender', 'interceptions', 990, 11, 2.20, 2.45, 93, 22, 'player-v1.0', now());
+
+    insert into analytics.player_meta_snapshots (
+        player_id, scope_key, role,
+        performance_score, performance_confidence,
+        form_score, form_confidence,
+        stable_score, stable_confidence,
+        expectation_score, expectation_confidence,
+        surprise_delta, surprise_signal,
+        trend_delta, trend_confidence, trend_signal,
+        watchlist_score, watchlist_signal,
+        history_seasons, baseline_evidence, trend_evidence,
+        source_model_version, model_version, calculated_at
+    )
+    values
+        (
+            forward_id, 'core:web-smoke', 'forward',
+            88, 0.90, 94, 0.82, 81.0, 0.86,
+            68, 0.79, 20, 'surprise',
+            7.5, 0.74, 'stable',
+            84, 'breakout', 1,
+            '[{"scope_key":"core:web-smoke-history","score":68,"confidence":0.88}]'::jsonb,
+            '{"short_delta":7,"form_delta":6}'::jsonb,
+            'player-v1.0', 'meta-v1.0', now()
+        ),
+        (
+            midfielder_id, 'core:web-smoke', 'midfielder',
+            84, 0.91, 82, 0.80, 84, 0.64,
+            null, null, null, 'insufficient_history',
+            -2, 0.80, 'stable',
+            37.8, 'none', 0,
+            '[]'::jsonb, '{"form_delta":-2}'::jsonb,
+            'player-v1.0', 'meta-v1.0', now()
+        ),
+        (
+            defender_id, 'core:web-smoke', 'defender',
+            81, 0.89, 85, 0.81, 81, 0.62,
+            null, null, null, 'insufficient_history',
+            4, 0.81, 'stable',
+            40.45, 'none', 0,
+            '[]'::jsonb, '{"form_delta":4}'::jsonb,
+            'player-v1.0', 'meta-v1.0', now()
+        );
 
     select id into competition_id_value
     from football.competitions
