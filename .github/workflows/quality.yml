@@ -165,6 +165,22 @@ jobs:
           grep -q "Performance vs Forma" "$RUNNER_TEMP/player.html"
 
           curl -fsS \
+            "http://127.0.0.1:3000/teams?competition=ENG_PL&window=season&confidence=0" \
+            > "$RUNNER_TEMP/teams.html"
+          grep -q "Web Smoke United" "$RUNNER_TEMP/teams.html"
+
+          TEAM_ID="$(psql -Atc \
+            "select id from football.teams where name = 'Web Smoke City' order by id desc limit 1")"
+          test -n "$TEAM_ID"
+
+          curl -fsS \
+            "http://127.0.0.1:3000/team/$TEAM_ID?competition=ENG_PL" \
+            > "$RUNNER_TEMP/team.html"
+          grep -q "Web Smoke City" "$RUNNER_TEMP/team.html"
+          grep -q "Resultados por encima del proceso" "$RUNNER_TEMP/team.html"
+
+          curl -fsS \
             "http://127.0.0.1:3000/lab" \
             > "$RUNNER_TEMP/lab.html"
           grep -q "core:web-smoke" "$RUNNER_TEMP/lab.html"
+          grep -q "competition:ENG_PL:web-smoke" "$RUNNER_TEMP/lab.html"

@@ -12,6 +12,8 @@ import {
   WINDOW_LABELS,
 } from "@/lib/player-display";
 import { getLabData } from "@/lib/queries/player-analytics";
+import { getTeamLabData } from "@/lib/queries/team-analytics";
+import { TEAM_WINDOW_LABELS } from "@/lib/team-display";
 
 export const metadata: Metadata = {
   title: "Diagnostics Lab",
@@ -24,7 +26,7 @@ export default async function LabPage() {
     notFound();
   }
 
-  const result = await getLabData();
+  const [result, teamResult] = await Promise.all([getLabData(), getTeamLabData()]);
 
   return (
     <main className="page-shell">
@@ -152,6 +154,44 @@ export default async function LabPage() {
               </table>
             </div>
           </section>
+
+          {teamResult.status === "ready" && teamResult.data.contexts.length > 0 ? (
+            <>
+              <section className="panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">TEAM SNAPSHOTS</p>
+                    <h2>Scopes por competición</h2>
+                  </div>
+                </div>
+                <div className="lab-table-wrap">
+                  <table className="lab-table">
+                    <thead><tr><th>Competición</th><th>Temporada</th><th>Equipos</th><th>Scores</th><th>Elo rows</th></tr></thead>
+                    <tbody>
+                      {teamResult.data.contexts.map((context) => (
+                        <tr key={`${context.scopeKey}-${context.modelVersion}`}>
+                          <td>{context.competitionCode}</td><td>{context.seasonLabel}</td>
+                          <td>{context.teams}</td><td>{context.scoreRows}</td><td>{context.eloRows}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+              <section className="panel">
+                <div className="section-heading"><div><p className="eyebrow">TEAM POPULATION</p><h2>Cobertura por ventana</h2></div></div>
+                <div className="lab-card-grid">
+                  {teamResult.data.populations.map((population) => (
+                    <article className="lab-stat" key={`${population.scopeKey}-${population.window}`}>
+                      <span>{population.competitionCode} · {population.seasonLabel} · {TEAM_WINDOW_LABELS[population.window]}</span>
+                      <strong>{population.teams}</strong>
+                      <small>score medio {formatScore(population.averageScore)} · confianza {formatConfidence(population.averageConfidence)}</small>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </>
+          ) : null}
         </>
       )}
     </main>
