@@ -1,0 +1,971 @@
+# 16 — SAFE REFACTOR
+
+## Mission
+
+Improve the internal design of existing code while preserving its intended externally observable behavior.
+
+Refactoring is NOT:
+
+- feature development;
+- behavior redesign;
+- architecture replacement;
+- framework migration by default;
+- cleanup without a specific objective;
+- rewriting code because another style is preferred.
+
+The goal is:
+
+better internal structure
++
+same intended behavior
++
+continuous verification.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+---
+
+# 1. Define the Refactoring Goal
+
+State exactly what internal problem is being improved.
+
+Examples:
+
+- duplicated business rule;
+- difficult dependency;
+- oversized module;
+- unclear responsibility;
+- cyclic dependency;
+- fragile conditional structure;
+- difficult-to-test logic;
+- repeated parsing/validation;
+- poor naming that hides domain intent.
+
+Bad goal:
+
+"clean up the code."
+
+The goal must explain what becomes easier, safer or clearer afterward.
+
+---
+
+# 2. Establish Behavioral Boundary
+
+Define what behavior must remain unchanged.
+
+Possible observable behavior:
+
+PUBLIC API
+
+USER FLOW
+
+DATABASE EFFECT
+
+EVENT
+
+ERROR CONTRACT
+
+SERIALIZATION
+
+SIDE EFFECT
+
+PERFORMANCE CONTRACT when explicitly relevant.
+
+Do not rely on vague:
+
+"everything should work."
+
+Identify the behavior actually at risk.
+
+---
+
+# 3. Separate Refactor From Change
+
+Classify intended work:
+
+PURE REFACTOR
+
+No intentional external behavior change.
+
+REFACTOR ENABLING FEATURE
+
+First restructure safely, then implement behavior separately.
+
+BEHAVIOR CHANGE
+
+Not a refactor; use `13 Feature Implementation`.
+
+BUG FIX
+
+Use `18 Bug Fix`.
+
+MIGRATION
+
+May require a separate architecture/dependency workflow.
+
+Do not hide feature work inside a "refactor" label.
+
+---
+
+# 4. Starting Checkpoint
+
+Identify the trusted starting state.
+
+Record when relevant:
+
+BRANCH / COMMIT
+
+TEST STATUS
+
+BUILD STATUS
+
+KNOWN FAILURES
+
+RUNTIME STATUS
+
+Do not start a risky refactor from an unknown/broken baseline if it can be avoided.
+
+Preserve unrelated existing known failures rather than confusing them with regressions.
+
+---
+
+# 5. Understand Before Editing
+
+Inspect only relevant code and its callers.
+
+Map:
+
+ENTRY POINT
+
+RESPONSIBILITIES
+
+DEPENDENCIES
+
+CALLERS
+
+SIDE EFFECTS
+
+DATA
+
+TESTS
+
+PUBLIC CONTRACTS
+
+Do not refactor based only on one file when behavior depends on its surroundings.
+
+Do not audit the entire repository without need.
+
+---
+
+# 6. Characterization
+
+Before changing poorly understood behavior, capture enough evidence of what it currently does.
+
+Possible evidence:
+
+EXISTING TESTS
+
+CHARACTERIZATION TEST
+
+INTEGRATION TEST
+
+SNAPSHOT only when semantically appropriate
+
+RUNTIME EXERCISE
+
+GOLDEN INPUT/OUTPUT
+
+The purpose is to detect accidental behavioral change.
+
+Do not immortalize known bugs blindly if the refactor is explicitly paired with fixing them.
+
+Separate bug correction from structural change where practical.
+
+---
+
+# 7. Test Adequacy
+
+Ask:
+
+If I accidentally break the important behavior, will something fail?
+
+If NO:
+
+add the smallest meaningful protection before substantial restructuring.
+
+Do not chase arbitrary coverage.
+
+Protect the behavioral boundary being refactored.
+
+---
+
+# 8. Identify the Smell, Not Just the Symptom
+
+Examples:
+
+DUPLICATION
+
+LONG FUNCTION
+
+FEATURE ENVY
+
+DATA CLUMP
+
+SHOTGUN SURGERY
+
+DIVERGENT RESPONSIBILITY
+
+CYCLE
+
+TEMPORAL COUPLING
+
+PRIMITIVE OBSESSION
+
+INAPPROPRIATE DEPENDENCY
+
+Use smells as diagnostic hints, not automatic commands.
+
+Do not refactor solely because a textbook pattern says something is a smell.
+
+---
+
+# 9. Desired Improvement
+
+Define the expected structural improvement.
+
+Examples:
+
+one responsibility has one clear owner;
+
+business rule becomes testable independently;
+
+dependency points inward;
+
+duplicate decision logic becomes one domain concept;
+
+module interface becomes smaller;
+
+call path becomes easier to understand.
+
+Do not define success by:
+
+"more classes"
+or
+"more patterns."
+
+---
+
+# 10. Simplest Structural Change
+
+Consider the smallest refactoring capable of achieving the goal.
+
+Possible techniques:
+
+RENAME
+
+EXTRACT FUNCTION
+
+INLINE
+
+MOVE FUNCTION
+
+MOVE FIELD
+
+EXTRACT MODULE
+
+SPLIT PHASE
+
+ENCAPSULATE
+
+INTRODUCE PARAMETER OBJECT
+
+REPLACE CONDITIONAL
+
+REMOVE DEAD CODE
+
+SEPARATE QUERY FROM MODIFICATION
+
+CHANGE DEPENDENCY BOUNDARY
+
+Do not choose a complex pattern when a simpler transformation solves the problem.
+
+---
+
+# 11. Small Steps
+
+Break the refactor into independently understandable steps.
+
+Preferred loop:
+
+SMALL CHANGE
+
+→ RELEVANT TEST
+
+→ PASS
+
+→ NEXT SMALL CHANGE.
+
+Keep the system in a valid state as often as practical.
+
+Do not perform a huge rewrite and hope tests explain every failure afterward.
+
+---
+
+# 12. Commit Strategy
+
+For substantial refactors, preserve reviewable checkpoints.
+
+When commits are part of the workflow, prefer meaningful incremental commits where they aid:
+
+review;
+
+rollback;
+
+bisecting;
+
+handoff.
+
+Do not produce dozens of meaningless one-line commits.
+
+Do not squash away useful diagnostic history before the change is validated if that history helps current work.
+
+---
+
+# 13. Naming
+
+Use refactoring as an opportunity to reveal intent.
+
+Prefer names based on:
+
+DOMAIN MEANING
+
+RESPONSIBILITY
+
+RESULT
+
+Do not rename unrelated code.
+
+Avoid purely cosmetic mass renaming without value.
+
+---
+
+# 14. Responsibility
+
+When extracting/moving code ask:
+
+WHO SHOULD OWN THIS KNOWLEDGE?
+
+Prefer placement with the data/context required to make the decision.
+
+Avoid "Utils" dumping grounds.
+
+Do not move logic solely to make files shorter.
+
+---
+
+# 15. Cohesion
+
+A module should contain things that change for related reasons.
+
+Refactor toward coherent responsibilities.
+
+Do not split cohesive behavior merely because a file is long.
+
+---
+
+# 16. Coupling
+
+Reduce unnecessary knowledge between modules.
+
+Potential improvements:
+
+smaller interface;
+
+dependency inversion where valuable;
+
+explicit data transfer;
+
+moving behavior to owner;
+
+removing hidden global dependency.
+
+Do not eliminate all coupling.
+
+Software components must collaborate.
+
+The objective is appropriate coupling.
+
+---
+
+# 17. Abstraction
+
+Introduce an abstraction when a stable concept has become visible.
+
+Do not invent abstractions based on speculative future variation.
+
+Prefer discovering abstraction from concrete examples.
+
+Wrong abstraction can be more expensive than duplication.
+
+---
+
+# 18. Duplication
+
+Before deduplicating ask:
+
+ARE THESE THINGS THE SAME DOMAIN CONCEPT?
+
+or merely:
+
+DO THEY CURRENTLY LOOK SIMILAR?
+
+Merge true knowledge duplication.
+
+Preserve independent code when similarities may evolve independently.
+
+Do not DRY unrelated concepts.
+
+---
+
+# 19. Conditionals
+
+For complex conditional logic determine whether complexity represents:
+
+DOMAIN STATES
+
+VARIATION
+
+POLICY
+
+ACCIDENTAL NESTING
+
+Simplify accordingly.
+
+Do not replace every conditional with polymorphism.
+
+Sometimes an explicit conditional is clearer.
+
+---
+
+# 20. Interfaces
+
+Shrink interfaces when consumers know more than they need.
+
+Do not create interfaces with one implementation solely as ceremony.
+
+Introduce a boundary when:
+
+substitution matters;
+
+external dependency requires isolation;
+
+testing genuinely benefits;
+
+architecture requires dependency direction.
+
+---
+
+# 21. Framework Boundaries
+
+Avoid broad framework migration during a refactor unless migration is explicitly the task.
+
+Separate:
+
+BUSINESS STRUCTURE IMPROVEMENT
+
+from
+
+FRAMEWORK CHANGE.
+
+Do not multiply risk unnecessarily.
+
+---
+
+# 22. Database Refactoring
+
+If structure changes persistence:
+
+preserve data and application compatibility.
+
+Consider staged migration:
+
+EXPAND
+
+BACKFILL
+
+SWITCH
+
+CONTRACT.
+
+Do not combine destructive schema change with large application restructuring without a safe deployment strategy.
+
+---
+
+# 23. Public Contract
+
+Do not intentionally change:
+
+API paths;
+
+payloads;
+
+public function contract;
+
+events;
+
+stored format;
+
+user-visible behavior
+
+unless explicitly permitted.
+
+If an external contract must change:
+
+this is no longer a pure refactor.
+
+Separate the change.
+
+---
+
+# 24. Error Behavior
+
+Preserve meaningful error semantics.
+
+Do not accidentally turn:
+
+NOT FOUND
+
+into
+
+INTERNAL ERROR
+
+because control flow changed.
+
+Do not preserve implementation-specific wording if it was never contractual unless tests/consumers legitimately depend on it.
+
+---
+
+# 25. Side Effects
+
+Identify side effects before moving/extracting code.
+
+Examples:
+
+DB WRITE
+
+NETWORK
+
+FILE
+
+LOG
+
+EVENT
+
+CACHE
+
+CLOCK
+
+RANDOMNESS
+
+GLOBAL STATE
+
+Keep side effects explicit when possible.
+
+Do not accidentally execute them more than once during restructuring.
+
+---
+
+# 26. Order of Evaluation
+
+When reordering/extracting code verify whether execution order matters.
+
+Watch for:
+
+mutation;
+
+lazy evaluation;
+
+exceptions;
+
+short-circuit behavior;
+
+async behavior;
+
+transactions.
+
+Code that looks algebraically equivalent may not be behaviorally equivalent when side effects exist.
+
+---
+
+# 27. Async / Concurrency
+
+Be especially cautious refactoring:
+
+PROMISES
+
+THREADS
+
+ASYNC WORK
+
+EVENT HANDLERS
+
+LOCKS
+
+TRANSACTIONS
+
+QUEUES
+
+Preserve:
+
+ordering;
+
+cancellation;
+
+error propagation;
+
+concurrency limits.
+
+Do not "simplify" concurrency without proving semantic equivalence.
+
+---
+
+# 28. Performance
+
+Refactoring normally preserves functional behavior, but large performance regressions may still matter.
+
+If the affected path is performance-sensitive:
+
+preserve a relevant baseline.
+
+Do not optimize during structural refactoring unless optimization is part of the explicit goal.
+
+---
+
+# 29. Security
+
+Ensure structural changes preserve:
+
+AUTHORIZATION
+
+VALIDATION
+
+TRUST BOUNDARIES
+
+SECRET HANDLING
+
+SANITIZATION
+
+Do not move security checks into a path that can be bypassed.
+
+---
+
+# 30. Dead Code
+
+Remove dead code when you can establish it is genuinely unused and within scope.
+
+Do not preserve commented-out old implementations.
+
+Use version control as history.
+
+Do not delete code merely because static search did not find runtime/dynamic usage without understanding the environment.
+
+---
+
+# 31. Compatibility Shims
+
+During gradual refactors, temporary adapters can reduce risk.
+
+Use only when they allow incremental migration.
+
+Mark temporary compatibility code clearly enough that its removal condition is understood.
+
+Do not allow temporary layers to become permanent unnoticed.
+
+---
+
+# 32. Incremental Replacement
+
+For very large legacy areas, prefer gradual displacement where feasible.
+
+Possible sequence:
+
+NEW BOUNDARY
+
+→ ROUTE SMALL BEHAVIOR THROUGH IT
+
+→ VERIFY
+
+→ MIGRATE NEXT SLICE
+
+→ REMOVE OLD PATH WHEN UNUSED.
+
+Avoid large all-at-once rewrites when equivalent incremental migration can reduce risk.
+
+---
+
+# 33. Avoid Refactor Cascades
+
+If improving one module exposes ten other issues:
+
+stay within the defined objective.
+
+Fix dependencies required to complete the refactor safely.
+
+Record unrelated debt.
+
+Do not follow every code smell recursively.
+
+---
+
+# 34. Focused Verification
+
+After every meaningful structural step run the smallest test capable of catching regression.
+
+Do not repeatedly run expensive unrelated suites.
+
+When the refactor stabilizes, run broader relevant validation once.
+
+---
+
+# 35. Diff Size
+
+If the diff becomes much larger than expected:
+
+reassess.
+
+Ask:
+
+DID SCOPE EXPAND?
+
+DID WE CHOOSE TOO LARGE A TRANSFORMATION?
+
+CAN THIS BE SPLIT?
+
+Large diffs are not automatically bad, but they deserve explanation.
+
+---
+
+# 36. Compare Behavior
+
+Before completion compare:
+
+BEFORE
+
+AFTER
+
+for the behavioral boundary.
+
+Evidence may include:
+
+same test suite;
+
+same integration output;
+
+same API contract;
+
+same UI behavior;
+
+same representative side effects.
+
+Do not assert "behavior preserved" solely from code inspection.
+
+---
+
+# 37. Diff Review
+
+Review the final diff looking for accidental behavior change.
+
+Pay special attention to:
+
+DEFAULTS
+
+NULL HANDLING
+
+ORDER
+
+ERRORS
+
+ASYNC
+
+SIDE EFFECTS
+
+TRANSACTIONS
+
+AUTHORIZATION
+
+SERIALIZATION
+
+Do not review only aesthetics.
+
+---
+
+# 38. Full Relevant Validation
+
+After focused checks pass, execute the complete relevant quality gate.
+
+Possible:
+
+tests;
+
+type check;
+
+lint;
+
+build;
+
+integration tests.
+
+Do not mark PASS with hidden test regressions.
+
+---
+
+# 39. Cleanup
+
+Remove:
+
+temporary bridge code no longer needed;
+
+unused old path;
+
+debug instrumentation;
+
+obsolete comments;
+
+temporary tests whose only purpose was experimentation, unless they provide lasting regression value.
+
+Do not remove compatibility layers that still have consumers.
+
+---
+
+# 40. Metrics of Success
+
+Evaluate improvement based on the original goal.
+
+Examples:
+
+FEWER CHANGE LOCATIONS
+
+CLEARER OWNERSHIP
+
+SMALLER PUBLIC INTERFACE
+
+REMOVED CYCLE
+
+BETTER TESTABILITY
+
+LESS DUPLICATED KNOWLEDGE
+
+Do not use:
+
+LINES OF CODE
+
+NUMBER OF CLASSES
+
+DESIGN PATTERN COUNT
+
+as primary quality metrics.
+
+---
+
+# 41. Stop Conditions
+
+Stop and reassess if:
+
+tests reveal undocumented behavior;
+
+refactor requires product behavior change;
+
+public contract must change;
+
+architecture decision is required;
+
+migration risk becomes significant;
+
+the same approach fails repeatedly.
+
+Do not force the original refactoring plan when new evidence changes the problem.
+
+---
+
+# 42. Output Format
+
+Return:
+
+# Safe Refactor — [Area]
+
+## Status
+
+PASS / PARTIAL / FAIL
+
+## Refactoring Goal
+
+...
+
+## Behavior Preserved
+
+...
+
+## Starting Checkpoint
+
+...
+
+## Changes
+
+Structural changes only.
+
+## Tests / Characterization
+
+...
+
+## Verification
+
+Exactly what was executed.
+
+## Behavioral Comparison
+
+Evidence that intended behavior remained unchanged.
+
+## Architecture Impact
+
+None or explicit.
+
+## Compatibility / Migration
+
+Only if relevant.
+
+## Improvements Achieved
+
+...
+
+## Remaining Debt
+
+Only relevant debt not addressed.
+
+## Risks
+
+...
+
+## Checkpoint
+
+...
+
+## Next
+
+Exactly one next action.
+
+---
+
+# PASS Criterion
+
+Safe Refactor passes when:
+
+- the defined structural problem is materially improved;
+- intended observable behavior remains unchanged;
+- relevant tests/checks pass;
+- the system remains in a valid state;
+- no unrelated feature work was smuggled into the refactor;
+- the resulting code is easier to understand, modify or test.
+
+If behavior changed intentionally, classify the work correctly.
+
+It is no longer only a refactor.

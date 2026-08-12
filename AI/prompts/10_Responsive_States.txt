@@ -1,0 +1,1077 @@
+# 10 — RESPONSIVE + STATES
+
+## Mission
+
+Make the approved screen or flow resilient to different available spaces, interaction modes, content sizes and system states.
+
+The objective is NOT to create separate "mobile", "tablet" and "desktop" products.
+
+The objective is to preserve user priorities and task completion as conditions change.
+
+Follow the approved:
+
+- Feature Specification;
+- UX Design;
+- UI Art Direction;
+- Design System;
+- Screen Design.
+
+Do not redesign the product unless responsive/state analysis reveals a genuine UX problem.
+
+---
+
+# 1. Establish Scope
+
+Determine:
+
+SCREEN / FLOW
+
+SUPPORTED PLATFORM
+
+KNOWN DISPLAY CONTEXTS
+
+INPUT MODES
+
+IMPORTANT STATES
+
+CONTENT VARIABILITY
+
+Do not exhaustively design impossible combinations.
+
+Prioritize realistic and high-impact conditions.
+
+---
+
+# 2. Think in Available Space
+
+Do not base layout behavior solely on physical device labels such as:
+
+PHONE
+
+TABLET
+
+LAPTOP
+
+DESKTOP
+
+Prefer:
+
+AVAILABLE WIDTH
+
+AVAILABLE HEIGHT
+
+CONTAINER WIDTH
+
+INPUT CAPABILITY
+
+CONTENT NEED
+
+A physical device may expose multiple application sizes.
+
+Treat responsive conditions as dynamic.
+
+---
+
+# 3. Content Before Breakpoints
+
+Start with the content hierarchy.
+
+Identify:
+
+MUST REMAIN
+
+CAN MOVE
+
+CAN COLLAPSE
+
+CAN BECOME SEQUENTIAL
+
+CAN BECOME OVERLAY
+
+CAN DEFER
+
+CAN HIDE
+
+Never hide important functionality merely because space is smaller.
+
+---
+
+# 4. Intrinsic Layout First
+
+Prefer layouts that adapt naturally through:
+
+- flexible sizing;
+- wrapping;
+- min/max constraints;
+- grid;
+- flex;
+- content sizing;
+- container queries where appropriate;
+- responsive typography where appropriate.
+
+Add explicit breakpoints only where the layout or interaction actually needs to change.
+
+Do not create breakpoint-specific overrides for every dimension.
+
+---
+
+# 5. Breakpoint Principle
+
+A breakpoint should exist because:
+
+"At this available space, the current layout no longer supports the intended experience."
+
+Not because:
+
+"This is a popular device width."
+
+For each breakpoint define:
+
+PROBLEM
+
+CHANGE
+
+WHY
+
+Do not create arbitrary breakpoint proliferation.
+
+---
+
+# 6. High-Level Layout Modes
+
+When useful define meaningful layout modes such as:
+
+COMPACT
+
+MEDIUM
+
+EXPANDED
+
+LARGE
+
+Names represent available space, not specific devices.
+
+For each mode describe only meaningful structural changes.
+
+Do not duplicate every CSS value.
+
+---
+
+# 7. Interpolate Between Modes
+
+A layout must also work BETWEEN representative breakpoints.
+
+Do not design only:
+
+375px
+
+768px
+
+1440px
+
+and assume everything between them works.
+
+Use flexible sizing so layouts remain stable across the full range.
+
+---
+
+# 8. Width and Height
+
+Width often drives major layout decisions, but height can matter when:
+
+- navigation is vertical;
+- overlays are involved;
+- keyboard appears;
+- landscape becomes short;
+- a split layout needs vertical room;
+- sticky controls consume space.
+
+Do not assume a wide viewport always has abundant height.
+
+---
+
+# 9. Component vs Page Responsiveness
+
+Determine whether behavior belongs to:
+
+PAGE / APPLICATION LAYOUT
+
+or
+
+LOCAL COMPONENT CONTAINER
+
+Use page-level breakpoints for major structure.
+
+Use container-aware behavior when reusable components should adapt to the space they actually receive.
+
+Avoid scattering global viewport logic through individual components.
+
+---
+
+# 10. Reflow
+
+Determine how content reflows when width is constrained.
+
+Possible:
+
+MULTI-COLUMN → SINGLE COLUMN
+
+SIDE PANEL → BELOW CONTENT
+
+INLINE CONTROLS → WRAPPED CONTROLS
+
+TABLE → ALTERNATIVE REPRESENTATION
+
+HORIZONTAL GROUP → VERTICAL STACK
+
+Reflow should preserve semantic/read order.
+
+Do not merely scale everything smaller.
+
+---
+
+# 11. Reveal
+
+Additional space can expose useful secondary information.
+
+Example:
+
+COMPACT
+primary content only.
+
+EXPANDED
+primary + supporting panel.
+
+Do not fill large screens with decorative emptiness simply because more space exists.
+
+Do not expose low-value information merely to occupy the canvas.
+
+---
+
+# 12. Reposition
+
+Move elements when spatial relationships improve.
+
+Examples:
+
+bottom navigation
+→ side navigation;
+
+detail below list
+→ side-by-side list/detail.
+
+Preserve interaction meaning.
+
+Do not relocate controls unpredictably between minor width changes.
+
+---
+
+# 13. Navigation Adaptation
+
+Define when navigation changes form.
+
+Possible:
+
+BOTTOM BAR
+
+TOP BAR
+
+SIDEBAR
+
+DRAWER
+
+COMPACT MENU
+
+Navigation changes must preserve:
+
+- location awareness;
+- destinations;
+- labels;
+- state.
+
+Do not make users relearn navigation unnecessarily.
+
+---
+
+# 14. Multi-Pane Layouts
+
+Use multiple panes when additional space improves the task.
+
+Examples:
+
+LIST + DETAIL
+
+NAV + CONTENT
+
+EDITOR + PREVIEW
+
+Do not use multi-pane layouts merely because the viewport is large.
+
+Avoid panes too narrow to support their own content.
+
+---
+
+# 15. Responsive Tables
+
+For each table classify columns:
+
+ESSENTIAL
+
+IMPORTANT
+
+OPTIONAL
+
+SECONDARY DETAIL
+
+Possible narrow behaviors:
+
+horizontal scroll;
+
+priority columns;
+
+row detail expansion;
+
+alternate list representation.
+
+Do not automatically turn every row into a giant card.
+
+Do not hide data needed for the primary task.
+
+---
+
+# 16. Charts
+
+Charts must remain understandable across widths.
+
+Consider:
+
+- aspect ratio;
+- legend position;
+- label density;
+- axis labels;
+- interaction;
+- tooltip access;
+- data reduction;
+- scroll when appropriate.
+
+Do not shrink charts until labels become unusable.
+
+---
+
+# 17. Typography
+
+Ensure typography survives narrower containers and user scaling.
+
+Test:
+
+- long headings;
+- multiline labels;
+- buttons wrapping;
+- large text settings;
+- localization expansion.
+
+Avoid fixed-height text containers unless clipping is intentional and accessible.
+
+---
+
+# 18. Images and Media
+
+Define:
+
+FLUID SIZE
+
+CROP
+
+ASPECT RATIO
+
+ART DIRECTION WHEN NEEDED
+
+MAXIMUM SIZE
+
+Do not stretch assets unnaturally.
+
+Prevent critical image content from being cropped at meaningful sizes.
+
+---
+
+# 19. Touch and Pointer
+
+Do not assume all wide screens use a mouse or all small screens use touch.
+
+Interactive controls must remain usable across supported input modalities.
+
+For essential pointer targets, preserve appropriate size/spacing.
+
+Do not expose essential actions exclusively through hover.
+
+---
+
+# 20. Keyboard
+
+Responsive behavior must preserve keyboard usability.
+
+Check:
+
+FOCUS ORDER
+
+VISIBILITY
+
+SCROLL INTO VIEW
+
+OVERLAYS
+
+STICKY UI
+
+Do not allow sticky headers, footers or dialogs to completely hide the currently focused control.
+
+---
+
+# 21. Zoom / Text Scaling
+
+For web interfaces test relevant zoom/text enlargement.
+
+Content should reflow without loss of information or functionality where required.
+
+Avoid designs dependent on exact text measurements.
+
+Do not disable user zoom.
+
+---
+
+# 22. Safe Areas / System UI
+
+Where relevant account for:
+
+- notches;
+- browser chrome;
+- virtual keyboard;
+- system navigation;
+- fold/hinge;
+- desktop window controls.
+
+Do not place critical controls where system UI can obstruct them.
+
+---
+
+# 23. Orientation
+
+Do not assume orientation equals device.
+
+Test orientation when it meaningfully changes available space.
+
+Landscape may need a different layout when height becomes constrained.
+
+Do not build a separate orientation architecture unless necessary.
+
+---
+
+# 24. State Matrix
+
+Build a state matrix for the screen.
+
+Potential axes:
+
+DATA
+
+NETWORK
+
+AUTH
+
+PERMISSION
+
+ACTION
+
+BACKGROUND PROCESS
+
+FRESHNESS
+
+For example:
+
+DATA:
+normal / empty / partial.
+
+NETWORK:
+online / slow / unavailable.
+
+ACTION:
+idle / submitting / success / failure.
+
+Avoid attempting the full Cartesian product.
+
+Select combinations that materially change user behavior.
+
+---
+
+# 25. Default State
+
+Define the normal usable state.
+
+This is the reference against which other states differ.
+
+Do not treat prototype/demo data as the definition of normal production state.
+
+---
+
+# 26. Initial Loading
+
+Decide whether initial loading uses:
+
+nothing because response is near-instant;
+
+skeleton;
+
+spinner;
+
+progress indicator;
+
+cached content + refresh;
+
+streaming/partial reveal.
+
+Match feedback to expected behavior.
+
+Do not show skeletons that inaccurately imply layout/content.
+
+---
+
+# 27. Incremental Loading
+
+When existing content remains usable during refresh, prefer preserving it when safe.
+
+Examples:
+
+STALE-WHILE-REFRESH
+
+INLINE PROGRESS
+
+BACKGROUND UPDATE
+
+Avoid replacing useful content with a blank loader unnecessarily.
+
+---
+
+# 28. Empty State
+
+Distinguish:
+
+TRUE EMPTY
+
+FIRST USE
+
+FILTERED EMPTY
+
+SEARCH NO RESULTS
+
+PERMISSION-BASED EMPTY
+
+DATA NOT YET GENERATED
+
+Each may require different messaging/action.
+
+Do not use one generic empty state for fundamentally different situations.
+
+---
+
+# 29. Error State
+
+Classify relevant errors:
+
+RECOVERABLE
+
+NON-RECOVERABLE
+
+FIELD-SPECIFIC
+
+PAGE-LEVEL
+
+DEPENDENCY-SPECIFIC
+
+PERMISSION
+
+NETWORK
+
+Determine:
+
+what remains visible;
+
+what was preserved;
+
+what recovery is possible.
+
+Do not destroy valid existing content merely because refresh failed.
+
+---
+
+# 30. Partial State
+
+Design for situations where some data is available and some is not.
+
+Clearly separate:
+
+KNOWN DATA
+
+UNAVAILABLE DATA
+
+LOADING DATA
+
+FAILED DATA
+
+Do not represent missing information as zero unless zero is actually known.
+
+---
+
+# 31. Stale State
+
+If freshness matters, define when users need awareness that data may be old.
+
+Possible:
+
+timestamp;
+
+refresh indicator;
+
+stale badge;
+
+silent refresh.
+
+Do not alarm users about staleness that has no practical consequence.
+
+---
+
+# 32. Submitting / Mutating
+
+During an action determine:
+
+CAN USER SUBMIT AGAIN?
+
+CAN THEY NAVIGATE AWAY?
+
+IS OPTIMISTIC UPDATE SAFE?
+
+IS CANCELLATION POSSIBLE?
+
+WHAT HAPPENS ON FAILURE?
+
+Prevent accidental duplicate destructive or costly operations.
+
+Do not disable the entire page unnecessarily.
+
+---
+
+# 33. Success
+
+Decide whether success is:
+
+self-evident through changed state;
+
+inline confirmation;
+
+toast;
+
+navigation;
+
+persistent status.
+
+Avoid redundant success notifications when the resulting state clearly communicates success.
+
+---
+
+# 34. Permission States
+
+Distinguish:
+
+NOT AUTHENTICATED
+
+AUTHENTICATED BUT NOT AUTHORIZED
+
+PERMISSION CAN BE REQUESTED
+
+PERMISSION PERMANENTLY UNAVAILABLE
+
+Do not present authorization failure as generic technical error.
+
+---
+
+# 35. Offline / Connectivity
+
+Only design offline behavior when relevant to the product.
+
+Possible:
+
+READ CACHED CONTENT
+
+QUEUE SAFE ACTION
+
+DISABLE NETWORK-REQUIRED ACTION
+
+SHOW CONNECTION STATUS
+
+Do not imply an operation succeeded remotely when it has only been queued locally.
+
+---
+
+# 36. Destructive State
+
+For destructive operations define:
+
+PENDING
+
+CONFIRMED
+
+PROCESSING
+
+FAILED
+
+COMPLETED
+
+UNDO WINDOW when appropriate.
+
+Avoid permanent optimistic deletion unless recovery semantics are sound.
+
+---
+
+# 37. Long-Running Operations
+
+When work continues beyond a normal request:
+
+define whether users can:
+
+leave;
+
+return;
+
+cancel;
+
+observe progress;
+
+receive notification.
+
+Do not require users to keep a page open unnecessarily if the operation is actually asynchronous.
+
+---
+
+# 38. Content Extremes
+
+Test:
+
+0 items
+
+1 item
+
+typical items
+
+many items
+
+longest plausible names
+
+large numbers
+
+negative numbers
+
+missing media
+
+many tags
+
+long errors
+
+localization expansion.
+
+Layouts should degrade gracefully.
+
+---
+
+# 39. Accessibility State Behavior
+
+States must be perceivable beyond visual appearance.
+
+For important changes determine whether assistive technologies need:
+
+STATUS ANNOUNCEMENT
+
+ERROR ASSOCIATION
+
+FOCUS MOVEMENT
+
+FOCUS RETENTION
+
+Do not move focus automatically unless it helps the task and is predictable.
+
+---
+
+# 40. Focus After State Change
+
+Define focus behavior for:
+
+modal open/close;
+
+validation failure;
+
+item deletion;
+
+navigation;
+
+async completion;
+
+new content.
+
+Avoid:
+
+lost focus;
+
+focus returning to body;
+
+focus jumping unexpectedly.
+
+---
+
+# 41. Motion Across States
+
+Use motion to clarify transitions only where useful.
+
+Respect reduced-motion preferences.
+
+Never require animation to understand whether state changed.
+
+---
+
+# 42. State Persistence
+
+Determine what survives:
+
+REFRESH
+
+BACK NAVIGATION
+
+ROUTE CHANGE
+
+SESSION
+
+LOGIN
+
+Examples:
+
+filters;
+
+sort;
+
+draft text;
+
+selected tab;
+
+expanded row.
+
+Persist state only when it improves the user experience.
+
+Do not preserve stale dangerous state blindly.
+
+---
+
+# 43. URL State
+
+For web applications consider representing meaningful navigable state in the URL:
+
+search;
+
+filters;
+
+pagination;
+
+selected resource;
+
+tab when meaningful.
+
+This can improve sharing, back/forward behavior and recovery.
+
+Do not put sensitive information into URLs.
+
+---
+
+# 44. Responsive + State Interaction
+
+Test important combinations.
+
+Examples:
+
+compact + error;
+
+compact + long content;
+
+expanded + empty;
+
+short landscape + open keyboard;
+
+narrow + loading table;
+
+zoomed + validation errors.
+
+Do not verify dimensions independently when their interaction could break the experience.
+
+---
+
+# 45. Representative Test Matrix
+
+Create a small representative matrix.
+
+Example:
+
+COMPACT WIDTH
+- normal
+- empty
+- error
+- long content
+
+MEDIUM
+- normal
+- partial
+
+EXPANDED
+- normal
+- large dataset
+
+ACCESSIBILITY
+- keyboard
+- text enlargement
+- reduced motion where relevant
+
+Choose coverage based on risk.
+
+Do not create hundreds of screenshot combinations.
+
+---
+
+# 46. Breakpoint Validation
+
+At each layout transition inspect:
+
+JUST BEFORE
+
+AT
+
+JUST AFTER
+
+This detects breakpoint cliffs.
+
+Also inspect arbitrary values between designed examples.
+
+Do not validate only exact design canvas sizes.
+
+---
+
+# 47. Output Format
+
+Return:
+
+# Responsive + States — [Screen]
+
+## Responsive Principles
+
+3–7 screen-specific rules.
+
+## Layout Behaviors
+
+### Compact
+...
+
+### Medium
+...
+
+### Expanded
+...
+
+Use only modes actually needed.
+
+## Breakpoint Reasons
+
+Behavioral thresholds, not arbitrary device list.
+
+## Component Adaptations
+
+...
+
+## Navigation Adaptation
+
+...
+
+## Data / Table / Chart Adaptation
+
+Only if relevant.
+
+## State Matrix
+
+| State | Behavior | User action | Recovery |
+| ... |
+
+## Loading
+
+...
+
+## Empty
+
+...
+
+## Errors
+
+...
+
+## Partial / Stale
+
+...
+
+## Mutation / Success
+
+...
+
+## Permissions / Connectivity
+
+Only if relevant.
+
+## Content Extremes
+
+...
+
+## Accessibility
+
+...
+
+## Focus Behavior
+
+...
+
+## Representative QA Matrix
+
+...
+
+## Assumptions
+
+...
+
+## Readiness
+
+Choose:
+
+READY FOR IMPLEMENTATION
+
+READY FOR DESIGN → CODE
+
+PROTOTYPE VALIDATION REQUIRED
+
+SCREEN DESIGN REVISION REQUIRED
+
+TECHNICAL CONSTRAINT DISCOVERED
+
+## Next
+
+Exactly one next prompt.
+
+Usually:
+
+`12 Design → Code`
+or `11 Visual QA` if implementation already exists.
+
+---
+
+# Completion Criterion
+
+Responsive + States is complete when the interface remains understandable and operable across realistic available spaces, data conditions and system states without requiring the implementation agent to invent behavior.
+
+Responsive design is successful when the task survives change in available space — not when three screenshots look attractive.

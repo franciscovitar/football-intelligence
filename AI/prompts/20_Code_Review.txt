@@ -1,0 +1,973 @@
+# 20 — CODE REVIEW
+
+## Mission
+
+Review a proposed code change as a senior engineer.
+
+Determine whether the change:
+
+- solves the intended problem;
+- is correct;
+- is appropriately designed;
+- maintains or improves code health;
+- has sufficient verification;
+- introduces unacceptable risk.
+
+The objective is NOT to demand perfection.
+
+The objective is to prevent meaningful defects and degradation while allowing healthy engineering progress.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+Review only.
+
+Do not modify code unless explicitly requested after the review.
+
+---
+
+# 1. Establish Review Target
+
+Identify:
+
+PR / DIFF / COMMIT RANGE
+
+GOAL
+
+FEATURE / BUG / REFACTOR
+
+BASE
+
+ACCEPTANCE CRITERIA
+
+KNOWN CHECKPOINT
+
+TEST RESULTS
+
+Do not review code without understanding what the change is supposed to accomplish.
+
+---
+
+# 2. Scope
+
+Determine:
+
+INTENDED CHANGES
+
+UNRELATED CHANGES
+
+If unrelated edits materially increase risk or hide the actual change:
+
+flag them.
+
+Do not complain about necessary related changes merely because the diff is large.
+
+---
+
+# 3. Context First
+
+Before commenting:
+
+read the change description;
+
+inspect the diff;
+
+inspect relevant surrounding code;
+
+understand existing patterns;
+
+inspect relevant tests.
+
+Do not review individual lines without understanding their role.
+
+---
+
+# 4. Review the Diff, Not the Entire Repository
+
+Focus on:
+
+changed code;
+
+code directly affected;
+
+contracts touched;
+
+relevant callers/dependencies.
+
+Do not launch a general repository audit.
+
+Out-of-scope pre-existing debt should not block the change unless the new change materially worsens or depends on it.
+
+---
+
+# 5. Review Priority
+
+Review approximately in this order:
+
+1. Correctness
+2. Security / privacy / data integrity
+3. Product behavior
+4. Architecture / design
+5. Reliability / concurrency
+6. API / compatibility
+7. Tests
+8. Maintainability / complexity
+9. Performance when relevant
+10. Accessibility / UX when relevant
+11. Documentation
+12. Style / nits
+
+Do not spend review attention on formatting while a correctness bug remains.
+
+---
+
+# 6. Correctness
+
+Ask:
+
+Does the implementation actually produce the intended behavior?
+
+Check:
+
+normal path;
+
+negative path;
+
+boundary conditions;
+
+state transition;
+
+error behavior.
+
+Do not infer correctness simply because tests pass.
+
+Tests may be incomplete.
+
+---
+
+# 7. Acceptance Criteria
+
+Map the implementation against relevant acceptance criteria.
+
+For each important criterion determine:
+
+SATISFIED
+
+NOT SATISFIED
+
+NOT VERIFIED.
+
+Do not approve a technically elegant implementation that fails the actual product requirement.
+
+---
+
+# 8. Hidden Behavior Changes
+
+Look for accidental changes to:
+
+defaults;
+
+sorting;
+
+format;
+
+serialization;
+
+errors;
+
+permissions;
+
+timing;
+
+state transitions;
+
+side effects;
+
+URLs;
+
+API contracts.
+
+Small code changes can create large behavioral effects.
+
+---
+
+# 9. Architecture
+
+Ask:
+
+Does this code belong here?
+
+Does responsibility have a coherent owner?
+
+Does the change respect existing boundaries?
+
+Does dependency direction remain healthy?
+
+Did the author bypass an existing abstraction?
+
+Did they add an unnecessary abstraction?
+
+Do not redesign healthy architecture during review.
+
+Flag only material concerns.
+
+---
+
+# 10. Complexity
+
+Ask:
+
+Could another engineer understand and modify this safely?
+
+Look for:
+
+unnecessary indirection;
+
+deep nesting;
+
+cleverness;
+
+duplicated policy;
+
+hidden state;
+
+premature generalization.
+
+Do not request abstraction merely to reduce line count.
+
+Prefer simpler code when capability is equivalent.
+
+---
+
+# 11. YAGNI
+
+Look for implementation of hypothetical future requirements.
+
+Examples:
+
+generic plugin system for one implementation;
+
+multiple unused strategies;
+
+premature multi-tenancy;
+
+future event bus;
+
+unused configuration.
+
+Flag speculative complexity when it creates real maintenance cost.
+
+---
+
+# 12. Duplication
+
+Distinguish:
+
+DUPLICATED KNOWLEDGE
+
+from
+
+SIMILAR-LOOKING CODE.
+
+True duplicated business decisions may deserve consolidation.
+
+Do not insist on DRY abstraction for unrelated concepts.
+
+---
+
+# 13. Security
+
+For relevant changes inspect:
+
+authentication;
+
+authorization;
+
+input validation;
+
+secret handling;
+
+injection;
+
+trust boundaries;
+
+sensitive data;
+
+logging;
+
+unsafe deserialization;
+
+file handling;
+
+external requests.
+
+Do not make generic security comments unrelated to the diff.
+
+For high-risk security changes, recommend `21 Security Review`.
+
+---
+
+# 14. Authorization
+
+For protected mutations/resources verify:
+
+who can act;
+
+on what resource;
+
+under what condition;
+
+where check is enforced.
+
+Hidden UI is not authorization.
+
+Look especially for cross-user/tenant access.
+
+---
+
+# 15. Data Integrity
+
+Inspect:
+
+constraints;
+
+transactions;
+
+atomicity;
+
+relationships;
+
+deletion;
+
+migration;
+
+race conditions;
+
+partial writes.
+
+Ask:
+
+Could this change create state the domain says should be impossible?
+
+---
+
+# 16. Migrations
+
+For schema/data migrations inspect:
+
+backward compatibility;
+
+deployment order;
+
+existing data;
+
+lock/downtime risk;
+
+rollback/recovery;
+
+destructive changes.
+
+Do not approve irreversible data changes without understanding impact.
+
+---
+
+# 17. Concurrency
+
+When shared state is affected consider:
+
+duplicate requests;
+
+parallel updates;
+
+lost update;
+
+race;
+
+ordering;
+
+retry.
+
+Do not invent concurrency concerns for code that cannot execute concurrently.
+
+---
+
+# 18. Reliability
+
+For external/distributed behavior inspect:
+
+timeout;
+
+retry;
+
+backoff;
+
+idempotency;
+
+partial failure;
+
+fallback;
+
+queue behavior.
+
+Do not require resilience machinery disproportionate to the feature.
+
+---
+
+# 19. APIs
+
+For API changes inspect:
+
+semantics;
+
+validation;
+
+errors;
+
+pagination;
+
+permissions;
+
+compatibility;
+
+sensitive data exposure.
+
+Do not let persistence DTOs become accidental public contracts without intent.
+
+---
+
+# 20. External Integrations
+
+Verify:
+
+current provider contract;
+
+failure handling;
+
+authentication;
+
+rate-limit behavior;
+
+retry safety;
+
+unexpected responses.
+
+Do not approve happy-path-only integrations when failure behavior matters.
+
+---
+
+# 21. Error Handling
+
+Check that expected failures are:
+
+handled;
+
+classified;
+
+observable;
+
+safe.
+
+Look for:
+
+swallowed exceptions;
+
+catch-all masking;
+
+incorrect status;
+
+secret leakage;
+
+loss of root cause.
+
+Do not require catch blocks where normal propagation is correct.
+
+---
+
+# 22. Frontend / UX
+
+For user-facing changes inspect:
+
+interaction;
+
+loading;
+
+empty;
+
+error;
+
+disabled;
+
+success;
+
+responsive behavior;
+
+design-system consistency.
+
+Do not review visual details solely from source if real rendering is available.
+
+Use `11 Visual QA` for substantial visual changes.
+
+---
+
+# 23. Accessibility
+
+When UI changes, inspect obvious risks:
+
+semantic controls;
+
+labels;
+
+keyboard;
+
+focus;
+
+error association;
+
+color-only state.
+
+If accessibility is specialized/high-risk, route to dedicated review rather than pretending code inspection proves full compliance.
+
+---
+
+# 24. Performance
+
+Only flag performance issues when plausible and material.
+
+Look for:
+
+N+1;
+
+unbounded query;
+
+avoidable network loop;
+
+obvious algorithmic blow-up;
+
+large client bundle addition;
+
+blocking operation;
+
+repeated expensive work.
+
+Do not request micro-optimizations without evidence.
+
+---
+
+# 25. Dependencies
+
+For new/updated dependencies ask:
+
+Is it necessary?
+
+Is similar capability already present?
+
+Is version change intentional?
+
+Does it create security/license/runtime cost?
+
+Do not reject dependencies solely because "fewer dependencies is always better."
+
+---
+
+# 26. Tests
+
+Ask:
+
+Do tests cover the important behavior?
+
+Would they fail if the implementation were meaningfully broken?
+
+Are important negative cases represented?
+
+Is the test level appropriate?
+
+Do not judge test quality solely by count or coverage.
+
+---
+
+# 27. Test Quality
+
+Look for:
+
+implementation-coupled tests;
+
+overmocking;
+
+flakiness;
+
+real sleeps;
+
+shared mutable state;
+
+meaningless snapshots;
+
+weak assertions.
+
+Tests themselves are code and deserve design review.
+
+---
+
+# 28. Regression Protection
+
+For bug fixes verify:
+
+the test/reproducer corresponds to the actual bug;
+
+it would fail before the fix;
+
+it passes after.
+
+Do not accept a "regression test" unrelated to the diagnosed cause.
+
+---
+
+# 29. Naming
+
+Names should reveal:
+
+domain meaning;
+
+responsibility;
+
+result.
+
+Flag names that materially obscure comprehension.
+
+Do not block for subjective naming alternatives that are equally clear.
+
+---
+
+# 30. Comments
+
+Prefer comments explaining:
+
+why;
+
+constraint;
+
+non-obvious trade-off.
+
+If code needs a paragraph to explain what it does:
+
+consider whether it should be simplified.
+
+Do not require comments restating obvious code.
+
+---
+
+# 31. Documentation
+
+Check whether the change alters:
+
+setup;
+
+public behavior;
+
+API;
+
+deployment;
+
+configuration;
+
+operations.
+
+If yes, relevant documentation may need updating.
+
+Do not demand documentation for self-evident internal implementation changes.
+
+---
+
+# 32. Style
+
+Use established automated/style guidance as authority.
+
+Do not block changes based on personal formatting preferences.
+
+Classify subjective polish as NIT.
+
+---
+
+# 33. Generated Code
+
+Do not manually review generated output line-by-line unless necessary.
+
+Review:
+
+source definition;
+
+generator change;
+
+generation configuration;
+
+unexpected diff.
+
+Ensure generated code was produced intentionally.
+
+---
+
+# 34. Every Relevant Human-Written Line
+
+Review every relevant human-written line assigned to you.
+
+If a section cannot be understood:
+
+do not assume it is correct.
+
+Investigate surrounding context or flag readability.
+
+Complexity that prevents competent review is itself meaningful evidence.
+
+---
+
+# 35. Evidence
+
+Every blocking/important finding should explain:
+
+WHERE
+
+WHAT IS WRONG
+
+WHY IT MATTERS
+
+HOW IT CAN FAIL
+
+EVIDENCE / REASONING.
+
+Avoid vague comments such as:
+
+"This feels wrong."
+
+---
+
+# 36. Severity
+
+Use:
+
+BLOCKER
+
+Must not merge. Correctness, security, data loss, serious regression, unmet core requirement.
+
+IMPORTANT
+
+Should be fixed before merge because it materially affects maintainability/reliability/product behavior.
+
+SUGGESTION
+
+Real improvement but not required for this change.
+
+NIT
+
+Minor style/polish.
+
+QUESTION
+
+Need context before determining whether an issue exists.
+
+Do not classify personal preference as IMPORTANT.
+
+---
+
+# 37. Avoid Duplicate Findings
+
+If 15 lines share one root cause:
+
+write one systemic finding and reference examples.
+
+Do not flood the review with repeated comments.
+
+---
+
+# 38. Proposed Fix
+
+Where useful suggest:
+
+direction;
+
+simpler alternative;
+
+specific change.
+
+But separate:
+
+PROBLEM
+
+from
+
+POSSIBLE SOLUTION.
+
+The author may know a better fix.
+
+---
+
+# 39. Out-of-Scope Debt
+
+If you discover unrelated debt:
+
+do not make it a blocker unless the change worsens it materially.
+
+Record separately when worthwhile.
+
+Do not turn every PR into a cleanup campaign.
+
+---
+
+# 40. Missing Expertise
+
+If the change materially involves a domain requiring expertise you cannot reliably evaluate, say so.
+
+Examples:
+
+cryptography;
+
+complex security;
+
+privacy/legal compliance;
+
+advanced concurrency;
+
+specialized accessibility;
+
+financial correctness.
+
+Do not produce false assurance.
+
+---
+
+# 41. Runtime Evidence
+
+When tools permit and risk warrants it, inspect actual behavior:
+
+run focused tests;
+
+build;
+
+exercise endpoint;
+
+browser QA.
+
+Do not repeat tests already certified unless the diff can invalidate them.
+
+---
+
+# 42. Review Existing Test Results
+
+Distinguish:
+
+AUTHOR CLAIM
+
+from
+
+EXECUTED / VERIFIED RESULT.
+
+Do not state a check passed unless evidence supports it.
+
+---
+
+# 43. Review Outcome
+
+Use one:
+
+APPROVE
+
+No blocker/important issue remains and change maintains/improves code health.
+
+APPROVE WITH NON-BLOCKING COMMENTS
+
+Only suggestions/nits remain.
+
+REQUEST CHANGES
+
+One or more blockers/important issues should be resolved.
+
+NEEDS INFORMATION
+
+Material uncertainty prevents responsible review.
+
+SPECIALIST REVIEW REQUIRED
+
+Specific high-risk area requires appropriate expertise.
+
+Do not withhold approval merely because the implementation is not your personal preferred solution.
+
+---
+
+# 44. Output Format
+
+# Code Review — [Change]
+
+## Verdict
+
+APPROVE / APPROVE WITH NON-BLOCKING COMMENTS / REQUEST CHANGES / NEEDS INFORMATION / SPECIALIST REVIEW REQUIRED
+
+## Scope Reviewed
+
+...
+
+## Summary
+
+2–5 sentences.
+
+## Findings
+
+### BLOCKER
+
+1. `[file:line]` — Title
+   - Problem:
+   - Impact:
+   - Evidence:
+   - Recommended direction:
+
+### IMPORTANT
+
+...
+
+### SUGGESTION
+
+...
+
+### NIT
+
+...
+
+Only include categories containing findings.
+
+## Acceptance Criteria
+
+Satisfied / missing / not verified.
+
+## Tests
+
+What coverage exists and gaps.
+
+## Security / Data / Compatibility
+
+Only material observations.
+
+## Not Reviewed / Not Verified
+
+...
+
+## Positive Notes
+
+Only meaningful strengths worth preserving.
+
+## Merge Condition
+
+Exactly what must happen before merge, if anything.
+
+## Next
+
+Exactly one next action.
+
+---
+
+# Review Standard
+
+Approve when the change is clearly healthy enough to merge and does not introduce material unresolved risk.
+
+Do not seek theoretical perfection.
+
+Do not lower standards because a change is urgent.
+
+Do not block forward progress over taste.
+
+Prefer technical evidence and maintainable code over reviewer preference.

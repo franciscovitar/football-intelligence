@@ -1,0 +1,814 @@
+# 05 — ARCHITECTURE DECISION
+
+## Mission
+
+Make one important architectural decision using explicit requirements, evidence and trade-offs.
+
+The objective is not to find a universally "best" technology or architecture.
+
+The objective is to choose the alternative that best fits THIS project's current requirements and constraints.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+Use existing Discovery, Feature Specifications, Architecture Design, Technical Spikes and checkpoints.
+
+Do not repeat validated investigation.
+
+---
+
+# 1. One Decision Only
+
+Express the decision clearly.
+
+Use:
+
+"We need to decide..."
+
+Examples:
+
+"We need to decide how authenticated user sessions will be represented and validated."
+
+"We need to decide whether this workload should remain in the existing application or become an independent service."
+
+"We need to choose the primary transactional datastore."
+
+Avoid combining unrelated decisions.
+
+Bad:
+
+"Choose database, hosting, frontend framework and architecture."
+
+Split unrelated decisions.
+
+---
+
+# 2. Why the Decision Exists
+
+State:
+
+TRIGGER
+Why must this decision be made now?
+
+IMPACT
+What does the decision affect?
+
+DEADLINE / DEPENDENCY
+What work is blocked by it?
+
+If nothing meaningful depends on the decision yet:
+
+consider deferring it.
+
+Do not make architecture decisions earlier than necessary.
+
+---
+
+# 3. Decision Scope
+
+Define:
+
+IN SCOPE
+
+OUT OF SCOPE
+
+Do not allow a technology-selection question to turn into a full architecture redesign.
+
+---
+
+# 4. Current State
+
+Describe the existing approach.
+
+The current solution is an alternative too.
+
+Do not assume changing technology is automatically an improvement.
+
+Identify:
+
+- existing implementation;
+- existing investment;
+- migration cost;
+- current strengths;
+- current limitations.
+
+---
+
+# 5. Decision Drivers
+
+Rank the requirements that matter to THIS decision.
+
+Possible drivers:
+
+- correctness;
+- security;
+- data integrity;
+- reliability;
+- latency;
+- throughput;
+- scalability;
+- developer productivity;
+- maintainability;
+- interoperability;
+- deployment independence;
+- team expertise;
+- time to market;
+- cost;
+- operational burden;
+- ecosystem;
+- portability;
+- vendor lock-in;
+- regulatory requirements.
+
+Do not include every possible driver.
+
+Rank the ones capable of changing the decision.
+
+---
+
+# 6. Hard Constraints
+
+Separate constraints from preferences.
+
+HARD CONSTRAINT
+
+Cannot be violated.
+
+PREFERENCE
+
+Desirable but negotiable.
+
+Examples of hard constraints:
+
+- mandatory provider;
+- legal requirement;
+- required protocol;
+- supported runtime;
+- data residency;
+- compatibility requirement.
+
+Do not reject an otherwise superior alternative because it violates a mere preference unless that preference is intentionally prioritized.
+
+---
+
+# 7. Evidence
+
+Separate:
+
+KNOWN
+
+INFERRED
+
+ASSUMED
+
+UNKNOWN
+
+For version-sensitive claims, research current primary sources.
+
+Prefer:
+
+- standards;
+- official documentation;
+- release notes;
+- provider documentation;
+- maintained source repositories;
+- real project benchmarks;
+- existing production evidence.
+
+Do not make technology decisions based on remembered features that may have changed.
+
+---
+
+# 8. Reversibility
+
+Classify the decision:
+
+EASY TO REVERSE
+
+MODERATELY EXPENSIVE
+
+HARD TO REVERSE
+
+Examples of potentially hard-to-reverse decisions:
+
+- primary database model;
+- public API contract;
+- identity model;
+- system decomposition;
+- vendor with large data gravity;
+- distributed consistency model.
+
+The harder the decision is to reverse, the stronger the required evidence.
+
+Do not overanalyze easily reversible choices.
+
+---
+
+# 9. Candidate Alternatives
+
+Keep the candidate set small and realistic.
+
+Usually 2–4 alternatives.
+
+Include when relevant:
+
+CURRENT APPROACH / DO NOTHING
+
+Do not include technologies that fail an obvious hard constraint.
+
+Do not create straw-man alternatives.
+
+---
+
+# 10. Minimum Viability Filter
+
+Before detailed comparison, eliminate alternatives that fail hard requirements.
+
+For each alternative:
+
+HARD REQUIREMENTS SATISFIED?
+YES / NO / UNKNOWN
+
+If NO:
+
+reject.
+
+If UNKNOWN and important:
+
+use `03 Technical Spike`.
+
+Do not compensate for a hard requirement failure with strengths elsewhere.
+
+---
+
+# 11. Evaluate Trade-offs
+
+For each viable alternative evaluate only relevant drivers.
+
+Use qualitative assessment where appropriate:
+
+STRONG
+
+GOOD
+
+ACCEPTABLE
+
+WEAK
+
+UNACCEPTABLE
+
+UNKNOWN
+
+Avoid fake numerical precision.
+
+A weighted score may be used only when:
+
+- weights have meaningful justification;
+- criteria are sufficiently independent;
+- the score aids rather than replaces judgment.
+
+Do not let a spreadsheet mechanically make the architectural decision.
+
+---
+
+# 12. Correctness and Data Integrity
+
+When relevant evaluate:
+
+- transaction semantics;
+- consistency;
+- concurrency;
+- data guarantees;
+- failure modes;
+- recovery.
+
+A faster or cheaper alternative is unacceptable if it cannot satisfy required correctness.
+
+---
+
+# 13. Security / Privacy
+
+When relevant evaluate:
+
+- authentication integration;
+- authorization model;
+- privilege requirements;
+- secret management;
+- encryption;
+- attack surface;
+- isolation;
+- data handling;
+- auditability;
+- compliance constraints.
+
+Do not assume a managed service removes application-level security responsibilities.
+
+---
+
+# 14. Reliability
+
+When relevant evaluate:
+
+- availability;
+- failure isolation;
+- recovery;
+- retry semantics;
+- regional limitations;
+- dependency chain;
+- operational maturity.
+
+Base required reliability on product impact, not prestige.
+
+---
+
+# 15. Performance / Scale
+
+Evaluate only against realistic requirements.
+
+Consider:
+
+- latency;
+- throughput;
+- concurrency;
+- resource efficiency;
+- scaling model;
+- known limits.
+
+Do not choose architecture for hypothetical future scale.
+
+If performance differentiates candidates and cannot be determined confidently:
+
+run `03 Technical Spike`.
+
+---
+
+# 16. Complexity
+
+Evaluate both:
+
+IMPLEMENTATION COMPLEXITY
+
+OPERATIONAL COMPLEXITY
+
+COGNITIVE COMPLEXITY
+
+Do not hide operational complexity behind a clean code-level abstraction.
+
+A solution that creates:
+
+- more services;
+- more networks;
+- more databases;
+- more deployment units;
+- more failure modes
+
+must provide enough value to justify them.
+
+---
+
+# 17. Team / Developer Experience
+
+Consider:
+
+- existing expertise;
+- learning curve;
+- tooling;
+- debugging;
+- local development;
+- documentation;
+- ecosystem.
+
+Do not choose technology solely because the team already knows it.
+
+Do not ignore learning/operational cost either.
+
+---
+
+# 18. Ecosystem and Maturity
+
+When relevant evaluate:
+
+- maintenance activity;
+- support lifecycle;
+- documentation;
+- adoption;
+- provider stability;
+- backward compatibility;
+- tooling;
+- community/ecosystem.
+
+Avoid both extremes:
+
+"new = better"
+
+and
+
+"old = safer".
+
+Evaluate fitness for purpose.
+
+---
+
+# 19. Cost
+
+Consider total relevant cost.
+
+Possible components:
+
+- infrastructure;
+- licensing;
+- API usage;
+- storage;
+- network;
+- operations;
+- engineering effort;
+- migration;
+- maintenance.
+
+Separate current measurable cost from speculative future estimates.
+
+Do not add architecture complexity to optimize insignificant cost.
+
+---
+
+# 20. Lock-in
+
+Evaluate lock-in based on realistic exit difficulty.
+
+Ask:
+
+What becomes provider-specific?
+
+How difficult is data export?
+
+How difficult is code migration?
+
+What contracts remain portable?
+
+How likely are we to need portability?
+
+Do not treat all vendor lock-in as inherently bad.
+
+Managed services may justify lock-in through substantial reduction in operational burden.
+
+---
+
+# 21. Migration Cost
+
+If changing an existing system, evaluate:
+
+- code changes;
+- data migration;
+- compatibility;
+- downtime;
+- dual-running period;
+- retraining;
+- rollback;
+- operational transition.
+
+Do not compare only the final architectures while ignoring the journey between them.
+
+---
+
+# 22. Failure / Worst-Case Analysis
+
+For each serious candidate ask:
+
+If this choice goes wrong, what is the plausible failure?
+
+Examples:
+
+- performance ceiling;
+- data model mismatch;
+- vendor limitation;
+- operational overload;
+- difficult migration;
+- security gap.
+
+Evaluate downside, not only upside.
+
+---
+
+# 23. Unknowns
+
+Identify unknowns that could reverse the decision.
+
+Separate:
+
+DECISION-CRITICAL UNKNOWN
+
+NON-CRITICAL UNKNOWN
+
+For critical unknowns:
+
+do not guess.
+
+Recommend `03 Technical Spike` before accepting the decision.
+
+---
+
+# 24. Decision
+
+Choose one alternative when evidence permits.
+
+State:
+
+DECISION
+
+RATIONALE
+
+WHY IT FITS THE DRIVERS
+
+WHAT WE ACCEPT AS TRADE-OFF
+
+Do not say:
+
+"It depends"
+
+after all relevant context is already available.
+
+Make a recommendation.
+
+---
+
+# 25. Consequences
+
+Record both positive and negative consequences.
+
+POSITIVE
+
+What becomes easier/better?
+
+NEGATIVE
+
+What becomes harder/worse?
+
+NEW RESPONSIBILITIES
+
+What must the team now operate, maintain or understand?
+
+Do not hide disadvantages.
+
+---
+
+# 26. Guardrails
+
+If the selected decision is valid only under certain conditions, record them.
+
+Examples:
+
+- remain within expected load;
+- no cross-region active-active requirement;
+- one deployment team;
+- no offline support;
+- specific data size range.
+
+Guardrails make conditional decisions explicit.
+
+---
+
+# 27. Reconsideration Triggers
+
+Define events that should cause the decision to be revisited.
+
+Examples:
+
+- p95 latency exceeds X;
+- dataset exceeds Y;
+- deployment independence becomes necessary;
+- provider pricing changes materially;
+- new regulatory constraint appears;
+- team ownership splits;
+- measured failure rate exceeds threshold.
+
+Do not revisit decisions periodically without a reason.
+
+Use evidence-based triggers.
+
+---
+
+# 28. Rollback / Exit Strategy
+
+For meaningful decisions define how we would back out if necessary.
+
+Especially for:
+
+- providers;
+- databases;
+- authentication systems;
+- public APIs;
+- distributed architecture;
+- migrations.
+
+Do not create expensive portability layers unless justified.
+
+A conceptual exit strategy may be enough.
+
+---
+
+# 29. ADR
+
+If the decision is architecture-significant, produce a lightweight ADR.
+
+Suggested format:
+
+# ADR-[ID]: [Decision]
+
+Date:
+Status: Proposed / Accepted / Superseded / Deprecated
+
+## Context
+
+Why the decision is necessary.
+
+## Decision Drivers
+
+- ...
+
+## Considered Options
+
+### Option A
+...
+
+### Option B
+...
+
+## Decision
+
+...
+
+## Rationale
+
+...
+
+## Consequences
+
+### Positive
+- ...
+
+### Negative
+- ...
+
+## Risks
+
+- ...
+
+## Reconsider When
+
+- ...
+
+## Related Evidence
+
+Technical spikes, benchmarks, docs or requirements.
+
+Do not turn ADRs into essays.
+
+---
+
+# 30. Decision Quality Check
+
+Before finalizing ask:
+
+Are we solving the actual decision?
+
+Were hard constraints respected?
+
+Were realistic alternatives considered?
+
+Was the current solution considered?
+
+Are important claims evidence-backed?
+
+Are trade-offs explicit?
+
+Did we consider operational complexity?
+
+Did we consider migration cost?
+
+Are decision-critical unknowns resolved?
+
+Is the amount of analysis proportional to reversibility?
+
+Could a simpler alternative satisfy the same drivers?
+
+If yes:
+
+prefer the simpler alternative.
+
+---
+
+# 31. Output Format
+
+Return:
+
+# Architecture Decision
+
+## Decision
+
+One sentence.
+
+## Status
+
+PROPOSED / ACCEPTED / BLOCKED BY SPIKE
+
+## Context
+
+...
+
+## Decision Drivers
+
+Ranked.
+
+## Hard Constraints
+
+...
+
+## Alternatives
+
+...
+
+## Comparison
+
+Concise comparison against relevant drivers.
+
+## Recommendation
+
+Selected option.
+
+## Why
+
+...
+
+## Trade-offs Accepted
+
+...
+
+## Risks
+
+...
+
+## Unknowns
+
+...
+
+## Reversibility
+
+Easy / Moderate / Hard.
+
+## Reconsider When
+
+Concrete triggers.
+
+## Migration / Rollback
+
+Only when relevant.
+
+## ADR
+
+Provide ready-to-save ADR when warranted.
+
+## Next
+
+Exactly one next prompt/action.
+
+---
+
+# Possible Outcomes
+
+ACCEPT
+
+Evidence supports the recommendation.
+
+ACCEPT CONDITIONALLY
+
+Decision is valid under explicit guardrails.
+
+SPIKE REQUIRED
+
+One or more unknowns could materially reverse the decision.
+
+DEFER
+
+The decision does not need to be made yet.
+
+KEEP CURRENT APPROACH
+
+Change does not currently justify its cost/complexity.
+
+---
+
+# Completion Criterion
+
+An Architecture Decision is complete when the project can proceed knowing:
+
+- what was chosen;
+- why;
+- which alternatives were considered;
+- which trade-offs were accepted;
+- what evidence supported it;
+- when the decision should be revisited.
+
+A good decision record prevents future engineers from asking:
+
+"Why on earth did they do this?"
+
+without forcing them to read the history of the entire project.

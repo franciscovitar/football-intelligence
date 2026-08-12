@@ -1,0 +1,906 @@
+# 19 — TEST STRATEGY
+
+## Mission
+
+Design the smallest testing strategy that gives sufficient confidence in the product while remaining fast, reliable and maintainable.
+
+The objective is NOT:
+
+maximum test count;
+
+maximum coverage percentage;
+
+maximum end-to-end realism;
+
+testing every implementation detail.
+
+The objective is:
+
+catch important failures
++
+at the cheapest reliable test boundary.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+---
+
+# 1. Define Test Scope
+
+Determine what is being protected:
+
+PROJECT
+
+FEATURE
+
+SUBSYSTEM
+
+API
+
+MIGRATION
+
+INTEGRATION
+
+CRITICAL FLOW.
+
+Do not redesign the entire repository's testing strategy for one isolated feature unless explicitly requested.
+
+---
+
+# 2. Start From Risk
+
+Identify failures that matter.
+
+For each important behavior consider:
+
+LIKELIHOOD
+
+IMPACT
+
+DETECTABILITY
+
+COMPLEXITY
+
+CHANGE FREQUENCY.
+
+Prioritize tests where failure would be costly, likely or difficult to detect manually.
+
+Do not give equal testing effort to all code.
+
+---
+
+# 3. Behavioral Inventory
+
+List important externally meaningful behaviors.
+
+Examples:
+
+business rule;
+
+permission;
+
+data invariant;
+
+API contract;
+
+integration boundary;
+
+critical UI flow;
+
+state transition;
+
+failure recovery.
+
+Do not begin by listing files/functions to test.
+
+Begin with behavior.
+
+---
+
+# 4. Existing Coverage
+
+Inspect existing:
+
+unit tests;
+
+integration tests;
+
+E2E;
+
+contract tests;
+
+visual tests;
+
+fixtures;
+
+test helpers;
+
+CI.
+
+Identify what is already trusted.
+
+Do not duplicate tests that already protect the same failure efficiently.
+
+---
+
+# 5. Choose Test Boundary
+
+For each important behavior ask:
+
+What is the smallest test capable of detecting this failure reliably?
+
+Possible:
+
+UNIT
+
+COMPONENT
+
+INTEGRATION
+
+CONTRACT
+
+END-TO-END
+
+VISUAL
+
+MANUAL / REAL ENVIRONMENT.
+
+Prefer lower-cost boundaries when fidelity is sufficient.
+
+Use higher-fidelity tests when the risk exists specifically at the integration/runtime boundary.
+
+---
+
+# 6. SMURF Trade-offs
+
+Evaluate test choices across:
+
+SPEED
+
+How quickly can feedback arrive?
+
+MAINTAINABILITY
+
+How expensive is the test to understand and update?
+
+UTILIZATION
+
+How much infrastructure/resource does it consume?
+
+RELIABILITY
+
+Does failure strongly indicate a real defect?
+
+FIDELITY
+
+How closely does it represent real behavior?
+
+Do not maximize one dimension blindly.
+
+Choose a useful balance for the risk.
+
+---
+
+# 7. Unit Tests
+
+Use unit tests for behavior that can be meaningfully isolated.
+
+Strong candidates:
+
+domain rules;
+
+calculations;
+
+parsing;
+
+transformations;
+
+validation;
+
+state transitions.
+
+Keep them:
+
+fast;
+
+deterministic;
+
+focused.
+
+Do not unit-test framework internals.
+
+Do not mock half the application just to call one function "unit tested."
+
+---
+
+# 8. Integration Tests
+
+Use integration tests for boundaries where collaboration itself creates risk.
+
+Examples:
+
+application ↔ database;
+
+API ↔ application;
+
+module ↔ module;
+
+application ↔ queue;
+
+serialization ↔ contract.
+
+Prefer real implementations for the boundary under test where practical.
+
+Do not mock away the exact integration behavior the test is meant to verify.
+
+---
+
+# 9. End-to-End Tests
+
+Reserve E2E for high-value journeys whose correctness depends on multiple real layers working together.
+
+Examples:
+
+sign-in;
+
+checkout/payment;
+
+critical submission;
+
+core onboarding;
+
+high-value workflow.
+
+Keep the E2E suite intentionally small.
+
+Do not reproduce every lower-level edge case through the browser.
+
+---
+
+# 10. Contract Tests
+
+Use contract tests when independent components/providers rely on stable expectations.
+
+Protect:
+
+request/response shape;
+
+required fields;
+
+error semantics;
+
+event schema;
+
+provider assumptions.
+
+Do not use contract tests as a substitute for business behavior tests.
+
+---
+
+# 11. Component Tests
+
+For interactive UI components, test meaningful behavior:
+
+interaction;
+
+state;
+
+accessibility semantics;
+
+callback/result.
+
+Do not assert implementation-specific DOM structure unless structurally contractual.
+
+---
+
+# 12. Visual Regression
+
+Use visual tests for stable visual behavior that matters.
+
+Suitable:
+
+design-system components;
+
+critical layout;
+
+important responsive states.
+
+Not suitable as the only test for:
+
+business logic;
+
+permissions;
+
+data correctness.
+
+A screenshot passing does not prove the feature works.
+
+---
+
+# 13. Accessibility Testing
+
+Use automated accessibility tests for detectable classes of problems.
+
+Also retain manual/real interaction checks where needed for:
+
+keyboard;
+
+focus;
+
+meaning;
+
+screen-reader experience.
+
+Automation cannot prove complete accessibility.
+
+Route broad accessibility review to the relevant quality workflow.
+
+---
+
+# 14. Security Tests
+
+Include specific security behavior when part of the contract:
+
+unauthorized denied;
+
+cross-user access denied;
+
+invalid input rejected;
+
+signature invalid;
+
+CSRF/security mechanism when relevant.
+
+Do not attempt to replace a dedicated security review with generic automated tests.
+
+---
+
+# 15. Performance Tests
+
+Only add performance tests when a measurable performance requirement exists or regression risk is material.
+
+Define:
+
+workload;
+
+environment;
+
+metric;
+
+threshold.
+
+Do not make arbitrary timing assertions in normal unit tests.
+
+---
+
+# 16. Test Data
+
+Use data representative enough to exercise behavior.
+
+Include when useful:
+
+normal;
+
+boundary;
+
+empty;
+
+invalid;
+
+large;
+
+historical/legacy.
+
+Avoid unrealistic fixtures that make tests pass while production data fails.
+
+---
+
+# 17. Fixture Design
+
+Keep fixtures understandable and local enough to reveal why the test matters.
+
+Avoid huge global fixtures where changing one irrelevant field breaks dozens of tests.
+
+Prefer builders/factories only when they reduce real duplication and noise.
+
+---
+
+# 18. Test Doubles
+
+Use:
+
+fake;
+
+stub;
+
+mock;
+
+spy
+
+only when they solve a real isolation/control problem.
+
+Mock boundaries, not everything.
+
+Do not reproduce entire third-party behavior manually.
+
+Do not assert every internal call unless call semantics are contractual.
+
+---
+
+# 19. Determinism
+
+Tests should produce the same result from the same relevant conditions.
+
+Control when appropriate:
+
+time;
+
+randomness;
+
+locale;
+
+timezone;
+
+network;
+
+global state;
+
+database state;
+
+parallel execution.
+
+Do not hide nondeterminism through automatic retries.
+
+---
+
+# 20. Time
+
+For time-dependent logic use a controllable clock where practical.
+
+Avoid real sleeps.
+
+Test boundaries explicitly:
+
+before;
+
+at;
+
+after.
+
+Do not create tests dependent on the wall clock unnecessarily.
+
+---
+
+# 21. Randomness
+
+Seed or inject randomness when deterministic verification matters.
+
+For property/randomized testing, preserve failing seeds/examples when possible.
+
+Do not allow randomness to make failures unreproducible.
+
+---
+
+# 22. Concurrency
+
+For concurrency-sensitive behavior test the invariant under relevant parallel execution.
+
+Examples:
+
+duplicate creation;
+
+lost updates;
+
+idempotency;
+
+locking;
+
+ordering.
+
+Do not assume normal sequential tests protect concurrent behavior.
+
+---
+
+# 23. Negative Paths
+
+Identify high-value failures.
+
+Examples:
+
+invalid input;
+
+not found;
+
+permission denied;
+
+dependency timeout;
+
+duplicate action;
+
+partial failure;
+
+conflict.
+
+Do not test only happy paths.
+
+---
+
+# 24. Boundaries
+
+Test important boundaries explicitly:
+
+0;
+
+1;
+
+maximum;
+
+empty;
+
+exact expiration;
+
+pagination edge;
+
+date transitions;
+
+enum evolution.
+
+Prefer domain-relevant boundaries over arbitrary values.
+
+---
+
+# 25. Regression Tests
+
+Every important bug fix should add or improve regression protection when practical.
+
+A useful regression test should have failed under the previous defect.
+
+Do not add duplicate regression tests if existing coverage already catches it.
+
+---
+
+# 26. TDD
+
+Use TDD when it improves:
+
+problem decomposition;
+
+API design;
+
+feedback;
+
+confidence.
+
+Typical loop:
+
+RED
+→ GREEN
+→ REFACTOR.
+
+Do not require TDD when:
+
+existing code makes it inefficient;
+
+exploration is needed first;
+
+UI/art-direction work dominates;
+
+the test boundary is not yet understood.
+
+TDD is a technique, not a quality guarantee by itself.
+
+---
+
+# 27. Coverage
+
+Use code coverage as diagnostic information.
+
+Useful questions:
+
+Which important path is unexecuted?
+
+Why is this module barely exercised?
+
+Do not use coverage percentage alone as proof of quality.
+
+100% execution can still assert the wrong things.
+
+Do not write trivial tests solely to increase the metric.
+
+---
+
+# 28. Mutation Testing
+
+Consider mutation testing only where it provides enough value to justify cost.
+
+Useful for:
+
+critical logic;
+
+high-confidence libraries;
+
+testing test quality itself.
+
+Do not introduce it ceremonially.
+
+---
+
+# 29. Flaky Tests
+
+Treat flakiness as a defect.
+
+Classify root cause:
+
+test;
+
+product race;
+
+environment;
+
+external dependency;
+
+shared state.
+
+Fix or quarantine with explicit ownership when necessary.
+
+Do not normalize permanently flaky CI.
+
+---
+
+# 30. Failure Quality
+
+A failed test should make diagnosis reasonably easy.
+
+Prefer:
+
+meaningful name;
+
+clear assertion;
+
+small behavioral scope;
+
+useful failure output.
+
+Avoid enormous snapshots and generic:
+
+"expected true, got false"
+
+when richer evidence is cheap.
+
+---
+
+# 31. Test Naming
+
+Name tests by behavior/outcome.
+
+Prefer:
+
+`rejects_duplicate_order_for_same_idempotency_key`
+
+over:
+
+`test_method_2`.
+
+A reader should understand what behavior is protected.
+
+---
+
+# 32. Isolation
+
+Tests should not depend unnecessarily on execution order.
+
+Reset/isolate relevant state.
+
+Do not make each test recreate expensive global infrastructure when safe shared fixtures improve efficiency.
+
+Balance isolation with utilization.
+
+---
+
+# 33. Parallelism
+
+Use parallel execution where tests are genuinely independent.
+
+Do not introduce races merely to reduce CI duration.
+
+If parallelism reveals shared-state bugs:
+
+fix the state problem rather than serializing blindly when feasible.
+
+---
+
+# 34. CI Tiers
+
+Structure feedback by cost when useful.
+
+Example:
+
+FAST
+lint/type/unit/focused integration.
+
+STANDARD
+broader integration/build.
+
+EXPENSIVE
+E2E/visual/performance/security where relevant.
+
+Run expensive checks at a cadence proportional to risk.
+
+Do not run every expensive test after every keystroke.
+
+---
+
+# 35. Local Developer Loop
+
+Developers should have a fast path for:
+
+changed behavior
+→ relevant test
+→ result.
+
+Do not require a 30-minute suite to validate a small local change if focused tests are possible.
+
+---
+
+# 36. Production-Like Fidelity
+
+Where risk exists specifically in real infrastructure, include a controlled higher-fidelity check.
+
+Examples:
+
+provider sandbox;
+
+real database engine;
+
+browser;
+
+deployed environment.
+
+Do not call a mocked test "integration with provider."
+
+---
+
+# 37. Manual Testing
+
+Manual verification remains appropriate for areas difficult to automate economically.
+
+Examples:
+
+new visual interaction;
+
+exploratory UX;
+
+device hardware;
+
+rare operational workflow.
+
+Use manual testing intentionally.
+
+Do not make routine regression depend permanently on repetitive human clicking when automation is practical.
+
+---
+
+# 38. Traceability
+
+For important functionality map:
+
+REQUIREMENT / RISK
+→ TEST.
+
+Do not create bureaucratic traceability for trivial behavior.
+
+The purpose is to identify unprotected critical requirements.
+
+---
+
+# 39. Test Ownership
+
+Tests are production assets.
+
+Whoever changes behavior should keep relevant tests healthy.
+
+Do not tolerate test suites nobody understands or owns.
+
+---
+
+# 40. Strategy Output
+
+Return:
+
+# Test Strategy — [Scope]
+
+## Scope
+
+...
+
+## Main Risks
+
+Ranked.
+
+## Behaviors To Protect
+
+...
+
+## Existing Coverage
+
+...
+
+## Test Matrix
+
+| Behavior/Risk | Test level | Why this level | Key cases |
+|---|---|---|---|
+
+## Unit
+
+...
+
+## Integration
+
+...
+
+## E2E
+
+...
+
+## Contract / Visual / Accessibility / Performance
+
+Only if relevant.
+
+## Test Data
+
+...
+
+## Doubles / Fixtures
+
+...
+
+## Negative / Boundary Cases
+
+...
+
+## Regression Policy
+
+...
+
+## CI Strategy
+
+Fast / standard / expensive when useful.
+
+## Flakiness Policy
+
+...
+
+## What NOT To Test
+
+Explicitly.
+
+## Gaps
+
+...
+
+## Readiness
+
+READY
+
+READY WITH KNOWN GAPS
+
+TESTABILITY REFACTOR REQUIRED
+
+TECHNICAL SPIKE REQUIRED
+
+## Next
+
+Usually:
+
+`13 Feature Implementation`
+or
+`20 Code Review`.
+
+---
+
+# Completion Criterion
+
+A Test Strategy is complete when important product risks have an appropriate detection mechanism and the resulting suite is expected to remain fast enough, reliable enough and maintainable enough to be used continuously.
+
+The best test strategy is not the one with the most tests.
+
+It is the one that gives the most useful confidence for its cost.

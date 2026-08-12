@@ -1,0 +1,1018 @@
+# 15 — EXTERNAL INTEGRATION
+
+# Mission
+
+Integrate an external API, SaaS, identity provider, payment provider, AI service, storage provider or other remote dependency safely and predictably.
+
+External systems must be treated as:
+
+outside our control
++
+fallible
++
+changeable
++
+potentially slow
++
+security-sensitive.
+
+The objective is NOT merely:
+
+"make the API call work."
+
+The objective is:
+
+"make the product remain correct when the integration works, fails, retries, slows down or changes within its documented contract."
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+---
+
+# 1. Identify Integration Purpose
+
+Define:
+
+PROVIDER
+
+PRODUCT CAPABILITY
+
+WHY EXTERNAL SERVICE IS NEEDED
+
+WHAT DATA CROSSES THE BOUNDARY
+
+CRITICALITY
+
+Do not integrate a service without understanding what product capability depends on it.
+
+---
+
+# 2. Build vs Integrate
+
+Before substantial integration work verify that externalizing this capability remains justified.
+
+Consider:
+
+CAPABILITY VALUE
+
+IMPLEMENTATION COST
+
+OPERATIONAL OWNERSHIP
+
+SECURITY
+
+LOCK-IN
+
+RELIABILITY
+
+Do not rebuild commodity infrastructure unnecessarily.
+
+Do not accept a provider when its constraints conflict with hard requirements.
+
+---
+
+# 3. Verify Current Official Documentation
+
+For provider-specific behavior use current official sources.
+
+Confirm:
+
+SUPPORTED API VERSION
+
+SDK VERSION
+
+AUTHENTICATION
+
+ENDPOINTS
+
+RATE LIMITS
+
+WEBHOOKS
+
+RETRY GUIDANCE
+
+ERRORS
+
+DEPRECATIONS
+
+ENVIRONMENT / SANDBOX
+
+Do not implement from model memory.
+
+---
+
+# 4. Existing Integration State
+
+Inspect existing project support.
+
+Determine:
+
+SDK already installed?
+
+integration client exists?
+
+credentials/configuration exists?
+
+webhook endpoint exists?
+
+test fixtures exist?
+
+provider abstraction exists?
+
+existing checkpoint?
+
+Reuse healthy infrastructure.
+
+Do not create duplicate clients.
+
+---
+
+# 5. Contract
+
+Define what our system needs from the provider.
+
+INPUT
+
+OUTPUT
+
+SIDE EFFECT
+
+ERRORS WE CARE ABOUT
+
+CONSISTENCY / FRESHNESS
+
+LATENCY EXPECTATION
+
+Do not expose the provider's complete API throughout the application.
+
+Keep provider-specific knowledge near the integration boundary.
+
+---
+
+# 6. Boundary / Adapter
+
+Create a local interface or adapter when it meaningfully isolates provider-specific behavior.
+
+This is justified when:
+
+provider contract is complex;
+
+multiple modules use it;
+
+testing needs a boundary;
+
+provider may reasonably change;
+
+domain should not depend on vendor types.
+
+Do not create an abstraction layer around a single trivial call merely for architectural appearance.
+
+---
+
+# 7. Provider Types
+
+Avoid leaking provider-specific DTOs throughout the product.
+
+Translate to application/domain concepts when that separation provides value.
+
+Preserve raw provider data only when needed for:
+
+AUDIT
+
+WEBHOOK RECONCILIATION
+
+DEBUGGING
+
+Do not duplicate large payloads without purpose.
+
+---
+
+# 8. Authentication
+
+Determine:
+
+API KEY
+
+OAUTH
+
+SERVICE ACCOUNT
+
+SIGNED REQUEST
+
+TOKEN
+
+CERTIFICATE
+
+Use the provider's supported secure mechanism.
+
+Apply minimum privilege/scopes.
+
+Do not store secrets in source control.
+
+Do not request broader permissions merely to simplify setup.
+
+---
+
+# 9. Secret Lifecycle
+
+Define:
+
+WHERE SECRET LIVES
+
+WHICH ENVIRONMENT
+
+WHO/WHAT CAN ACCESS IT
+
+ROTATION
+
+EXPIRATION when applicable.
+
+Avoid logging secrets.
+
+Avoid exposing them to the browser/client unless explicitly designed as public credentials.
+
+---
+
+# 10. Environment Separation
+
+Distinguish:
+
+LOCAL / TEST
+
+SANDBOX
+
+STAGING
+
+PRODUCTION
+
+Use sandbox/test environment when provider supports it.
+
+Do not accidentally use Production for routine development.
+
+Make environment selection explicit enough to avoid dangerous mistakes.
+
+---
+
+# 11. Timeouts
+
+Every remote call should have bounded waiting behavior appropriate to the application and provider.
+
+Determine:
+
+CONNECTION
+
+REQUEST
+
+TOTAL OPERATION
+
+where relevant.
+
+Do not allow external requests to hang indefinitely.
+
+Do not choose arbitrary extremely aggressive timeouts without understanding normal latency.
+
+---
+
+# 12. Retry Classification
+
+Classify provider failures:
+
+PERMANENT
+
+TRANSIENT
+
+RATE LIMITED
+
+UNKNOWN
+
+Only retry conditions that can plausibly succeed later and are safe to repeat.
+
+Do not retry:
+
+validation errors;
+
+authorization failures;
+
+clearly permanent errors
+
+unless provider semantics explicitly justify it.
+
+---
+
+# 13. Retry Budget
+
+Retries must be bounded.
+
+Define when relevant:
+
+MAX ATTEMPTS
+
+BACKOFF
+
+JITTER
+
+TOTAL TIME BUDGET
+
+Do not create infinite retry loops.
+
+Do not retry aggressively against an already overloaded dependency.
+
+---
+
+# 14. Idempotency
+
+Before retrying mutation operations determine whether repeated execution can create duplicate side effects.
+
+If yes, use provider-supported idempotency when available or create an application-level strategy when necessary.
+
+Possible:
+
+IDEMPOTENCY KEY
+
+CLIENT REQUEST ID
+
+UNIQUE DOMAIN OPERATION ID
+
+DEDUPLICATION RECORD
+
+Do not assume a timeout means the provider did nothing.
+
+---
+
+# 15. Ambiguous Outcome
+
+Handle the important distributed-system state:
+
+"request outcome unknown."
+
+Example:
+
+we sent a mutation;
+
+connection timed out;
+
+we do not know whether provider committed it.
+
+Define recovery using, when available:
+
+IDEMPOTENCY
+
+STATUS LOOKUP
+
+RECONCILIATION
+
+WEBHOOK
+
+Do not blindly repeat destructive/costly operations.
+
+---
+
+# 16. Rate Limits
+
+Understand provider rate limit behavior.
+
+Consider:
+
+REQUEST LIMIT
+
+CONCURRENCY
+
+QUOTA
+
+BURST
+
+RETRY-AFTER
+
+When needed:
+
+throttle;
+
+queue;
+
+batch;
+
+cache;
+
+backoff.
+
+Do not wait until Production to discover obvious quota limitations.
+
+---
+
+# 17. Circuit / Failure Isolation
+
+For critical high-volume integrations consider whether repeated failures could cascade into the application.
+
+Possible protections:
+
+bounded concurrency;
+
+circuit breaker;
+
+load shedding;
+
+queue;
+
+cached fallback;
+
+graceful degradation.
+
+Use only when failure risk justifies the complexity.
+
+Do not add resilience patterns ceremonially.
+
+---
+
+# 18. Fallback
+
+Define whether the product can degrade gracefully.
+
+Possible:
+
+CACHED DATA
+
+STALE DATA WITH DISCLOSURE
+
+DISABLE FEATURE
+
+QUEUE ACTION
+
+ALTERNATIVE PROVIDER
+
+NO FALLBACK / EXPLICIT FAILURE
+
+Never fabricate successful data.
+
+Never silently present stale data as current when freshness matters.
+
+---
+
+# 19. Webhooks
+
+If provider sends webhooks, treat them as untrusted external input.
+
+Determine:
+
+AUTHENTICITY / SIGNATURE
+
+REPLAY PROTECTION
+
+IDEMPOTENCY
+
+ORDERING
+
+DUPLICATES
+
+RETRIES
+
+OUT-OF-ORDER DELIVERY
+
+SCHEMA VERSION
+
+PROCESSING TIME
+
+Do not assume one delivery exactly once.
+
+---
+
+# 20. Webhook Acknowledgement
+
+Keep synchronous webhook acknowledgement appropriately bounded.
+
+If processing is substantial:
+
+validate/authenticate
+→ persist/queue safely
+→ acknowledge
+→ process asynchronously.
+
+Do not perform long fragile business workflows before acknowledgement if provider retry semantics make that unsafe.
+
+---
+
+# 21. Reconciliation
+
+For important stateful integrations consider periodic reconciliation.
+
+Examples:
+
+payments;
+
+subscriptions;
+
+external provisioning;
+
+job status.
+
+Compare:
+
+LOCAL STATE
+
+PROVIDER STATE
+
+Resolve mismatches intentionally.
+
+Do not assume webhook delivery alone guarantees permanent consistency.
+
+---
+
+# 22. Polling
+
+If polling is necessary:
+
+define:
+
+INTERVAL
+
+BACKOFF
+
+STOP CONDITION
+
+MAX DURATION
+
+Do not poll aggressively.
+
+Prefer provider-supported push mechanisms where they materially improve the system, but do not introduce them solely for elegance.
+
+---
+
+# 23. Caching
+
+Cache external data only when:
+
+freshness semantics are understood;
+
+invalidation/TTL is defined;
+
+authorization remains correct;
+
+failure behavior is acceptable.
+
+Do not cache sensitive provider responses blindly.
+
+---
+
+# 24. Data Validation
+
+Treat provider responses as external input.
+
+Validate fields required for correctness.
+
+Handle:
+
+MISSING FIELD
+
+UNKNOWN ENUM
+
+NULL
+
+MALFORMED DATA
+
+UNEXPECTED STATUS
+
+Do not crash because a provider added an unknown non-breaking value.
+
+---
+
+# 25. Schema Evolution
+
+Design parsing to tolerate compatible provider evolution.
+
+Do not tightly bind the whole application to every provider field.
+
+Monitor deprecations/version changes.
+
+Do not ignore explicit breaking-version contracts.
+
+---
+
+# 26. Errors
+
+Map provider errors into application-level meaning.
+
+Example:
+
+provider RATE_LIMITED
+→ application TEMPORARILY_UNAVAILABLE.
+
+Do not leak confusing provider-specific messages directly to end users unless appropriate.
+
+Retain enough provider error context for debugging safely.
+
+---
+
+# 27. Logging
+
+Log enough to diagnose:
+
+OPERATION
+
+PROVIDER
+
+RESULT
+
+LATENCY
+
+REQUEST/CORRELATION ID
+
+ERROR CLASS
+
+RETRY COUNT
+
+Do not log:
+
+secret;
+
+access token;
+
+full sensitive payload;
+
+payment details;
+
+unnecessary personal information.
+
+---
+
+# 28. Correlation
+
+Where supported, preserve provider request IDs/correlation IDs.
+
+These are useful for:
+
+debugging;
+
+provider support;
+
+distributed tracing.
+
+Do not expose internal identifiers to users unless useful/safe.
+
+---
+
+# 29. Metrics
+
+For important integrations consider:
+
+SUCCESS RATE
+
+ERROR RATE
+
+LATENCY
+
+TIMEOUTS
+
+RATE LIMITS
+
+RETRIES
+
+WEBHOOK LAG
+
+QUEUE DEPTH
+
+RECONCILIATION MISMATCH
+
+Collect metrics that can influence operations.
+
+Do not instrument meaningless vanity metrics.
+
+---
+
+# 30. Alerts
+
+Alert only on actionable conditions.
+
+Examples:
+
+sustained failure rate;
+
+authentication broken;
+
+webhook processing stopped;
+
+quota near exhaustion.
+
+Do not alert on every transient remote error.
+
+---
+
+# 31. Cost
+
+For usage-priced providers identify:
+
+WHAT CREATES COST
+
+CALL VOLUME
+
+TOKEN/DATA VOLUME
+
+STORAGE
+
+EGRESS
+
+RETRY MULTIPLIER
+
+Put obvious safeguards around unexpectedly expensive operations when appropriate.
+
+Do not optimize negligible cost at the expense of product quality.
+
+---
+
+# 32. Provider Lock-In
+
+Identify what becomes vendor-specific.
+
+Examples:
+
+DATA FORMAT
+
+AUTH
+
+SDK
+
+WORKFLOW
+
+EVENT MODEL
+
+PROPRIETARY FEATURE
+
+Decide whether the benefit justifies it.
+
+Do not build portability abstraction unless switching is a realistic concern.
+
+---
+
+# 33. Testing Strategy
+
+Use an appropriate mix:
+
+UNIT
+adapter/mapping logic.
+
+CONTRACT
+our expectations of provider schema.
+
+SANDBOX INTEGRATION
+real provider test environment.
+
+FAULT TEST
+timeouts/errors/retries where valuable.
+
+WEBHOOK FIXTURE
+signed representative events.
+
+Do not make every unit test call a live external service.
+
+Do not rely exclusively on mocks for critical integration behavior.
+
+---
+
+# 34. Provider Sandbox Verification
+
+When available, verify critical flows against the real sandbox/test provider.
+
+Mocks cannot prove:
+
+credentials;
+
+network;
+
+real schema;
+
+provider-specific behavior.
+
+Do not claim integration PASS based solely on mocked tests when real sandbox verification is feasible and important.
+
+---
+
+# 35. Negative Tests
+
+Test relevant:
+
+INVALID CREDENTIALS
+
+RATE LIMIT
+
+TIMEOUT
+
+INVALID PAYLOAD
+
+DUPLICATE WEBHOOK
+
+UNKNOWN EVENT
+
+PROVIDER FAILURE
+
+RETRY
+
+Do not attempt to simulate every hypothetical provider failure.
+
+---
+
+# 36. Local Development
+
+Make development possible without unsafe production credentials.
+
+Use:
+
+sandbox;
+
+fixtures;
+
+local emulator;
+
+mock server
+
+when justified.
+
+Document only genuinely non-obvious setup.
+
+---
+
+# 37. Deployment
+
+Before Production integration verify:
+
+CONFIGURATION
+
+SECRET
+
+CALLBACK URL
+
+WEBHOOK URL
+
+ENVIRONMENT
+
+PERMISSIONS
+
+RATE LIMIT
+
+PROVIDER-SIDE SETTINGS
+
+Do not assume local success means production configuration is correct.
+
+Use Work/external environment when authenticated provider configuration is required.
+
+---
+
+# 38. Rollout
+
+For high-risk integrations consider:
+
+FEATURE FLAG
+
+LIMITED USERS
+
+LOW VOLUME
+
+STAGED MIGRATION
+
+Observe before full rollout.
+
+Do not add rollout machinery to trivial low-risk integrations.
+
+---
+
+# 39. Provider Outage Behavior
+
+Explicitly decide:
+
+WHAT USERS SEE
+
+WHAT OPERATIONS STOP
+
+WHAT CAN CONTINUE
+
+WHAT IS QUEUED
+
+WHAT DATA REMAINS AVAILABLE
+
+A provider outage should not accidentally take unrelated product capabilities down.
+
+---
+
+# 40. Exit Strategy
+
+For important/high-lock-in providers know conceptually:
+
+HOW DATA CAN BE EXPORTED
+
+HOW CREDENTIALS CAN BE REVOKED
+
+WHAT APPLICATION SURFACE DEPENDS ON PROVIDER
+
+WHAT MIGRATION WOULD REQUIRE
+
+Do not build the replacement in advance.
+
+---
+
+# 41. Output Format
+
+Return:
+
+# External Integration — [Provider]
+
+## Purpose
+
+...
+
+## Provider Contract
+
+...
+
+## Existing Project State
+
+...
+
+## Local Boundary / Mapping
+
+...
+
+## Authentication / Secrets
+
+...
+
+## Environments
+
+...
+
+## Timeout
+
+...
+
+## Retry Policy
+
+...
+
+## Idempotency / Ambiguous Outcomes
+
+...
+
+## Rate Limits
+
+...
+
+## Errors / Fallback
+
+...
+
+## Webhooks / Polling / Reconciliation
+
+Only applicable sections.
+
+## Security / Sensitive Data
+
+...
+
+## Observability
+
+...
+
+## Cost / Lock-In
+
+Only if material.
+
+## Test Strategy
+
+...
+
+## Production Configuration
+
+...
+
+## Rollback / Exit
+
+...
+
+## Risks
+
+...
+
+## Readiness
+
+Choose:
+
+READY FOR IMPLEMENTATION
+
+READY WITH ASSUMPTIONS
+
+TECHNICAL SPIKE REQUIRED
+
+PROVIDER ACCESS REQUIRED
+
+ARCHITECTURE DECISION REQUIRED
+
+## Next
+
+Usually:
+
+`13 Feature Implementation`.
+
+---
+
+# Completion Criterion
+
+External Integration design is complete when the system knows not only how to call the provider, but how to behave when that provider succeeds, fails, times out, retries or returns unexpected data.
+
+A working happy-path API call is a demo.
+
+A resilient integration is a product capability.

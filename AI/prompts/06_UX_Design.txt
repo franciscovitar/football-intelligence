@@ -1,0 +1,960 @@
+# 06 — UX DESIGN
+
+## Mission
+
+Design the user experience required to achieve the product objective with the least unnecessary friction.
+
+Focus first on:
+
+- user goals;
+- tasks;
+- information;
+- decisions;
+- navigation;
+- interaction;
+- feedback;
+- errors;
+- accessibility.
+
+Do NOT begin with visual styling.
+
+Do NOT treat the current proposed interface as automatically correct.
+
+Follow existing `AGENTS.md`, `WORKFLOW.md`, Product Discovery and Feature Specifications when available.
+
+Do not repeat validated product analysis.
+
+---
+
+# 1. Establish UX Scope
+
+Determine what is being designed:
+
+PRODUCT EXPERIENCE
+
+USER JOURNEY
+
+FEATURE FLOW
+
+MULTI-STEP TASK
+
+INFORMATION ARCHITECTURE
+
+NAVIGATION
+
+INTERACTION MODEL
+
+Do not redesign unrelated parts of the product.
+
+---
+
+# 2. Understand the User Outcome
+
+Define:
+
+USER / ACTOR
+
+CONTEXT
+
+TRIGGER
+
+GOAL
+
+SUCCESSFUL OUTCOME
+
+PRIMARY OBSTACLE
+
+The UX should optimize for achieving the outcome, not maximizing interaction with the interface.
+
+Do not confuse:
+
+"what the interface contains"
+
+with:
+
+"what the user needs to accomplish."
+
+---
+
+# 3. Evidence Discipline
+
+Separate:
+
+KNOWN
+
+Supported by existing product research, requirements, analytics, user information or observed behavior.
+
+INFERRED
+
+Strong conclusions supported by evidence.
+
+HYPOTHESIS
+
+Plausible UX assumptions requiring validation.
+
+ASSUMED
+
+Low-risk reversible decisions used to continue.
+
+UNKNOWN
+
+Material information we genuinely do not know.
+
+Never fabricate user research.
+
+Never claim:
+
+"users prefer..."
+
+without evidence.
+
+---
+
+# 4. User Context
+
+Understand relevant context such as:
+
+- frequency of use;
+- experience level;
+- urgency;
+- environment;
+- device;
+- interruptions;
+- physical constraints;
+- cognitive load;
+- accessibility needs;
+- whether the user is exploring or completing a known task.
+
+Do not create demographic personas unless demographics materially affect behavior.
+
+Prefer behavioral context.
+
+---
+
+# 5. Jobs and Tasks
+
+Identify the user's actual task.
+
+Break complex tasks into meaningful steps.
+
+For each important task determine:
+
+START
+
+REQUIRED INFORMATION
+
+DECISIONS
+
+ACTIONS
+
+SYSTEM RESPONSE
+
+SUCCESS
+
+RECOVERY
+
+Look for steps that can be:
+
+- removed;
+- automated;
+- inferred;
+- combined;
+- postponed;
+- prefilled.
+
+Do not make the user perform work the system already has enough information to perform.
+
+---
+
+# 6. Current Journey
+
+If an existing workflow exists, understand it first.
+
+Map:
+
+Trigger
+→ action
+→ decision
+→ system response
+→ next action
+→ result.
+
+Identify:
+
+FRICTION
+
+REDUNDANCY
+
+UNCERTAINTY
+
+DELAY
+
+ERROR RISK
+
+CONTEXT SWITCHING
+
+MANUAL WORK
+
+Do not redesign merely because the current flow looks old.
+
+Preserve behavior that works well.
+
+---
+
+# 7. Ideal Journey
+
+Design the simplest coherent journey capable of delivering the desired outcome.
+
+Prefer:
+
+recognition over recall;
+
+clear next actions;
+
+minimal unnecessary decisions;
+
+progressive disclosure;
+
+appropriate defaults;
+
+reversible actions;
+
+immediate useful feedback.
+
+Do not optimize only for minimum number of clicks.
+
+A longer understandable flow can be better than a shorter confusing flow.
+
+---
+
+# 8. Information Architecture
+
+Determine:
+
+WHAT INFORMATION EXISTS
+
+WHAT BELONGS TOGETHER
+
+WHAT USERS NEED FIRST
+
+WHAT CAN BE SECONDARY
+
+WHAT SHOULD NOT BE SHOWN YET
+
+Organize information around user tasks and mental models rather than database structure.
+
+Avoid exposing implementation concepts unnecessarily.
+
+---
+
+# 9. Hierarchy
+
+For each experience determine:
+
+PRIMARY
+
+What deserves immediate attention?
+
+SECONDARY
+
+What supports the primary goal?
+
+TERTIARY
+
+What should remain available but quiet?
+
+HIDDEN UNTIL NEEDED
+
+What can use progressive disclosure?
+
+Do not give every piece of information equal visual or interaction priority.
+
+---
+
+# 10. Navigation
+
+Design navigation based on user orientation and tasks.
+
+Users should be able to understand:
+
+WHERE AM I?
+
+WHAT CAN I DO HERE?
+
+WHERE CAN I GO?
+
+HOW DO I RETURN?
+
+Avoid unnecessary navigation depth.
+
+Avoid multiple navigation models for the same conceptual level.
+
+Preserve platform conventions when they reduce learning cost.
+
+---
+
+# 11. Entry Points
+
+Identify how the user reaches the flow.
+
+Possible entry points:
+
+- navigation;
+- search;
+- notification;
+- deep link;
+- dashboard;
+- contextual action;
+- external URL;
+- onboarding.
+
+The design must remain coherent from relevant entry points.
+
+Do not assume every user arrives from the homepage.
+
+---
+
+# 12. Interaction Model
+
+Define how users interact with important objects.
+
+Examples:
+
+- select;
+- create;
+- edit;
+- compare;
+- reorder;
+- filter;
+- search;
+- approve;
+- delete.
+
+Use familiar interaction patterns when they adequately solve the problem.
+
+Novel interactions require concrete user value.
+
+Do not create novelty merely to appear innovative.
+
+---
+
+# 13. System Feedback
+
+Every important user action should produce appropriate feedback.
+
+Determine when users need to know:
+
+ACTION RECEIVED
+
+PROCESSING
+
+SUCCESS
+
+FAILURE
+
+PARTIAL SUCCESS
+
+BACKGROUND PROCESS CONTINUES
+
+STATE CHANGED
+
+Avoid unnecessary confirmation messages for obvious reversible actions.
+
+Do not leave users wondering whether an action occurred.
+
+---
+
+# 14. System Status
+
+When operations take noticeable time or occur asynchronously, expose enough status to answer:
+
+What is happening?
+
+Is anything required from me?
+
+Did it work?
+
+What happens next?
+
+Avoid fake progress indicators.
+
+Use indeterminate progress when actual progress is unknown.
+
+---
+
+# 15. Forms
+
+For forms:
+
+ask only for information that is genuinely needed.
+
+Determine:
+
+- logical grouping;
+- ordering;
+- defaults;
+- autofill;
+- validation timing;
+- optional vs required fields;
+- recovery;
+- preservation of entered data.
+
+Avoid unnecessary fields.
+
+Avoid asking users to enter information the system already knows.
+
+Prefer inline validation when it helps correction.
+
+Do not punish users for formatting that can be normalized safely.
+
+---
+
+# 16. Errors
+
+Design errors as part of the normal experience.
+
+For important errors determine:
+
+WHAT HAPPENED
+
+WHY, IF USEFUL
+
+WHAT WAS PRESERVED
+
+WHAT THE USER CAN DO
+
+WHETHER RETRY IS SAFE
+
+Do not blame the user.
+
+Do not expose internal technical details.
+
+Avoid dead-end error states.
+
+---
+
+# 17. Prevention Before Recovery
+
+For high-impact errors, prefer preventing the error rather than explaining it afterward.
+
+Use when appropriate:
+
+- constraints;
+- safe defaults;
+- validation;
+- previews;
+- confirmation for destructive actions;
+- reversible actions;
+- undo.
+
+Do not add confirmation dialogs to every action.
+
+Confirmation should be proportional to consequence and reversibility.
+
+---
+
+# 18. Destructive Actions
+
+Determine:
+
+SEVERITY
+
+REVERSIBILITY
+
+TIME SENSITIVITY
+
+DATA LOSS
+
+Use the least intrusive safe mechanism.
+
+Possible:
+
+UNDO
+
+SOFT DELETE
+
+CONFIRMATION
+
+RE-AUTHENTICATION
+
+Do not use identical confirmation patterns for low-risk and irreversible actions.
+
+---
+
+# 19. Empty States
+
+Treat empty states as meaningful product states.
+
+Determine whether empty means:
+
+FIRST USE
+
+NO CONTENT CREATED
+
+NO SEARCH RESULTS
+
+FILTER EXCLUDES EVERYTHING
+
+DATA UNAVAILABLE
+
+PERMISSION ISSUE
+
+ERROR
+
+Provide the appropriate next action.
+
+Do not use generic:
+
+"Nothing here."
+
+when the system can explain what the user should do.
+
+---
+
+# 20. Loading
+
+Determine whether the user needs:
+
+- immediate placeholder;
+- skeleton;
+- progress;
+- optimistic update;
+- background processing;
+- no loading UI because operation is effectively instant.
+
+Avoid unnecessary loading animations.
+
+Do not use optimistic behavior when failure would create misleading or dangerous state.
+
+---
+
+# 21. Search
+
+When search exists determine:
+
+WHAT USERS SEARCH FOR
+
+MATCHING EXPECTATION
+
+FILTER RELATIONSHIP
+
+RESULT ORDER
+
+EMPTY RESULTS
+
+QUERY PRESERVATION
+
+TYPO TOLERANCE WHEN RELEVANT
+
+Do not add search to small information spaces where navigation is simpler.
+
+---
+
+# 22. Filtering and Sorting
+
+Expose filters only when users meaningfully need to reduce a set.
+
+Prioritize common filters.
+
+Make active filtering understandable.
+
+Allow reset.
+
+Preserve state when appropriate.
+
+Do not present dozens of equally prominent filters.
+
+---
+
+# 23. Onboarding
+
+Do not assume onboarding is necessary.
+
+First ask whether the product can teach itself through clear interaction.
+
+Use onboarding only when users need information before they can succeed.
+
+Prefer:
+
+contextual guidance
+
+over:
+
+long introductory tours.
+
+Do not force users to learn future functionality before they need it.
+
+---
+
+# 24. Cognitive Load
+
+Reduce unnecessary mental work.
+
+Avoid requiring users to:
+
+- remember data from another screen;
+- translate internal terminology;
+- compare values mentally when the system can compare them;
+- repeat already-entered information;
+- understand implementation details;
+- make decisions without sufficient context.
+
+Expose complexity progressively.
+
+Do not remove necessary information merely to make screens look minimal.
+
+---
+
+# 25. Content and Microcopy
+
+Interface text is part of UX.
+
+Prefer copy that is:
+
+- specific;
+- concise;
+- actionable;
+- understandable;
+- consistent.
+
+Buttons should usually describe the action.
+
+Errors should help recovery.
+
+Labels should use user terminology.
+
+Avoid internal jargon unless users actually use it.
+
+---
+
+# 26. Trust
+
+For experiences involving:
+
+- money;
+- personal data;
+- permissions;
+- deletion;
+- AI;
+- important recommendations;
+- legal consequences;
+
+make relevant system behavior understandable.
+
+Explain important consequences before commitment.
+
+Do not create false confidence.
+
+Do not hide uncertainty that materially affects the user.
+
+---
+
+# 27. AI-Specific UX
+
+When AI is involved, determine:
+
+WHAT THE MODEL CONTROLS
+
+WHAT THE USER CONTROLS
+
+UNCERTAINTY
+
+EDITABILITY
+
+REVERSIBILITY
+
+FAILURE
+
+SOURCE / EVIDENCE WHEN RELEVANT
+
+Users should understand when content is generated or uncertain when that distinction matters.
+
+Do not design AI as if model output is always correct.
+
+---
+
+# 28. Accessibility From the Beginning
+
+Accessibility is part of interaction design.
+
+For web products, use current WCAG guidance when applicable.
+
+Design for:
+
+KEYBOARD
+
+FOCUS
+
+SCREEN READER MEANING
+
+ZOOM / REFLOW
+
+TOUCH
+
+COLOR INDEPENDENCE
+
+CLEAR LABELS
+
+ERROR RECOVERY
+
+TARGET SIZE
+
+COGNITIVE CLARITY
+
+REDUCED MOTION WHEN RELEVANT
+
+Do not postpone accessibility until visual QA.
+
+---
+
+# 29. Device and Platform
+
+Respect meaningful platform conventions.
+
+Consider:
+
+- pointer vs touch;
+- keyboard;
+- screen size;
+- safe areas;
+- browser navigation;
+- native expectations;
+- mobile interruption patterns.
+
+Do not copy another platform's interaction model when it creates unnecessary friction.
+
+---
+
+# 30. Responsive UX
+
+Define conceptually how priorities change with available space.
+
+Ask:
+
+What remains essential?
+
+What moves?
+
+What collapses?
+
+What becomes sequential?
+
+What deserves a different interaction?
+
+Detailed responsive layouts belong to:
+
+`10 Responsive + States`.
+
+Do not treat mobile as desktop scaled down.
+
+---
+
+# 31. Motion
+
+Use motion only when it helps:
+
+- orientation;
+- continuity;
+- hierarchy;
+- feedback;
+- understanding.
+
+Do not add motion merely for visual polish.
+
+Avoid motion that blocks interaction.
+
+Respect reduced-motion preferences where relevant.
+
+---
+
+# 32. Edge Cases
+
+Consider realistic UX edge cases:
+
+- long text;
+- missing images;
+- empty data;
+- large numbers;
+- slow network;
+- partial data;
+- changed permissions;
+- stale information;
+- duplicated action;
+- interrupted flow;
+- expired session;
+- localization expansion.
+
+Prioritize cases likely enough to influence design.
+
+---
+
+# 33. Validate the Flow
+
+Before visual design, mentally or through a low-fidelity prototype walk through:
+
+HAPPY PATH
+
+COMMON ALTERNATIVE PATH
+
+IMPORTANT ERROR PATH
+
+FIRST USE
+
+RETURNING USE
+
+KEYBOARD / ACCESSIBILITY PATH
+
+Ask:
+
+Can the user always determine the next useful action?
+
+Are there dead ends?
+
+Does the system ask for unnecessary work?
+
+Can important errors be recovered from?
+
+Could anything important be simpler?
+
+---
+
+# 34. User Research / Testing
+
+If UX uncertainty is material, recommend the cheapest useful validation.
+
+Possible:
+
+- clickable prototype;
+- moderated usability test;
+- unmoderated task test;
+- internal workflow observation;
+- analytics;
+- support-data analysis.
+
+Define what question the research should answer.
+
+Do not conduct research merely to "validate the design."
+
+Research should be capable of disproving a hypothesis.
+
+---
+
+# 35. Output Format
+
+Return:
+
+# UX Design
+
+## Objective
+
+...
+
+## User / Context
+
+...
+
+## Primary Task
+
+...
+
+## UX Principles For This Feature
+
+3–7 specific principles.
+
+## Information Architecture
+
+...
+
+## Primary Journey
+
+1. ...
+2. ...
+
+## Alternative Journeys
+
+...
+
+## Navigation
+
+...
+
+## Key Interactions
+
+...
+
+## Feedback / System Status
+
+...
+
+## Forms
+
+Only if relevant.
+
+## Errors / Recovery
+
+...
+
+## Empty / Loading / Partial States
+
+...
+
+## Accessibility
+
+...
+
+## Responsive UX
+
+...
+
+## Edge Cases
+
+...
+
+## UX Assumptions
+
+...
+
+## Validation Needed
+
+None or concise plan.
+
+## UX Decisions
+
+Important decisions only.
+
+## Open Questions
+
+Blocking questions only.
+
+## Readiness
+
+Choose:
+
+READY FOR VISUAL DESIGN
+
+READY FOR SCREEN DESIGN
+
+READY WITH ASSUMPTIONS
+
+USER VALIDATION RECOMMENDED
+
+PRODUCT SPECIFICATION REQUIRED
+
+## Next
+
+Exactly one next prompt.
+
+Usually:
+
+`07 UI Art Direction`
+`09 Screen Design`
+or
+`10 Responsive + States`.
+
+---
+
+# Completion Criterion
+
+UX Design is complete when the intended user can conceptually travel from trigger to outcome without important interaction decisions being left to visual styling or implementation.
+
+A beautiful interface cannot rescue an incoherent experience.

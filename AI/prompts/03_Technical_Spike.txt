@@ -1,0 +1,630 @@
+# 03 — TECHNICAL SPIKE
+
+## Mission
+
+Resolve a specific technical uncertainty using the smallest amount of investigation and experimentation necessary to make a responsible decision.
+
+A Technical Spike exists to produce evidence.
+
+It is NOT:
+
+- production feature implementation;
+- a broad architecture redesign;
+- an excuse to explore interesting technologies;
+- a full repository audit;
+- a benchmark without a decision question.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+Do not repeat their general engineering rules.
+
+---
+
+# 1. Define the Decision Question
+
+Before researching or writing code, express the uncertainty as one concrete question.
+
+Examples:
+
+Can this provider reliably support our required authentication flow?
+
+Can technology X satisfy our latency requirement under expected load?
+
+Can this API provide the data granularity required by the feature?
+
+Can the existing architecture support real-time updates without introducing a new service?
+
+Can library X perform operation Y in the currently supported runtime?
+
+Avoid broad questions such as:
+
+"Is Redis good?"
+
+"Should we use microservices?"
+
+"Research WebSockets."
+
+A spike must exist because a decision depends on its result.
+
+---
+
+# 2. Decision Context
+
+Identify:
+
+DECISION
+What future decision depends on this spike?
+
+CURRENT STATE
+What solution or architecture exists today?
+
+TRIGGER
+Why has this uncertainty become relevant?
+
+CONSTRAINTS
+What limits the viable solution?
+
+IMPACT IF WRONG
+What happens if we make the wrong assumption?
+
+Do not investigate questions whose answer would not materially change any decision.
+
+---
+
+# 3. Evidence Classification
+
+Separate:
+
+KNOWN
+Already supported by repository state, verified documentation, existing tests or established checkpoints.
+
+ASSUMED
+Currently accepted but unverified.
+
+UNKNOWN
+What this spike must determine.
+
+OUT OF SCOPE
+Questions deliberately not being answered.
+
+Do not revalidate known facts without reason.
+
+---
+
+# 4. Hypothesis
+
+When useful, state a falsifiable hypothesis.
+
+Example:
+
+"We expect SSE to support the required one-way update flow with acceptable reconnect behavior without requiring a persistent bidirectional socket."
+
+A useful hypothesis must be capable of being proven wrong.
+
+Avoid vague hypotheses such as:
+
+"Technology X will work well."
+
+---
+
+# 5. Success / Exit Criteria
+
+Before experimentation, define what evidence would be sufficient to stop.
+
+Examples:
+
+- API returns all required fields.
+- p95 latency remains below the required threshold under representative load.
+- authentication survives token refresh correctly.
+- library supports the required runtime and deployment environment.
+- implementation works without violating an existing architectural constraint.
+- expected cost remains inside the defined boundary.
+
+Also define evidence that would invalidate the approach.
+
+Do not continue experimenting after the decision question has been answered sufficiently.
+
+---
+
+# 6. Research First
+
+Before building a PoC:
+
+1. inspect relevant existing code;
+2. inspect current project constraints;
+3. check existing checkpoints;
+4. research current official documentation;
+5. identify known limitations;
+6. verify relevant versions.
+
+Prefer:
+
+- official documentation;
+- standards;
+- primary specifications;
+- maintained repositories;
+- provider documentation;
+- authoritative release notes.
+
+Use secondary sources only when primary sources do not answer the question or when independent operational evidence is genuinely useful.
+
+Do not rely on model memory for version-sensitive behavior.
+
+---
+
+# 7. Identify the Cheapest Evidence
+
+Determine the cheapest reliable method capable of answering the question.
+
+Possible methods:
+
+- documentation verification;
+- source code inspection;
+- API call;
+- isolated experiment;
+- benchmark;
+- minimal prototype;
+- integration test;
+- deployment experiment;
+- network trace;
+- database query plan;
+- browser test;
+- provider sandbox.
+
+Do not write code when documentation already proves the answer.
+
+Do not rely only on documentation when runtime behavior is the actual uncertainty.
+
+---
+
+# 8. Build the Smallest Useful Experiment
+
+If experimentation is required, implement the smallest experiment that isolates the uncertainty.
+
+Prefer:
+
+one question
+→ one focused experiment
+→ measurable result.
+
+Avoid building:
+
+- complete UI;
+- production architecture;
+- generalized abstractions;
+- polished infrastructure;
+- complete error handling;
+- unrelated tests;
+- speculative reusable systems
+
+unless required to answer the question accurately.
+
+---
+
+# 9. Representativeness
+
+A small experiment must still preserve the conditions relevant to the decision.
+
+Identify which conditions need to be realistic:
+
+- runtime;
+- framework version;
+- deployment environment;
+- network path;
+- authentication;
+- representative data;
+- concurrency;
+- payload size;
+- database size;
+- browser/device;
+- geographic region;
+- provider tier.
+
+Do not extrapolate from an unrealistic test when the missing condition could materially change the answer.
+
+---
+
+# 10. Production vs Experimental Code
+
+Explicitly classify spike artifacts as:
+
+DISPOSABLE
+Created only to gather evidence.
+
+REUSABLE WITH WORK
+Potentially useful but not production-ready.
+
+PRODUCTION-CANDIDATE
+Built to sufficient standards and can reasonably become part of the product.
+
+Default to DISPOSABLE or REUSABLE WITH WORK.
+
+Do not silently ship experimental code into production.
+
+If code will be retained, identify what hardening remains.
+
+---
+
+# 11. Functional Feasibility
+
+When applicable test:
+
+- required capability;
+- inputs/outputs;
+- limits;
+- failure behavior;
+- compatibility;
+- integration boundaries;
+- correctness.
+
+Do not equate:
+
+"the happy-path demo worked"
+
+with:
+
+"the technology is suitable."
+
+---
+
+# 12. Performance Feasibility
+
+Only benchmark when performance influences the decision.
+
+Define before measuring:
+
+- workload;
+- representative input;
+- concurrency;
+- environment;
+- metric;
+- threshold.
+
+Useful metrics may include:
+
+- latency percentiles;
+- throughput;
+- CPU;
+- memory;
+- I/O;
+- network;
+- cold-start behavior;
+- resource utilization.
+
+Avoid meaningless microbenchmarks disconnected from the expected workload.
+
+Record enough context to reproduce important results.
+
+---
+
+# 13. Reliability Feasibility
+
+When relevant, test failure behavior.
+
+Consider:
+
+- timeout;
+- restart;
+- dropped connection;
+- dependency failure;
+- duplicate request;
+- retry;
+- partial response;
+- stale state;
+- concurrency;
+- recovery.
+
+Only test scenarios relevant to the decision.
+
+Do not turn a spike into a complete resilience program.
+
+---
+
+# 14. Security / Privacy Feasibility
+
+When relevant determine whether the proposed approach creates unacceptable:
+
+- privilege requirements;
+- secret handling;
+- data exposure;
+- trust boundaries;
+- authentication limitations;
+- authorization limitations;
+- encryption constraints;
+- compliance issues.
+
+A technically functioning solution is not feasible if it violates a hard security or privacy requirement.
+
+---
+
+# 15. Operational Feasibility
+
+Consider when relevant:
+
+- deployability;
+- observability;
+- backup/recovery;
+- operational burden;
+- platform support;
+- maintenance;
+- failure diagnosis;
+- dependency maturity.
+
+Do not reject a solution for theoretical operational complexity that the project will never encounter.
+
+---
+
+# 16. Cost Feasibility
+
+Only estimate cost when it can influence the decision.
+
+Identify major cost drivers.
+
+Use realistic expected usage when available.
+
+Separate:
+
+KNOWN COST
+Directly supported by current pricing or measured usage.
+
+ESTIMATED COST
+Calculated from explicit assumptions.
+
+UNKNOWN COST
+Cannot yet be responsibly estimated.
+
+Do not invent precise future bills from weak assumptions.
+
+---
+
+# 17. Alternatives
+
+A spike may compare alternatives only when comparison is necessary to answer the decision.
+
+Keep alternatives realistic and small in number.
+
+Usually:
+
+CURRENT APPROACH
+CANDIDATE A
+CANDIDATE B
+
+is enough.
+
+Do not benchmark ten technologies because they exist.
+
+---
+
+# 18. Negative Evidence
+
+Actively record evidence against the preferred hypothesis.
+
+Do not search only for confirmation.
+
+Examples:
+
+- unsupported runtime;
+- undocumented limitation;
+- poor failure mode;
+- unacceptable latency;
+- operational requirement;
+- licensing constraint;
+- missing API capability.
+
+Unexpected negative evidence is often the most valuable result of a spike.
+
+---
+
+# 19. Stop Conditions
+
+Stop the experiment when:
+
+- success criteria are satisfied;
+- failure criteria are satisfied;
+- sufficient evidence exists to make the decision;
+- a hard constraint invalidates the approach;
+- further work would become production implementation;
+- two meaningful attempts based on the same hypothesis fail to produce new evidence;
+- the remaining uncertainty requires a different tool/environment.
+
+Do not continue exploring for intellectual completeness.
+
+---
+
+# 20. Preserve Evidence
+
+When valuable, retain:
+
+- experiment code;
+- exact versions;
+- benchmark script;
+- relevant configuration;
+- test input;
+- results;
+- documentation links/references;
+- commands;
+- environment assumptions.
+
+Do not retain large temporary artifacts that provide no future value.
+
+---
+
+# 21. Interpret Results Conservatively
+
+Distinguish:
+
+OBSERVED
+Directly measured or verified.
+
+SUPPORTED
+Reasonably supported by evidence.
+
+NOT VALIDATED
+Not tested.
+
+Do not generalize beyond what the experiment actually proved.
+
+Example:
+
+Observed:
+50 concurrent requests succeeded.
+
+Not proven:
+The system will handle 50,000 concurrent requests.
+
+---
+
+# 22. Decide
+
+A Technical Spike must end in one of:
+
+GO
+
+Evidence supports proceeding with the candidate.
+
+NO-GO
+
+Evidence shows the candidate does not satisfy an important requirement.
+
+CONDITIONAL GO
+
+Candidate is viable under explicitly stated constraints.
+
+INCONCLUSIVE
+
+Available evidence is insufficient to make the decision responsibly.
+
+Do not use INCONCLUSIVE merely to avoid making a recommendation.
+
+---
+
+# 23. Architecture Impact
+
+If the result affects architecture:
+
+identify:
+
+- decision affected;
+- constraints learned;
+- new trade-offs;
+- architectural changes required.
+
+If a durable architectural decision now exists:
+
+recommend `05 Architecture Decision`.
+
+Do not rewrite architecture during the spike unless explicitly requested.
+
+---
+
+# 24. Cleanup
+
+After experimentation:
+
+- remove unnecessary temporary resources;
+- stop cost-generating resources;
+- remove temporary credentials;
+- delete unsafe debug artifacts;
+- preserve useful evidence;
+- leave the repository in a known state.
+
+Do not damage existing project state.
+
+---
+
+# 25. Output Format
+
+Return:
+
+# Technical Spike
+
+## Decision Question
+
+...
+
+## Why It Matters
+
+...
+
+## Known
+
+- ...
+
+## Assumptions
+
+- ...
+
+## Unknown Being Tested
+
+- ...
+
+## Success / Exit Criteria
+
+- ...
+
+## Method
+
+What was researched/tested and why.
+
+## Environment
+
+Relevant versions/configuration.
+
+## Evidence
+
+### Observed
+- ...
+
+### Documentation / External Evidence
+- ...
+
+## Results
+
+Concise findings.
+
+## Limitations
+
+What this spike did NOT prove.
+
+## Security / Reliability / Cost Impact
+
+Only relevant findings.
+
+## Conclusion
+
+GO / NO-GO / CONDITIONAL GO / INCONCLUSIVE
+
+## Recommendation
+
+One recommended action.
+
+## Architecture Impact
+
+None or concise description.
+
+## Artifacts
+
+Only useful retained artifacts.
+
+## Cleanup
+
+What was cleaned up.
+
+## Next
+
+Exactly one next prompt/action.
+
+Usually:
+
+`04 Architecture Design`
+`05 Architecture Decision`
+`13 Feature Implementation`
+or another specifically justified spike.
+
+---
+
+# Completion Criterion
+
+A Technical Spike is complete when the important uncertainty has been reduced enough to make a responsible decision.
+
+Its success is measured by learning and risk reduction, not by how much code was written.

@@ -1,0 +1,544 @@
+# 18 — BUG FIX
+
+# Mission
+
+Correct a diagnosed software defect with the smallest safe change and protect the behavior against regression.
+
+Input should ideally include a completed `17 Bug Diagnosis`.
+
+Do not restart diagnosis unless implementation evidence contradicts it.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+---
+
+# 1. Confirm Diagnosis
+
+Before editing verify:
+
+SYMPTOM
+
+ROOT CAUSE
+
+AFFECTED PATH
+
+REGRESSION REPRODUCER
+
+EXPECTED BEHAVIOR.
+
+If diagnosis confidence is insufficient and the fix depends on guessing:
+
+return to `17 Bug Diagnosis`.
+
+---
+
+# 2. Establish Baseline
+
+Record relevant existing state:
+
+branch / commit;
+
+tests;
+
+build;
+
+known failures;
+
+environment.
+
+Do not attribute pre-existing failures to the fix.
+
+---
+
+# 3. Demonstrate Failure Before Fix
+
+When practical execute the regression reproducer before changing production code.
+
+Expected:
+
+FAIL for the diagnosed reason.
+
+This can be:
+
+automated test;
+
+integration test;
+
+API request;
+
+script;
+
+runtime reproduction.
+
+Do not create a meaningless failing test just to satisfy ceremony.
+
+---
+
+# 4. Choose the Smallest Correct Fix
+
+Fix the root cause.
+
+Do not merely hide the symptom.
+
+Prefer:
+
+one causal correction
+
+over:
+
+multiple defensive patches
+
+when one correction restores the intended invariant.
+
+Do not expand scope unnecessarily.
+
+---
+
+# 5. Preserve Contracts
+
+Unless the bug itself is a contract defect, preserve:
+
+public API;
+
+data format;
+
+user-visible intended behavior;
+
+permissions;
+
+integration behavior.
+
+Do not introduce unrelated breaking changes.
+
+---
+
+# 6. Preserve Security
+
+Never fix a bug by:
+
+disabling validation;
+
+broadening permissions blindly;
+
+bypassing authorization;
+
+hardcoding secrets;
+
+turning off TLS/security;
+
+trusting untrusted input.
+
+A functional workaround that creates a security defect is not a valid fix.
+
+---
+
+# 7. Data Integrity
+
+If the bug affects persistent data determine separately:
+
+CODE FIX
+
+EXISTING CORRUPTED DATA
+
+BACKFILL / REPAIR
+
+PREVENTION.
+
+Fixing future writes does not repair historical bad state automatically.
+
+Do not modify production records without a controlled recovery plan.
+
+---
+
+# 8. Concurrency Bugs
+
+For concurrency/timing defects, fix the violated invariant rather than relying on arbitrary delays.
+
+Avoid:
+
+sleep(100);
+
+extra retries;
+
+"wait a little longer"
+
+unless timing itself is the intended contract.
+
+Test the race under controlled repetition where practical.
+
+---
+
+# 9. External Integration Bugs
+
+If provider behavior is involved:
+
+confirm the current external contract.
+
+Do not patch around documented provider behavior incorrectly.
+
+Handle:
+
+ambiguous outcome;
+
+timeout;
+
+rate limit;
+
+schema variation
+
+according to the actual integration contract.
+
+---
+
+# 10. Configuration Bugs
+
+If root cause is configuration:
+
+fix configuration at its source.
+
+Do not change application logic to compensate for a wrong environment variable unless resilient behavior genuinely requires it.
+
+---
+
+# 11. Regression Test
+
+Add or improve the smallest test that would have caught this bug.
+
+The test should:
+
+fail before the fix;
+
+pass after the fix;
+
+represent externally meaningful behavior;
+
+remain deterministic.
+
+Choose the lowest-cost layer with sufficient fidelity.
+
+---
+
+# 12. Don't Overspecify Internals
+
+A regression test should protect behavior, not freeze an accidental implementation.
+
+Avoid assertions on:
+
+private method calls;
+
+internal object layout;
+
+arbitrary sequence
+
+unless those are actually contractual.
+
+---
+
+# 13. Nearby Boundary Cases
+
+Check a small number of nearby relevant cases.
+
+Example:
+
+bug at boundary 0
+→ consider -1 / 0 / 1 where domain permits.
+
+Do not turn one bug fix into exhaustive domain testing.
+
+---
+
+# 14. Implement
+
+Make the fix.
+
+Keep unrelated cleanup separate.
+
+If a prerequisite structural issue must be corrected, make only the minimum prerequisite change or run `16 Safe Refactor` separately when substantial.
+
+---
+
+# 15. Focused Verification
+
+Immediately run:
+
+REGRESSION TEST
+
+and the smallest affected test set.
+
+Expected:
+
+original failure PASS
+
+nearby behavior PASS.
+
+If it still fails:
+
+do not stack random changes.
+
+Return to diagnosis evidence.
+
+---
+
+# 16. Compare Before / After
+
+Explicitly verify:
+
+BEFORE
+reproducer failed.
+
+AFTER
+same reproducer passes.
+
+This is stronger evidence than:
+
+"the code looks correct."
+
+---
+
+# 17. Negative Behavior
+
+Verify relevant invalid/error path.
+
+Examples:
+
+invalid input still rejected;
+
+unauthorized access still rejected;
+
+timeout still handled;
+
+duplicate still prevented.
+
+Do not fix happy path by breaking safeguards.
+
+---
+
+# 18. Broader Regression
+
+After focused checks pass, run the broader relevant quality gate once.
+
+Depending on project:
+
+unit;
+
+integration;
+
+type check;
+
+lint;
+
+build;
+
+E2E.
+
+Do not run unrelated expensive suites repeatedly during editing.
+
+---
+
+# 19. Runtime Verification
+
+When feasible exercise the actual behavior in the appropriate runtime.
+
+Frontend:
+real browser.
+
+Backend:
+real endpoint.
+
+Integration:
+sandbox/provider.
+
+Do not stop at unit tests when the original bug occurred at a higher boundary and higher-fidelity verification is cheap.
+
+---
+
+# 20. Production Bug
+
+For production defects distinguish:
+
+CODE FIX COMPLETE
+
+from
+
+PRODUCTION RECOVERED.
+
+Deployment/configuration may still be required.
+
+Use delivery workflows for rollout and real QA.
+
+Do not claim production is fixed merely because local tests pass.
+
+---
+
+# 21. Existing Bad Data
+
+If users/data were affected, determine:
+
+HOW MANY
+
+WHICH RECORDS
+
+CAN IT BE DETECTED
+
+DOES IT NEED REPAIR
+
+IS REPAIR REVERSIBLE.
+
+Do not silently ignore existing damage.
+
+---
+
+# 22. Observability Gap
+
+If the defect was unnecessarily difficult to diagnose because one important signal was missing, add the smallest durable observability improvement when justified.
+
+Do not turn every bug into an observability project.
+
+---
+
+# 23. Documentation
+
+Update docs only if the bug exposed incorrect documented behavior or operating instructions.
+
+Do not document obvious implementation details.
+
+---
+
+# 24. Diff Review
+
+Inspect the resulting diff.
+
+Check:
+
+fix matches diagnosed cause;
+
+scope remains focused;
+
+test truly protects regression;
+
+no security weakening;
+
+no temporary debug code;
+
+no accidental refactor;
+
+no unrelated formatting.
+
+---
+
+# 25. Cleanup
+
+Remove:
+
+temporary instrumentation no longer needed;
+
+debug logs;
+
+local reproducer hacks;
+
+temporary data;
+
+commented alternatives.
+
+Keep durable regression tests and useful observability.
+
+---
+
+# 26. Checkpoint
+
+Create a reusable bug-fix checkpoint:
+
+CAUSE
+
+FIX
+
+REGRESSION TEST
+
+VALIDATION
+
+COMMIT / DEPLOYMENT STATE
+
+REMAINING IMPACT.
+
+Future agents should not rediagnose the same defect without contradictory evidence.
+
+---
+
+# 27. Output Format
+
+# Bug Fix — [Issue]
+
+## Status
+
+PASS / PARTIAL / FAIL
+
+## Root Cause
+
+One concise statement.
+
+## Fix
+
+...
+
+## Why It Fixes the Cause
+
+...
+
+## Regression Protection
+
+...
+
+## Before
+
+Evidence the reproducer failed.
+
+## After
+
+Evidence the same behavior passes.
+
+## Broader Verification
+
+...
+
+## Runtime Verification
+
+...
+
+## Existing Data Impact
+
+None or explicit.
+
+## Files Changed
+
+...
+
+## Not Verified
+
+...
+
+## Remaining Risk
+
+...
+
+## Checkpoint
+
+...
+
+## Next
+
+Exactly one next action.
+
+---
+
+# PASS Criterion
+
+Bug Fix passes when:
+
+- the diagnosed cause was corrected;
+- the original reproducer no longer fails;
+- regression protection exists when valuable;
+- nearby relevant behavior remains correct;
+- broader relevant checks pass;
+- no material new defect was introduced.
+
+A bug is not fixed merely because the error is no longer visible.

@@ -1,0 +1,727 @@
+# 11 — VISUAL QA
+
+## Mission
+
+Verify that an implemented interface faithfully delivers the approved design and UX in a real runtime.
+
+Visual QA is NOT:
+
+- subjective redesign;
+- pixel perfection for its own sake;
+- a broad code review;
+- a new accessibility audit;
+- a reason to rewrite working architecture.
+
+The objective is to detect meaningful differences between:
+
+INTENDED EXPERIENCE
+
+and
+
+IMPLEMENTED EXPERIENCE.
+
+Use real browser/device rendering whenever available.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+---
+
+# 1. Establish Reference
+
+Before testing determine the authoritative reference.
+
+Possible:
+
+FIGMA FRAME
+
+APPROVED SCREEN DESIGN
+
+DESIGN SYSTEM
+
+REFERENCE SCREENSHOT
+
+SPECIFICATION
+
+PROTOTYPE
+
+Identify:
+
+REFERENCE VERSION
+
+REFERENCE STATE
+
+REFERENCE VIEWPORT / AVAILABLE SPACE
+
+Do not QA against an outdated design.
+
+If multiple references conflict, identify the conflict rather than guessing.
+
+---
+
+# 2. Verify Implementation State
+
+Confirm that the implementation being tested is the intended version.
+
+Identify when relevant:
+
+BRANCH / COMMIT
+
+ENVIRONMENT
+
+BUILD
+
+FEATURE FLAG
+
+DATA STATE
+
+Do not report visual bugs caused by testing the wrong deployment.
+
+---
+
+# 3. Reproduce Comparable Conditions
+
+Match relevant conditions where practical:
+
+- viewport;
+- content;
+- theme;
+- state;
+- authentication;
+- fonts;
+- browser;
+- zoom;
+- device pixel ratio when material.
+
+Exact equality is unnecessary when the design is intentionally fluid.
+
+The objective is a fair comparison.
+
+---
+
+# 4. Inspect Actual Runtime
+
+Prefer direct runtime inspection.
+
+Use when available:
+
+- browser automation;
+- screenshots;
+- DOM inspection;
+- computed styles;
+- accessibility tree;
+- responsive viewport;
+- console;
+- network information.
+
+Do not QA only from source code.
+
+Visual correctness is a runtime property.
+
+---
+
+# 5. Compare by Priority
+
+Inspect in this order:
+
+1. PRODUCT / UX BEHAVIOR
+2. INFORMATION HIERARCHY
+3. LAYOUT
+4. RESPONSIVE BEHAVIOR
+5. COMPONENTS
+6. TYPOGRAPHY
+7. SPACING
+8. COLOR / SURFACES
+9. IMAGERY / ICONS
+10. MOTION / POLISH
+
+Do not spend time fixing a 2px gap while the hierarchy is wrong.
+
+---
+
+# 6. Functional Visual Errors
+
+Treat as highest priority when implementation visually prevents or miscommunicates function.
+
+Examples:
+
+- action hidden;
+- wrong content shown;
+- required status absent;
+- overlay blocks controls;
+- table information missing;
+- wrong state displayed;
+- mobile navigation unusable.
+
+These are product defects, not cosmetic deviations.
+
+---
+
+# 7. Hierarchy
+
+Compare:
+
+WHAT ATTRACTS ATTENTION FIRST
+
+PRIMARY ACTION
+
+HEADINGS
+
+CONTENT GROUPING
+
+CONTRAST
+
+DENSITY
+
+A technically pixel-close implementation can still fail if hierarchy feels materially different.
+
+---
+
+# 8. Layout
+
+Check:
+
+- container width;
+- columns;
+- alignment;
+- stacking;
+- centering;
+- edge relationships;
+- sticky/fixed behavior;
+- overflow;
+- scroll behavior.
+
+Prioritize structural differences.
+
+---
+
+# 9. Spacing
+
+Inspect:
+
+INTERNAL COMPONENT SPACING
+
+BETWEEN RELATED ITEMS
+
+BETWEEN GROUPS
+
+PAGE RHYTHM
+
+Do not flag insignificant optical differences individually.
+
+Look for systematic errors first.
+
+Example:
+
+If all gaps are too large, fix the token/layout source rather than 20 components independently.
+
+---
+
+# 10. Typography
+
+Verify:
+
+FONT FAMILY
+
+WEIGHT
+
+SIZE
+
+LINE HEIGHT
+
+LETTER SPACING
+
+WRAPPING
+
+ALIGNMENT
+
+NUMERIC STYLE when relevant.
+
+Font loading failure can create many secondary layout differences.
+
+Diagnose root cause before correcting individual dimensions.
+
+---
+
+# 11. Color / Surfaces
+
+Compare semantic appearance:
+
+BACKGROUND
+
+SURFACE
+
+TEXT
+
+BORDER
+
+ACTION
+
+STATE
+
+FOCUS
+
+Do not overfocus on insignificant rasterization/color-profile variance.
+
+Raw color mismatch matters when it changes hierarchy, branding or accessibility.
+
+---
+
+# 12. Components
+
+For each reused component verify:
+
+CORRECT COMPONENT
+
+CORRECT VARIANT
+
+CORRECT SIZE
+
+CORRECT STATE
+
+CORRECT CONTENT
+
+Do not reproduce a design-system component manually when the repository already contains the correct one.
+
+---
+
+# 13. Icons / Assets
+
+Check:
+
+CORRECT ASSET
+
+SIZE
+
+ALIGNMENT
+
+CROP
+
+ASPECT RATIO
+
+RESOLUTION
+
+ICON FAMILY
+
+Do not substitute arbitrary similar icons when an approved asset exists.
+
+---
+
+# 14. States
+
+Verify representative states from the approved state matrix.
+
+At minimum according to risk:
+
+NORMAL
+
+LOADING
+
+EMPTY
+
+ERROR
+
+DISABLED
+
+SUBMITTING
+
+PERMISSION
+
+LONG CONTENT
+
+Do not validate only the pristine default state.
+
+---
+
+# 15. Responsive QA
+
+Test representative available widths.
+
+Inspect:
+
+JUST BEFORE BREAKPOINT
+
+AT BREAKPOINT
+
+JUST AFTER BREAKPOINT
+
+INTERMEDIATE WIDTHS
+
+Check:
+
+- overflow;
+- wrapping;
+- reordering;
+- hidden content;
+- panes;
+- navigation;
+- tables/charts;
+- sticky elements.
+
+Do not test only device presets.
+
+---
+
+# 16. Height-Constrained QA
+
+When relevant test:
+
+- landscape;
+- short browser windows;
+- virtual keyboard;
+- overlays;
+- sticky headers/footers.
+
+A layout can be correct by width and broken by height.
+
+---
+
+# 17. Content Stress
+
+Use realistic stress cases:
+
+LONG TITLE
+
+LONG BUTTON LABEL
+
+LARGE NUMBER
+
+MISSING IMAGE
+
+MULTIPLE BADGES
+
+MANY TABLE ROWS
+
+EMPTY CONTENT
+
+LOCALIZED TEXT when relevant.
+
+Do not accept a layout that works only with handpicked demo content.
+
+---
+
+# 18. Interaction QA
+
+Verify visual response for important interactions:
+
+HOVER when applicable
+
+FOCUS
+
+ACTIVE / PRESSED
+
+SELECTED
+
+EXPANDED
+
+DRAG when relevant
+
+SUBMIT
+
+SUCCESS
+
+ERROR
+
+Interaction state should remain consistent with the Design System.
+
+---
+
+# 19. Keyboard / Focus Visual QA
+
+Inspect real keyboard navigation.
+
+Verify:
+
+- visible focus;
+- logical progression;
+- no focus trapped unintentionally;
+- focused control not hidden by sticky UI;
+- overlays manage focus appropriately.
+
+Do not infer keyboard behavior from mouse interaction.
+
+---
+
+# 20. Motion QA
+
+When motion matters verify:
+
+TIMING
+
+DIRECTION
+
+CONTINUITY
+
+PURPOSE
+
+INTERRUPTIBILITY
+
+REDUCED MOTION
+
+Do not flag minor timing deviations unless they materially change feel or comprehension.
+
+---
+
+# 21. Screenshot Comparison
+
+Use automated visual comparison when it provides repeatable value.
+
+Suitable for:
+
+- stable components;
+- stable layouts;
+- regression detection;
+- representative states.
+
+Maintain baselines intentionally.
+
+Do not blindly update snapshots to make tests pass.
+
+Every baseline change should correspond to an understood design change.
+
+---
+
+# 22. Screenshot Environment
+
+Visual baselines must be generated and compared in sufficiently consistent environments.
+
+Rendering can differ across:
+
+- operating systems;
+- browser versions;
+- fonts;
+- hardware;
+- headless/headed configuration;
+- device pixel ratio.
+
+Do not treat environment-driven raster differences as product defects.
+
+Prefer reproducible CI/runtime conditions for automated comparison.
+
+---
+
+# 23. Pixel Diff vs Perceptual Importance
+
+Pixel differences are evidence, not severity.
+
+Classify based on user/design impact.
+
+Example:
+
+1px anti-aliasing difference
+→ probably noise.
+
+Wrong layout column
+→ major defect.
+
+Missing error state
+→ critical defect.
+
+Do not let screenshot percentage alone determine priority.
+
+---
+
+# 24. Accessibility Visual Signals
+
+Check visible aspects such as:
+
+- focus;
+- contrast-sensitive states;
+- target spacing;
+- zoom/reflow;
+- error indicators;
+- color-independent status.
+
+Visual QA does not replace a full accessibility review.
+
+Escalate systemic accessibility issues to the appropriate quality workflow.
+
+---
+
+# 25. Diagnose Before Fixing
+
+For each discrepancy determine likely source:
+
+DESIGN TOKEN
+
+COMPONENT
+
+PAGE LAYOUT
+
+TYPOGRAPHY / FONT
+
+ASSET
+
+CONTENT
+
+BROWSER DEFAULT
+
+RESPONSIVE RULE
+
+STATE LOGIC
+
+DESIGN REFERENCE
+
+Do not patch symptoms repeatedly when one shared cause explains them.
+
+---
+
+# 26. Severity
+
+Classify findings:
+
+BLOCKER
+
+Prevents task completion or seriously breaks intended behavior.
+
+MAJOR
+
+Materially wrong layout, hierarchy, responsive behavior or design-system use.
+
+MINOR
+
+Visible discrepancy worth correcting but low user impact.
+
+NIT
+
+Negligible visual polish.
+
+Do not block completion on NITs unless pixel-level fidelity is itself a contractual requirement.
+
+---
+
+# 27. Batch Systemic Fixes
+
+Group findings by root cause.
+
+Example:
+
+WRONG TYPOGRAPHY TOKEN
+→ 17 visible differences.
+
+Fix the typography source once.
+
+Do not create 17 unrelated patches.
+
+---
+
+# 28. Correction Cycle
+
+Use:
+
+OBSERVE
+→ CLASSIFY
+→ DIAGNOSE
+→ FIX
+→ TARGETED RECHECK.
+
+After targeted issues pass:
+
+perform one broader final visual validation.
+
+Do not re-run the entire matrix after every tiny edit.
+
+---
+
+# 29. Preserve Valid Work
+
+Do not rewrite healthy UI around a small mismatch.
+
+Prefer minimum corrective changes.
+
+If most screen regions PASS, preserve them.
+
+---
+
+# 30. Evidence
+
+Retain useful evidence:
+
+BEFORE SCREENSHOT
+
+REFERENCE
+
+AFTER SCREENSHOT
+
+DIFF
+
+VIEWPORT
+
+STATE
+
+Do not generate huge collections of screenshots without purpose.
+
+---
+
+# 31. Completion Report
+
+Return:
+
+# Visual QA — [Screen]
+
+## Status
+
+PASS / PASS WITH MINOR DIFFERENCES / FAIL
+
+## Reference
+
+...
+
+## Environment
+
+...
+
+## Tested
+
+Viewports / states / interactions.
+
+## Blockers
+
+- ...
+
+## Major
+
+- ...
+
+## Minor
+
+- ...
+
+## Systemic Causes
+
+- ...
+
+## Fixed
+
+- ...
+
+## Verified After Fix
+
+- ...
+
+## Not Tested
+
+- ...
+
+## Remaining Risk
+
+- ...
+
+## Next
+
+Exactly one next action.
+
+---
+
+# PASS Criterion
+
+Visual QA passes when:
+
+- product behavior matches intent;
+- hierarchy is materially correct;
+- layout is correct across representative spaces;
+- approved components/tokens are used appropriately;
+- important states work;
+- realistic content does not break the screen;
+- no material visual/accessibility defect remains.
+
+PASS does not mean every rasterized pixel is mathematically identical.

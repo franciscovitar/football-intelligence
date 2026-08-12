@@ -1,0 +1,1092 @@
+# 22 — PERFORMANCE DIAGNOSIS
+
+## Mission
+
+Identify the actual cause of a performance problem using measurement, profiling and controlled experiments.
+
+Do NOT optimize before establishing evidence.
+
+The objective is:
+
+user-visible symptom
+→ measurable baseline
+→ localization
+→ bottleneck
+→ causal hypothesis
+→ experiment
+→ recommendation.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+Do not implement broad optimizations during diagnosis unless explicitly requested.
+
+---
+
+# 1. Define the Performance Problem
+
+Translate:
+
+"the app is slow"
+
+into a measurable symptom.
+
+Determine:
+
+WHO experiences it?
+
+WHAT operation?
+
+WHEN?
+
+UNDER WHAT LOAD?
+
+HOW OFTEN?
+
+WHAT IS THE IMPACT?
+
+Examples:
+
+API p95 latency increased from X to Y.
+
+Search becomes slow above N records.
+
+Initial web rendering is slow on mobile users.
+
+A background job cannot keep up with arrival rate.
+
+Do not optimize vague discomfort.
+
+---
+
+# 2. Define Success
+
+Before changing anything define the target.
+
+Possible:
+
+LATENCY
+
+THROUGHPUT
+
+TIME TO COMPLETE
+
+RESOURCE UTILIZATION
+
+WEB VITAL
+
+DATABASE QUERY TIME
+
+QUEUE DELAY
+
+COST PER OPERATION.
+
+Targets should reflect product/user needs when available.
+
+Do not invent arbitrary microsecond goals.
+
+---
+
+# 3. Establish Baseline
+
+Measure current behavior.
+
+Record relevant:
+
+WORKLOAD
+
+ENVIRONMENT
+
+DATASET
+
+CONCURRENCY
+
+CACHE STATE
+
+BUILD
+
+VERSION
+
+NETWORK CONDITION
+
+METRIC
+
+PERCENTILE.
+
+A performance improvement without a baseline is difficult to prove.
+
+---
+
+# 4. Prefer Distributions Over Averages
+
+Where latency varies, inspect useful percentiles such as:
+
+p50
+
+p75
+
+p95
+
+p99
+
+according to the product.
+
+Average latency can hide slow user experiences.
+
+Do not obsess over extreme tails when they have no product significance.
+
+---
+
+# 5. Business / User Metric First
+
+Start from the outcome users care about.
+
+Examples:
+
+page usable;
+
+search results visible;
+
+payment complete;
+
+job complete.
+
+Then decompose into technical metrics.
+
+Do not optimize CPU usage if users are already meeting the performance objective.
+
+---
+
+# 6. Field vs Lab
+
+Distinguish:
+
+FIELD / PRODUCTION DATA
+
+Real user/workload behavior.
+
+LAB / SYNTHETIC DATA
+
+Controlled reproducible environment.
+
+Use field data to understand actual user impact when available.
+
+Use lab measurements for controlled diagnosis.
+
+Do not assume synthetic performance exactly matches real users.
+
+---
+
+# 7. Web Performance
+
+For applicable web products inspect current Core Web Vitals:
+
+LCP
+
+loading of primary content.
+
+INP
+
+interaction responsiveness.
+
+CLS
+
+visual stability.
+
+Also inspect diagnostic metrics where useful:
+
+TTFB
+
+FCP
+
+TBT in lab.
+
+Do not optimize Lighthouse score as an abstract number.
+
+Optimize the actual user experience and failing metrics.
+
+---
+
+# 8. Reproduce
+
+Create the smallest repeatable performance reproduction.
+
+Specify:
+
+INPUT
+
+REQUEST
+
+VIEW
+
+WORKLOAD
+
+LOAD
+
+DATA SIZE
+
+MEASUREMENT METHOD.
+
+Run multiple samples when variance matters.
+
+Do not diagnose from one anomalous request.
+
+---
+
+# 9. Control Noise
+
+Reduce irrelevant variance.
+
+Consider:
+
+warmup;
+
+background processes;
+
+network;
+
+cache;
+
+JIT;
+
+GC;
+
+shared environment;
+
+autoscaling;
+
+cold start.
+
+Document meaningful uncontrolled factors.
+
+Do not manipulate the environment so much that the test no longer resembles reality.
+
+---
+
+# 10. Map the Critical Path
+
+Trace the operation.
+
+Example:
+
+USER
+
+→ CDN
+
+→ APPLICATION
+
+→ API
+
+→ DATABASE
+
+→ PROVIDER
+
+→ RESPONSE
+
+→ CLIENT RENDER.
+
+Estimate/measure time spent at each significant boundary.
+
+Do not optimize components outside the critical path.
+
+---
+
+# 11. Four Resource Questions
+
+At bottleneck candidates inspect:
+
+CPU
+
+MEMORY
+
+I/O
+
+NETWORK.
+
+Also consider:
+
+LOCK / CONTENTION
+
+QUEUEING
+
+DEPENDENCY WAIT
+
+MAIN THREAD BLOCKING
+
+CONNECTION POOL
+
+THREAD/WORKER POOL.
+
+Do not assume high CPU is always bad or low CPU means the system has capacity.
+
+---
+
+# 12. Saturation
+
+Determine whether a resource approaches capacity.
+
+Examples:
+
+CPU;
+
+memory;
+
+connections;
+
+threads;
+
+workers;
+
+database connections;
+
+disk IOPS;
+
+network;
+
+provider quota.
+
+Performance often degrades non-linearly near saturation.
+
+Look for queueing and wait time.
+
+---
+
+# 13. Traffic / Workload
+
+Understand workload shape.
+
+Consider:
+
+REQUEST RATE
+
+CONCURRENT USERS
+
+BURST
+
+PAYLOAD SIZE
+
+QUERY COMPLEXITY
+
+DATASET SIZE
+
+BACKGROUND WORK.
+
+Do not benchmark unrealistic trivial inputs if production uses large workloads.
+
+---
+
+# 14. Error Interaction
+
+Performance degradation may create:
+
+timeouts;
+
+retries;
+
+failed requests;
+
+queue buildup.
+
+Inspect error rate alongside latency.
+
+A "performance problem" may actually be a reliability failure.
+
+---
+
+# 15. Regression Timeline
+
+If performance changed recently ask:
+
+WHEN DID IT CHANGE?
+
+WHAT CHANGED NEAR THAT TIME?
+
+CODE
+
+DEPENDENCY
+
+DATA VOLUME
+
+TRAFFIC
+
+CONFIG
+
+INFRASTRUCTURE
+
+PROVIDER
+
+CACHE
+
+REGION.
+
+Use historical metrics/diffs where available.
+
+Do not infer causation from timing alone.
+
+---
+
+# 16. Profiling
+
+Use profilers when CPU/runtime behavior is unclear.
+
+Possible:
+
+CPU PROFILE
+
+FLAME GRAPH
+
+MEMORY PROFILE
+
+HEAP SNAPSHOT
+
+ALLOCATION PROFILE
+
+BROWSER PERFORMANCE TRACE.
+
+Profile representative workload.
+
+Do not optimize functions simply because they appear in a profile; consider total contribution to user latency.
+
+---
+
+# 17. Database
+
+For DB-heavy paths inspect:
+
+QUERY COUNT
+
+QUERY TIME
+
+EXECUTION PLAN
+
+INDEX USAGE
+
+ROWS SCANNED
+
+N+1
+
+SORT
+
+JOIN
+
+LOCK
+
+CONNECTION WAIT.
+
+Measure before adding indexes.
+
+An index can improve reads while increasing write/storage cost.
+
+---
+
+# 18. N+1
+
+Look for:
+
+one parent query
++
+repeated child queries.
+
+Measure actual impact.
+
+Use appropriate:
+
+JOIN
+
+BATCH
+
+PREFETCH
+
+DATALOADER
+
+depending on architecture.
+
+Do not replace readable queries with highly complex joins without proving benefit.
+
+---
+
+# 19. Payload
+
+Inspect:
+
+REQUEST SIZE
+
+RESPONSE SIZE
+
+SERIALIZATION
+
+DESERIALIZATION
+
+COMPRESSION.
+
+Do not send data consumers do not need when payload is material.
+
+Do not create complex partial-response infrastructure for tiny payloads.
+
+---
+
+# 20. Network
+
+Inspect:
+
+RTT
+
+REGION
+
+DNS
+
+TLS
+
+CONNECTION REUSE
+
+NUMBER OF ROUND TRIPS
+
+CDN
+
+THIRD-PARTY REQUESTS.
+
+Reducing a round trip can matter more than micro-optimizing local code.
+
+---
+
+# 21. External Services
+
+Measure provider contribution separately.
+
+Check:
+
+latency;
+
+timeout;
+
+rate limit;
+
+sequential calls;
+
+parallelizable calls;
+
+retries.
+
+Do not optimize your application CPU when most latency is external waiting.
+
+---
+
+# 22. Parallelism
+
+Identify independent operations that could run concurrently.
+
+Do not parallelize operations with ordering or resource constraints blindly.
+
+Parallel work can:
+
+increase throughput
+
+or
+
+create saturation/contention.
+
+Measure.
+
+---
+
+# 23. Queueing
+
+If async systems exist inspect:
+
+arrival rate;
+
+processing rate;
+
+queue depth;
+
+oldest message age;
+
+worker count;
+
+retry volume.
+
+If arrival rate exceeds sustained processing capacity, latency will grow indefinitely.
+
+Fix capacity or work cost, not dashboard appearance.
+
+---
+
+# 24. Caching
+
+Before introducing/changing cache ask:
+
+WHAT EXPENSIVE WORK IS REPEATED?
+
+HOW OFTEN?
+
+WHAT HIT RATE IS EXPECTED?
+
+WHAT FRESHNESS IS ACCEPTABLE?
+
+HOW IS INVALIDATION HANDLED?
+
+WHAT HAPPENS ON MISS?
+
+Do not use caching to hide a fundamentally broken query without understanding it.
+
+---
+
+# 25. Cache Diagnosis
+
+If cache exists inspect:
+
+HIT RATE
+
+MISS RATE
+
+KEY CARDINALITY
+
+TTL
+
+INVALIDATION
+
+STAMPEDE
+
+STALE DATA
+
+SERIALIZATION.
+
+A cache with near-zero useful hit rate only adds complexity.
+
+---
+
+# 26. Memory
+
+Inspect:
+
+working set;
+
+allocation;
+
+growth over time;
+
+GC;
+
+leaks;
+
+large objects;
+
+cache growth.
+
+Differentiate:
+
+high but stable usage
+
+from
+
+unbounded growth.
+
+Do not call every high memory value a leak.
+
+---
+
+# 27. Garbage Collection
+
+When runtime uses GC inspect whether pauses/allocation materially affect latency.
+
+Avoid object-allocation micro-optimization unless profiling demonstrates impact.
+
+---
+
+# 28. Frontend JavaScript
+
+For web UI inspect:
+
+bundle size;
+
+long tasks;
+
+main-thread work;
+
+hydration;
+
+render loops;
+
+expensive event handlers;
+
+third-party scripts.
+
+For poor interaction responsiveness, identify the actual long task/work responsible.
+
+Do not remove useful JavaScript merely to improve a synthetic score without user benefit.
+
+---
+
+# 29. Rendering
+
+Check:
+
+unnecessary rerenders;
+
+layout thrashing;
+
+large DOM;
+
+expensive paint;
+
+image sizing;
+
+font loading.
+
+Use browser tracing/profiling when relevant.
+
+Do not infer rendering bottlenecks solely from component count.
+
+---
+
+# 30. Images
+
+For image-heavy experiences inspect:
+
+format;
+
+dimensions;
+
+compression;
+
+responsive variants;
+
+lazy loading;
+
+priority;
+
+CDN.
+
+Do not lazy-load primary above-the-fold imagery that must appear immediately without considering LCP impact.
+
+---
+
+# 31. Fonts
+
+Inspect:
+
+number of families;
+
+weights;
+
+file size;
+
+loading path;
+
+fallback;
+
+preload necessity.
+
+Do not load unused weights.
+
+Preserve visual requirements.
+
+---
+
+# 32. Build / Bundle
+
+Check whether new dependencies or code paths increase:
+
+client bundle;
+
+startup time;
+
+cold start;
+
+memory.
+
+Use bundle analysis where relevant.
+
+Do not chase tiny bundle reductions with large maintainability cost.
+
+---
+
+# 33. Cold Start
+
+When serverless/on-demand runtime exists distinguish:
+
+cold
+
+vs.
+
+warm
+
+behavior.
+
+Measure frequency and user impact.
+
+Do not redesign architecture around rare cold starts unless impact matters.
+
+---
+
+# 34. Algorithmic Complexity
+
+For scaling with data size, examine algorithmic behavior.
+
+Ask:
+
+What happens when N becomes 10×?
+
+100×?
+
+Look for accidental:
+
+O(n²)
+
+repeated search;
+
+full scans;
+
+unbounded loops.
+
+Do not optimize asymptotic complexity when actual N is permanently tiny and simpler code is better.
+
+---
+
+# 35. Load Testing
+
+Use load testing when concurrency/capacity matters.
+
+Model representative:
+
+normal load;
+
+peak;
+
+spike;
+
+sustained high load;
+
+stress beyond expected load when useful.
+
+Use synthetic/sanitized data.
+
+Prefer a production-like environment where meaningful.
+
+Do not unintentionally attack production or third-party systems.
+
+---
+
+# 36. Load Test Metrics
+
+Capture:
+
+throughput;
+
+latency distribution;
+
+errors;
+
+resource saturation;
+
+queueing;
+
+autoscaling behavior.
+
+A throughput number without latency/error information is incomplete.
+
+---
+
+# 37. Capacity Limit
+
+When relevant discover where performance begins to degrade materially.
+
+This establishes a practical capacity boundary.
+
+Do not stress systems beyond safe limits without controlled isolation.
+
+---
+
+# 38. Cost Efficiency
+
+Performance optimization can change cost.
+
+Measure important trade-offs:
+
+more compute;
+
+cache cost;
+
+database tier;
+
+network;
+
+provider API.
+
+The fastest architecture is not necessarily the best product architecture.
+
+---
+
+# 39. Hypotheses
+
+Maintain ranked causal hypotheses.
+
+For each:
+
+EVIDENCE
+
+EXPECTED EFFECT
+
+EXPERIMENT
+
+RESULT.
+
+Example:
+
+Hypothesis:
+database query dominates API latency.
+
+Experiment:
+replace DB call with controlled constant result.
+
+Expected:
+latency decreases materially if true.
+
+Do not change multiple variables at once when isolating cause.
+
+---
+
+# 40. Bottleneck Standard
+
+A component is a bottleneck when evidence shows it constrains the relevant performance objective.
+
+Do not call something a bottleneck just because it consumes resources.
+
+---
+
+# 41. Optimization Candidates
+
+After identifying bottleneck, rank possible changes by:
+
+EXPECTED IMPACT
+
+IMPLEMENTATION COST
+
+RISK
+
+REVERSIBILITY
+
+MAINTENANCE COST.
+
+Prefer large validated gains before micro-optimizations.
+
+---
+
+# 42. Do Not Optimize Yet
+
+Performance Diagnosis normally ends with recommendation, not broad implementation.
+
+Use:
+
+`13 Feature Implementation`
+
+or focused performance optimization afterward.
+
+This keeps measurement and change separable.
+
+---
+
+# 43. Validation Plan
+
+For recommended optimization define:
+
+BASELINE METRIC
+
+TARGET
+
+TEST
+
+EXPECTED IMPROVEMENT
+
+REGRESSION GUARDRAILS.
+
+Without a comparison plan, optimization cannot be proven.
+
+---
+
+# 44. Output Format
+
+# Performance Diagnosis — [Scope]
+
+## Status
+
+BOTTLENECK CONFIRMED / HIGH CONFIDENCE / INCONCLUSIVE / NO MATERIAL ISSUE
+
+## User-Visible Problem
+
+...
+
+## Performance Target
+
+...
+
+## Baseline
+
+Include workload/environment.
+
+## Measurements
+
+...
+
+## Critical Path
+
+...
+
+## Bottleneck
+
+...
+
+## Evidence
+
+...
+
+## Hypotheses Tested
+
+...
+
+## Root Cause
+
+...
+
+## Recommended Optimization
+
+One primary recommendation.
+
+## Expected Trade-offs
+
+...
+
+## Validation Plan
+
+Before/after comparison.
+
+## Secondary Opportunities
+
+Only meaningful ones.
+
+## Not Proven
+
+...
+
+## Risk
+
+...
+
+## Next
+
+Exactly one next action.
+
+---
+
+# Completion Criterion
+
+Performance Diagnosis is complete when the system knows:
+
+- which performance objective is failing;
+- under what conditions;
+- where time/resources are being consumed;
+- what bottleneck causes the failure;
+- how the proposed optimization will be proven effective.
+
+Performance engineering begins with measurement.
+
+Without measurement, optimization is guessing.

@@ -1,0 +1,511 @@
+# 01 — PRODUCT DISCOVERY
+
+## Mission
+
+Understand the product problem well enough to decide what should be built, what should NOT be built, and what needs to be learned before implementation.
+
+Do not design architecture or write production code during Discovery.
+
+The goal is not to validate the user's initial solution.
+
+The goal is to determine whether the underlying problem is real, valuable and sufficiently understood.
+
+Follow `WORKFLOW.md` for research, autonomy, delegation and user intervention.
+
+---
+
+# 1. Start With the Problem, Not the Proposed Solution
+
+The user may arrive with a solution:
+
+"Build an app that..."
+
+Do not automatically treat that solution as the requirement.
+
+Identify:
+
+- what problem exists;
+- who experiences it;
+- what they are trying to accomplish;
+- how they currently solve it;
+- where current approaches fail;
+- why solving it matters.
+
+Rewrite the proposed solution as a problem statement where useful.
+
+---
+
+# 2. Evidence Discipline
+
+Separate everything into:
+
+FACT
+Supported by user-provided information, repository data, analytics, research or other evidence.
+
+INFERENCE
+A conclusion reasonably supported by facts.
+
+HYPOTHESIS
+Something plausible that still needs validation.
+
+ASSUMPTION
+Something being temporarily accepted to continue.
+
+UNKNOWN
+Something that materially matters but is not known.
+
+Never present invented user behavior as research.
+
+Never invent:
+
+- interviews;
+- customer quotes;
+- analytics;
+- conversion rates;
+- market evidence;
+- user preferences;
+- competitor performance.
+
+If evidence does not exist, call it a hypothesis.
+
+---
+
+# 3. Problem Definition
+
+Produce a concise problem statement covering:
+
+WHO
+Who experiences the problem?
+
+CONTEXT
+When and where does it occur?
+
+GOAL
+What are they trying to achieve?
+
+FRICTION
+What prevents or slows them?
+
+IMPACT
+Why does solving it matter?
+
+Do not define the problem in terms of a specific interface or technology unless technology itself is genuinely part of the constraint.
+
+---
+
+# 4. Users
+
+Identify the minimum useful set of user groups.
+
+For each relevant group determine:
+
+- goal;
+- context;
+- current behavior;
+- major pain points;
+- constraints;
+- level of expertise;
+- accessibility considerations when relevant.
+
+Do not create decorative demographic personas unless demographics materially affect product behavior.
+
+Prefer behavioral/user-need distinctions.
+
+---
+
+# 5. Jobs and Outcomes
+
+Identify the important outcomes users are trying to achieve.
+
+Describe needs in terms of outcomes rather than features.
+
+Example:
+
+Weak:
+"Users need a dashboard."
+
+Better:
+"Users need to understand which campaigns require attention without manually comparing multiple reports."
+
+Avoid feature wording unless discussing a proposed solution.
+
+---
+
+# 6. Existing Journey
+
+Understand the current workflow before proposing a new one.
+
+Map:
+
+Trigger
+→ current steps
+→ decisions
+→ external actors/systems
+→ pain points
+→ outcome.
+
+Include offline steps if relevant.
+
+Identify where the product would fit into the broader journey.
+
+Do not assume the digital product owns the entire process.
+
+---
+
+# 7. Constraints
+
+Identify:
+
+HARD CONSTRAINTS
+Constraints unlikely to change.
+
+Examples:
+
+- law;
+- contractual obligations;
+- fixed external APIs;
+- mandatory platforms;
+- physical limitations;
+- existing infrastructure that cannot currently change.
+
+SOFT CONSTRAINTS
+Constraints that may be negotiable.
+
+Examples:
+
+- current internal process;
+- preferred technology;
+- historical convention;
+- manually imposed workflow.
+
+Do not treat soft constraints as immutable without evidence.
+
+---
+
+# 8. Existing Alternatives
+
+Determine how the problem is currently solved.
+
+Consider:
+
+- manual workflows;
+- spreadsheets;
+- messaging;
+- competitors;
+- existing internal tools;
+- doing nothing;
+- content/information;
+- process changes;
+- automation;
+- third-party products.
+
+Research externally when current market or technical information materially changes the decision.
+
+Prefer primary sources where possible.
+
+---
+
+# 9. Do We Need Software?
+
+Explicitly consider whether building software is the best intervention.
+
+Possible alternatives may include:
+
+- process change;
+- automation of an existing workflow;
+- better information;
+- integration between existing systems;
+- using an existing product;
+- reducing/removing a step;
+- API/data access;
+- no intervention.
+
+Do not recommend building software merely because this is a software project conversation.
+
+---
+
+# 10. Value
+
+Determine why solving the problem matters.
+
+Possible value:
+
+USER VALUE
+time saved, reduced friction, fewer errors, better outcomes.
+
+BUSINESS VALUE
+revenue, retention, lower operating cost, differentiation, risk reduction.
+
+OPERATIONAL VALUE
+less manual work, fewer incidents, faster workflows.
+
+STRATEGIC VALUE
+enabling a future capability.
+
+Do not fabricate monetary value.
+
+Quantify only when evidence exists.
+
+---
+
+# 11. Success
+
+Define how we would know the solution worked.
+
+Identify:
+
+PRIMARY OUTCOME
+The most important behavior/result.
+
+SUPPORTING METRICS
+Useful indicators.
+
+GUARDRAILS
+Things that must not get worse.
+
+Examples may include:
+
+- successful task completion;
+- time to complete;
+- error rate;
+- retention;
+- conversion;
+- support volume;
+- latency;
+- operational workload.
+
+Choose metrics appropriate to the product.
+
+Do not use vanity metrics when they do not represent user or business value.
+
+---
+
+# 12. Risky Assumptions
+
+Identify assumptions that could invalidate the product.
+
+Classify where useful:
+
+VALUE RISK
+Will users care?
+
+USABILITY RISK
+Can they use it?
+
+FEASIBILITY RISK
+Can we build/operate it?
+
+VIABILITY RISK
+Does it work for the business/organization?
+
+SECURITY / PRIVACY / LEGAL RISK
+Can it be done acceptably?
+
+Rank by:
+
+Impact × Uncertainty.
+
+Do not spend equal effort validating low-risk assumptions.
+
+---
+
+# 13. Scope
+
+Define:
+
+CORE PROBLEM
+What we are solving.
+
+IN SCOPE
+Capabilities likely required to solve it.
+
+OUT OF SCOPE
+Things explicitly not being solved now.
+
+LATER
+Potential future areas that should not contaminate current design.
+
+Avoid feature creep.
+
+---
+
+# 14. MVP Candidate
+
+Only after understanding the problem, propose the smallest useful product increment capable of testing real value.
+
+The MVP should:
+
+- solve a meaningful slice of the problem;
+- be usable end-to-end;
+- generate useful learning;
+- avoid unnecessary infrastructure.
+
+Do not define MVP as:
+
+"the final product but with fewer polish features."
+
+Prefer the smallest coherent outcome.
+
+---
+
+# 15. Research Needs
+
+Identify what evidence is still missing.
+
+For each important unknown define the cheapest useful validation method.
+
+Examples:
+
+- inspect analytics;
+- interview users;
+- examine support tickets;
+- test a prototype;
+- verify an API;
+- analyze existing workflow data;
+- run a technical spike;
+- inspect competitor/public documentation.
+
+Do directly any research available through current tools.
+
+Only require human research when it genuinely cannot be substituted.
+
+---
+
+# 16. Avoid Premature Technical Design
+
+During Discovery, do NOT prematurely decide:
+
+- exact framework;
+- detailed database schema;
+- microservices;
+- class structure;
+- API endpoint structure;
+- component architecture;
+- cloud topology.
+
+Technical constraints may be identified.
+
+Detailed architecture belongs later.
+
+If feasibility itself is a risky assumption, recommend `03 Technical Spike`.
+
+---
+
+# 17. Questions
+
+Do not start with a long questionnaire.
+
+First inspect all available context.
+
+Answer everything possible through:
+
+- existing project context;
+- files;
+- repository;
+- connected data;
+- research.
+
+If a material product decision cannot be inferred, ask the smallest number of high-value questions.
+
+Prefer one grouped clarification instead of repeated interruptions.
+
+---
+
+# 18. Discovery Output
+
+Return:
+
+## 1. Problem
+
+Concise problem statement.
+
+## 2. Users
+
+Relevant user groups and their goals.
+
+## 3. Current Journey
+
+How the problem is solved today.
+
+## 4. Evidence
+
+What we actually know.
+
+## 5. Hypotheses
+
+What remains unvalidated.
+
+## 6. Constraints
+
+Hard and soft constraints.
+
+## 7. Opportunity
+
+Why solving the problem matters.
+
+## 8. Success
+
+Primary outcome, supporting metrics and guardrails.
+
+## 9. Risky Assumptions
+
+Ranked by impact and uncertainty.
+
+## 10. Scope
+
+In scope / out of scope / later.
+
+## 11. MVP Candidate
+
+Smallest coherent product outcome.
+
+## 12. Research Still Needed
+
+Only material unknowns.
+
+## 13. Recommendation
+
+Choose one:
+
+PROCEED
+Problem sufficiently understood.
+
+PROCEED WITH VALIDATION
+Promising, but one or more assumptions should be tested during early development.
+
+SPIKE FIRST
+A feasibility assumption blocks responsible commitment.
+
+DO NOT BUILD YET
+Product problem is not sufficiently understood.
+
+CONSIDER NON-SOFTWARE SOLUTION
+A simpler intervention may solve the problem better.
+
+## 14. Next
+
+Recommend exactly one next prompt/action.
+
+Usually:
+
+`02 Feature Specification`
+`03 Technical Spike`
+or further Discovery validation.
+
+---
+
+# Completion Criterion
+
+Discovery is complete when we understand enough about:
+
+- the problem;
+- users;
+- context;
+- value;
+- constraints;
+- success;
+- major risks
+
+to make a rational decision about what to do next.
+
+Discovery is NOT complete merely because we produced a list of features.

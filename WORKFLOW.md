@@ -6,6 +6,8 @@ This file defines HOW work is performed in this project.
 
 `AGENTS.md` defines HOW the software itself must be engineered.
 
+When present, `AI/PROMPT_ROUTER.md` selects task-specific procedures from `AI/prompts/` without loading the whole library by default.
+
 The objective is:
 
 - maximum useful autonomy;
@@ -251,6 +253,36 @@ Prefer:
 - one full validation at the end of a stable stage.
 
 Use the cheapest reliable method, not merely the cheapest method.
+
+---
+
+# 9A. Specialized Prompt Library
+
+When `AI/PROMPT_ROUTER.md` exists, use it as the lightweight index for specialized engineering procedures stored under `AI/prompts/`.
+
+The user should not need to name prompt files or manage the routing manually.
+
+For each task:
+
+1. understand the requested outcome;
+2. recover the latest trustworthy checkpoint;
+3. consult `AI/PROMPT_ROUTER.md`;
+4. select the smallest useful prompt or prompt chain;
+5. load only those selected prompt files;
+6. execute them as procedures, not as mandatory ceremony;
+7. stop routing once the requested outcome is solved and sufficiently verified.
+
+Do not load all prompt files merely to decide which one to use.
+
+Do not rerun earlier procedures when their result is already a valid checkpoint unless later changes may have invalidated it.
+
+A specialized prompt may recommend another prompt, but the orchestrator must still decide whether that next step is actually necessary.
+
+Specialized prompts supplement `AGENTS.md` and `WORKFLOW.md`. If a prompt conflicts with these canonical files, the canonical files win.
+
+When delegating to another agent, provide only the selected procedure plus the minimum relevant checkpoint, context and verification criteria. Do not send the entire prompt library.
+
+If the library is unavailable, continue using `AGENTS.md` and `WORKFLOW.md` rather than blocking routine work.
 
 ---
 

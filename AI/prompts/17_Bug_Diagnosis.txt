@@ -1,0 +1,1066 @@
+# 17 — BUG DIAGNOSIS
+
+## Mission
+
+Determine the most likely root cause of a reported software failure using evidence and controlled hypothesis testing.
+
+Do NOT start by changing code.
+
+The objective is:
+
+symptom
+→ reproduce
+→ localize
+→ form hypotheses
+→ test hypotheses
+→ identify root cause
+→ hand off a precise diagnosis.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+Use existing checkpoints and previous investigation.
+
+Do not repeat validated work.
+
+---
+
+# 1. Establish the Problem Report
+
+Capture:
+
+EXPECTED
+
+What should happen?
+
+ACTUAL
+
+What happens instead?
+
+IMPACT
+
+Who/what is affected?
+
+FREQUENCY
+
+Always / intermittent / condition-dependent?
+
+FIRST KNOWN OCCURRENCE
+
+If known.
+
+ENVIRONMENT
+
+Local / test / staging / production / browser / device / runtime.
+
+REPRODUCTION
+
+Known steps, input or trigger.
+
+Do not begin from:
+
+"something is broken."
+
+Turn the report into observable behavior.
+
+---
+
+# 2. Triage Risk First
+
+Before root-cause investigation determine whether continuing normal operation could:
+
+- corrupt data;
+- expose sensitive information;
+- cause financial loss;
+- increase production impact;
+- cascade into other systems;
+- create irreversible state.
+
+If yes:
+
+contain impact first.
+
+Examples:
+
+- disable dangerous path;
+- stop rollout;
+- isolate component;
+- route around failure;
+- revert a clearly causal deployment.
+
+Preserve evidence where possible.
+
+Do not spend time finding the perfect root cause while users/data continue being harmed.
+
+---
+
+# 3. Separate Incident From Ordinary Bug
+
+Classify:
+
+LOCAL DEVELOPMENT BUG
+
+TEST FAILURE
+
+STAGING FAILURE
+
+PRODUCTION BUG
+
+ACTIVE INCIDENT
+
+PERFORMANCE REGRESSION
+
+DATA ISSUE
+
+INTEGRATION FAILURE
+
+CONFIGURATION / DEPLOYMENT ISSUE
+
+The investigation depth and urgency should match impact.
+
+Do not apply incident-level ceremony to a trivial local defect.
+
+---
+
+# 4. Starting Checkpoint
+
+Identify the latest known valid state.
+
+Examples:
+
+last passing test;
+
+last good commit;
+
+last good deployment;
+
+known healthy configuration;
+
+last verified provider state.
+
+Ask:
+
+WHAT CHANGED SINCE THEN?
+
+Do not assume the latest code change caused the problem, but treat recent relevant changes as useful evidence.
+
+---
+
+# 5. Reproduce
+
+Try to create the smallest reliable reproduction.
+
+Prefer:
+
+MINIMAL INPUT
+
+MINIMAL ENVIRONMENT
+
+MINIMAL STEPS
+
+CONSISTENT OUTPUT.
+
+Record exact reproduction conditions.
+
+A reliable reproducer is one of the strongest debugging assets.
+
+If reproduction is impossible, gather production/runtime evidence instead.
+
+Do not invent a reproduction that has not been observed.
+
+---
+
+# 6. Confirm the Symptom
+
+Before diagnosing, ensure the reported symptom is real and correctly understood.
+
+Check:
+
+- logs;
+- error output;
+- returned data;
+- UI behavior;
+- metrics;
+- network behavior;
+- persistence state.
+
+Do not debug an interpretation of the symptom when the actual symptom differs.
+
+---
+
+# 7. Classify the Failure Domain
+
+Before changing anything classify likely layers:
+
+APPLICATION LOGIC
+
+UI
+
+STATE MANAGEMENT
+
+API CONTRACT
+
+DATABASE / DATA
+
+CONFIGURATION
+
+ENVIRONMENT
+
+AUTHENTICATION
+
+AUTHORIZATION
+
+INFRASTRUCTURE
+
+DEPLOYMENT
+
+NETWORK
+
+DEPENDENCY
+
+EXTERNAL SERVICE
+
+CACHE
+
+CONCURRENCY
+
+BROWSER / DEVICE
+
+TEST INFRASTRUCTURE
+
+Do not automatically assume code is responsible.
+
+---
+
+# 8. Understand the Expected Path
+
+Trace how the system is supposed to work.
+
+Identify:
+
+INPUT
+
+ENTRY POINT
+
+IMPORTANT TRANSFORMATIONS
+
+BOUNDARIES
+
+SIDE EFFECTS
+
+OUTPUT
+
+Do not read the entire codebase.
+
+Understand only the path relevant to the symptom.
+
+---
+
+# 9. Observe the Actual Path
+
+Determine where actual behavior first diverges from expected behavior.
+
+Compare:
+
+EXPECTED VALUE / STATE
+
+vs.
+
+OBSERVED VALUE / STATE
+
+at important boundaries.
+
+The first meaningful divergence is usually more useful than the final visible error.
+
+---
+
+# 10. Reduce the Search Space
+
+Use divide-and-conquer.
+
+Examples:
+
+client vs server;
+
+server vs database;
+
+application vs provider;
+
+before transformation vs after transformation;
+
+old version vs new version;
+
+working environment vs failing environment.
+
+Bisect when appropriate.
+
+Do not inspect every component with equal depth.
+
+---
+
+# 11. Evidence Ledger
+
+Maintain internally:
+
+OBSERVATION
+
+What was directly seen?
+
+SOURCE
+
+Where was it observed?
+
+IMPLICATION
+
+What does it suggest?
+
+DOES NOT PROVE
+
+What conclusion would be premature?
+
+This prevents weak observations from becoming "facts."
+
+---
+
+# 12. Hypotheses
+
+Create a short ranked list of plausible causes.
+
+For each:
+
+HYPOTHESIS
+
+SUPPORTING EVIDENCE
+
+CONTRADICTING EVIDENCE
+
+TEST
+
+EXPECTED RESULT IF TRUE
+
+EXPECTED RESULT IF FALSE
+
+Prefer a few high-probability hypotheses over dozens of exotic theories.
+
+---
+
+# 13. Falsify, Don't Just Confirm
+
+Design tests capable of proving a hypothesis wrong.
+
+Do not only search for evidence supporting your favorite theory.
+
+When evidence contradicts a hypothesis:
+
+downgrade or discard it.
+
+Do not keep patching around a disproven explanation.
+
+---
+
+# 14. Correlation Is Not Causation
+
+Treat temporal correlation as evidence, not proof.
+
+Example:
+
+deployment occurred
++
+errors began
+
+does not automatically prove the deployment caused them.
+
+Look for a causal mechanism.
+
+Do not confuse two symptoms sharing a cause with one symptom causing the other.
+
+---
+
+# 15. Prefer Simple Plausible Causes First
+
+Investigate common realistic causes before rare exotic ones when evidence is otherwise equal.
+
+Examples:
+
+configuration;
+
+incorrect input;
+
+bad state;
+
+dependency version;
+
+recent change;
+
+permission;
+
+schema mismatch;
+
+environment difference.
+
+But do not ignore strong evidence merely because a failure is unusual.
+
+---
+
+# 16. Recent Changes
+
+Inspect relevant changes to:
+
+CODE
+
+CONFIG
+
+INFRASTRUCTURE
+
+DATA
+
+DEPENDENCIES
+
+FEATURE FLAGS
+
+SECRETS / PERMISSIONS
+
+TRAFFIC / LOAD
+
+EXTERNAL PROVIDERS.
+
+Use diffs and history rather than speculation.
+
+Do not revert unrelated changes blindly.
+
+---
+
+# 17. Compare Working vs Failing
+
+When possible compare:
+
+WORKING ENVIRONMENT
+vs.
+FAILING ENVIRONMENT.
+
+Look for differences in:
+
+version;
+
+config;
+
+data;
+
+permissions;
+
+dependency;
+
+runtime;
+
+browser;
+
+feature flag;
+
+network;
+
+provider response.
+
+One controlled difference can collapse a large search space.
+
+---
+
+# 18. Logs
+
+Use logs to answer specific questions.
+
+Prefer:
+
+relevant timeframe;
+
+relevant request;
+
+correlation ID;
+
+structured fields;
+
+causal sequence.
+
+Do not dump thousands of lines and hope the answer appears.
+
+Do not treat absence of logs as proof an operation did not occur unless logging guarantees that.
+
+---
+
+# 19. Metrics
+
+Use metrics when they help characterize:
+
+WHEN
+
+HOW OFTEN
+
+HOW SEVERE
+
+WHICH COMPONENT
+
+WHICH COHORT.
+
+Look for:
+
+rate;
+
+latency;
+
+errors;
+
+resource saturation;
+
+queue depth;
+
+traffic.
+
+Do not overinterpret coincidental graph correlation.
+
+---
+
+# 20. Traces
+
+When distributed boundaries matter, trace the request/operation across components.
+
+Identify:
+
+where latency appears;
+
+where error originates;
+
+which dependency fails;
+
+which path differs.
+
+Do not add tracing infrastructure solely for one trivial local bug.
+
+---
+
+# 21. Instrumentation
+
+If current observability cannot distinguish hypotheses, add the minimum temporary or durable instrumentation needed.
+
+Examples:
+
+targeted log;
+
+counter;
+
+trace field;
+
+assertion;
+
+diagnostic endpoint.
+
+Do not add broad noisy logging.
+
+Never log secrets or unnecessary sensitive data.
+
+---
+
+# 22. Data Investigation
+
+When data may be causal inspect:
+
+actual problematic record;
+
+schema;
+
+constraints;
+
+relationships;
+
+migration history;
+
+null/edge values;
+
+encoding;
+
+timestamps.
+
+Do not modify production data simply to see whether the issue disappears.
+
+Prefer read-only diagnosis first.
+
+---
+
+# 23. Database Investigation
+
+When relevant inspect:
+
+query;
+
+parameters;
+
+result;
+
+execution plan;
+
+transaction;
+
+lock;
+
+constraint;
+
+connection.
+
+Distinguish:
+
+bad query
+
+from
+
+bad data
+
+from
+
+bad schema
+
+from
+
+infrastructure problem.
+
+---
+
+# 24. Configuration
+
+Verify effective configuration, not merely source files.
+
+Consider:
+
+environment variables;
+
+feature flags;
+
+provider settings;
+
+build-time configuration;
+
+runtime configuration;
+
+secret scope.
+
+A correct config file is irrelevant if the running system receives different values.
+
+---
+
+# 25. Authentication / Authorization
+
+Distinguish:
+
+IDENTITY FAILURE
+
+SESSION FAILURE
+
+TOKEN FAILURE
+
+PERMISSION FAILURE
+
+OWNERSHIP FAILURE
+
+PROVIDER FAILURE.
+
+Do not "fix" authorization by broadening permissions without understanding the intended policy.
+
+---
+
+# 26. External Dependencies
+
+For provider failures determine:
+
+our request;
+
+provider response;
+
+provider request ID;
+
+API version;
+
+auth;
+
+rate limit;
+
+timeout;
+
+provider status when relevant.
+
+Do not blame the provider without evidence.
+
+Do not blame our code merely because provider documentation says the service should work.
+
+---
+
+# 27. Cache
+
+If caching is involved inspect:
+
+cache key;
+
+TTL;
+
+invalidation;
+
+stale value;
+
+scope;
+
+serialization;
+
+multiple cache layers.
+
+Compare cached vs authoritative state.
+
+Do not clear every cache globally as the first debugging technique.
+
+---
+
+# 28. Concurrency / Timing
+
+For intermittent bugs consider:
+
+race;
+
+ordering;
+
+duplicate execution;
+
+lost update;
+
+timeout;
+
+clock;
+
+async cancellation;
+
+event ordering;
+
+shared mutable state.
+
+Try to increase reproducibility through controlled timing rather than random retries.
+
+---
+
+# 29. Browser / UI
+
+For frontend failures inspect when relevant:
+
+console;
+
+network;
+
+DOM;
+
+runtime state;
+
+hydration;
+
+layout;
+
+browser support;
+
+stored client state;
+
+service worker/cache.
+
+Do not infer UI runtime behavior solely from source code.
+
+---
+
+# 30. Test Failures
+
+If only a test fails determine whether:
+
+PRODUCT CODE IS WRONG
+
+TEST EXPECTATION IS WRONG
+
+TEST IS FLAKY
+
+FIXTURE IS WRONG
+
+ENVIRONMENT IS WRONG
+
+DEPENDENCY CHANGED.
+
+Never weaken a test solely to obtain green status.
+
+---
+
+# 31. Flakiness
+
+A flaky failure requires evidence.
+
+Investigate possible nondeterminism:
+
+time;
+
+randomness;
+
+network;
+
+ordering;
+
+shared state;
+
+parallelism;
+
+external dependency;
+
+eventual consistency.
+
+Do not "solve" flakiness with retries before identifying why the test is nondeterministic.
+
+---
+
+# 32. Controlled Experiment
+
+Change one meaningful variable when practical.
+
+Record:
+
+CHANGE
+
+EXPECTED EFFECT
+
+OBSERVED EFFECT.
+
+Avoid changing five things simultaneously.
+
+Otherwise a successful outcome may not reveal what fixed the problem.
+
+---
+
+# 33. Production Safety
+
+For production diagnosis prefer:
+
+read-only inspection;
+
+existing observability;
+
+safe queries;
+
+limited experiments.
+
+Do not:
+
+alter real data;
+
+disable security;
+
+restart broad infrastructure;
+
+purge global caches;
+
+change permissions
+
+without a justified and controlled reason.
+
+---
+
+# 34. Retry Discipline
+
+If two meaningful attempts based on essentially the same hypothesis fail:
+
+stop repeating.
+
+Reassess:
+
+hypothesis;
+
+observability;
+
+search boundary;
+
+tool/environment.
+
+Do not enter trial-and-error loops.
+
+---
+
+# 35. Root Cause Standard
+
+Do not call something root cause merely because changing it makes the symptom disappear.
+
+A confirmed root cause should explain:
+
+WHY THE FAILURE OCCURS
+
+WHY IT OCCURS UNDER THESE CONDITIONS
+
+WHY THE OBSERVED SYMPTOM FOLLOWS
+
+WHY THE PROPOSED FIX SHOULD PREVENT IT.
+
+Prefer causal explanation over correlation.
+
+---
+
+# 36. Contributing Factors
+
+Separate:
+
+ROOT CAUSE
+
+CONTRIBUTING FACTOR
+
+TRIGGER
+
+DETECTION GAP
+
+AMPLIFIER.
+
+Example:
+
+Root cause:
+invalid concurrency assumption.
+
+Trigger:
+higher request parallelism.
+
+Amplifier:
+retry storm.
+
+Detection gap:
+no metric on duplicate execution.
+
+Do not force complex failures into one simplistic cause.
+
+---
+
+# 37. Diagnosis Confidence
+
+Classify:
+
+CONFIRMED
+
+Direct evidence explains the failure and reproduces causal behavior.
+
+HIGH CONFIDENCE
+
+Strong evidence, but one part could not be directly demonstrated.
+
+PLAUSIBLE
+
+Evidence suggests it, but alternatives remain.
+
+INCONCLUSIVE
+
+Insufficient evidence.
+
+Do not present PLAUSIBLE as CONFIRMED.
+
+---
+
+# 38. Regression Reproducer
+
+When possible preserve the reproducer so `18 Bug Fix` can prove:
+
+FAIL BEFORE
+
+PASS AFTER.
+
+Do not fix the issue before preserving reproducible evidence when doing so is cheap and safe.
+
+---
+
+# 39. Do Not Fix Yet
+
+During Bug Diagnosis do not implement the final code fix unless:
+
+- the user explicitly requested diagnosis + repair as one task; or
+- active harm requires immediate containment.
+
+Even then:
+
+separate diagnosis evidence from fix evidence.
+
+---
+
+# 40. Output Format
+
+# Bug Diagnosis — [Issue]
+
+## Status
+
+CONFIRMED / HIGH CONFIDENCE / PLAUSIBLE / INCONCLUSIVE
+
+## Expected
+
+...
+
+## Actual
+
+...
+
+## Impact
+
+...
+
+## Reproduction
+
+Exact minimal reproduction or "not reliably reproduced."
+
+## Starting Checkpoint
+
+...
+
+## Failure Domain
+
+...
+
+## Evidence
+
+- ...
+
+## Hypotheses Tested
+
+### Hypothesis 1
+Result: supported / rejected.
+
+...
+
+## Root Cause
+
+...
+
+## Contributing Factors
+
+...
+
+## Why This Explains the Symptom
+
+...
+
+## Regression Reproducer
+
+...
+
+## Not Proven
+
+...
+
+## Risk
+
+...
+
+## Recommended Fix Direction
+
+High-level only.
+
+## Next
+
+`18 Bug Fix`
+
+or, if unresolved:
+
+the single next diagnostic action.
+
+---
+
+# Completion Criterion
+
+Bug Diagnosis is complete when there is enough evidence to explain the failure causally and define a focused fix without guessing.
+
+The objective is not to find code that can be changed.
+
+The objective is to understand why the system is wrong.

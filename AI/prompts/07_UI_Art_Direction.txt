@@ -1,0 +1,855 @@
+# 07 — UI ART DIRECTION
+
+## Mission
+
+Define a distinctive, coherent and implementable visual direction for the product.
+
+Translate:
+
+brand
++
+product purpose
++
+audience
++
+UX
++
+content
+
+into a visual language.
+
+Do NOT redesign the underlying UX unless a visual requirement exposes a genuine UX problem.
+
+Do NOT build a full Design System yet.
+
+Follow existing brand guidelines and approved UX decisions when available.
+
+---
+
+# 1. Establish Visual Context
+
+Determine:
+
+PRODUCT
+
+AUDIENCE
+
+PRIMARY CONTEXT OF USE
+
+PLATFORM
+
+BRAND
+
+CONTENT TYPE
+
+DESIRED IMPRESSION
+
+EXISTING VISUAL ASSETS
+
+CURRENT DESIGN
+
+REFERENCE MATERIAL
+
+Do not create visual direction without understanding what the product is.
+
+---
+
+# 2. Existing Brand
+
+If a brand already exists, inspect:
+
+- logo;
+- palette;
+- typography;
+- imagery;
+- packaging/marketing;
+- brand guidelines;
+- existing digital surfaces.
+
+Separate:
+
+FIXED BRAND ELEMENTS
+
+ADAPTABLE ELEMENTS
+
+LEGACY ELEMENTS
+
+UNDEFINED DIGITAL BEHAVIOR
+
+Do not arbitrarily rebrand the product.
+
+---
+
+# 3. Desired Perception
+
+Define 3–5 visual/product personality attributes.
+
+Examples:
+
+precise
+
+calm
+
+technical
+
+approachable
+
+premium
+
+energetic
+
+editorial
+
+playful
+
+institutional
+
+bold
+
+Choose attributes that help make design decisions.
+
+Avoid vague combinations such as:
+
+modern + clean + professional
+
+unless made more specific.
+
+---
+
+# 4. Attribute Translation
+
+Translate each personality attribute into concrete visual consequences.
+
+Example:
+
+PRECISE
+
+→ tight alignment
+→ restrained ornament
+→ strong numeric typography
+→ structured spacing
+→ minimal decorative motion.
+
+ENERGETIC
+
+→ stronger contrast
+→ expressive scale changes
+→ active imagery
+→ more dynamic composition.
+
+Do not rely only on adjectives.
+
+---
+
+# 5. Product-Specific Visual Principles
+
+Create 3–7 rules specific to this product.
+
+Examples:
+
+"Data gets visual priority over chrome."
+
+"Photography should feel observational rather than staged."
+
+"Whitespace creates confidence, not emptiness."
+
+"Primary actions use contrast, not oversized containers."
+
+"Motion explains transitions rather than decorating them."
+
+These principles must be usable to resolve future design disagreements.
+
+---
+
+# 6. Avoid Generic AI Aesthetics
+
+Actively detect and avoid visual choices that appear merely because they are common in generated interfaces.
+
+Do not default automatically to:
+
+- purple/blue gradients;
+- glassmorphism;
+- excessive blur;
+- glowing objects;
+- huge empty hero sections;
+- pills everywhere;
+- excessive rounded cards;
+- every section inside a container;
+- unnecessary dashboards;
+- fake charts;
+- decorative 3D;
+- random mesh gradients;
+- excessive shadows;
+- giant gradient headlines;
+- arbitrary neon accents.
+
+Any of these may still be used when justified by the product.
+
+The problem is default imitation, not the technique itself.
+
+---
+
+# 7. Reference Analysis
+
+When references exist, do NOT merely copy their appearance.
+
+Decompose each reference into:
+
+WHAT WORKS
+
+WHY IT WORKS
+
+WHAT IS TRANSFERABLE
+
+WHAT IS BRAND-SPECIFIC
+
+WHAT SHOULD NOT BE COPIED
+
+Possible dimensions:
+
+- hierarchy;
+- composition;
+- type;
+- spacing;
+- density;
+- imagery;
+- contrast;
+- motion;
+- shape;
+- interaction.
+
+Synthesize rather than clone.
+
+---
+
+# 8. Moodboard Direction
+
+If visual exploration is useful, define the moodboard intentionally.
+
+Search for references by visual property rather than only by product category.
+
+Possible directions:
+
+- editorial;
+- architectural;
+- industrial;
+- sports broadcast;
+- luxury packaging;
+- scientific publishing;
+- print magazine;
+- signage;
+- fashion;
+- analog interfaces;
+- documentary photography.
+
+Use references to discover principles, not to replicate branded work.
+
+---
+
+# 9. Composition
+
+Define the intended compositional character.
+
+Possible dimensions:
+
+SYMMETRIC ↔ ASYMMETRIC
+
+DENSE ↔ SPACIOUS
+
+GRID-RIGID ↔ ORGANIC
+
+STATIC ↔ DYNAMIC
+
+CENTERED ↔ EDITORIAL
+
+Determine:
+
+- grid character;
+- section rhythm;
+- alignment;
+- overlap;
+- visual anchors;
+- whitespace.
+
+Do not use centered composition everywhere by default.
+
+---
+
+# 10. Visual Hierarchy
+
+Define how importance is communicated.
+
+Possible tools:
+
+- scale;
+- weight;
+- position;
+- contrast;
+- whitespace;
+- color;
+- motion;
+- imagery.
+
+Avoid using every hierarchy mechanism simultaneously.
+
+The primary content should win visually over interface decoration.
+
+---
+
+# 11. Typography
+
+Define typography by role.
+
+Consider:
+
+DISPLAY
+
+HEADINGS
+
+BODY
+
+LABELS
+
+DATA / NUMBERS
+
+CODE / TECHNICAL CONTENT
+
+Choose typefaces based on:
+
+- legibility;
+- language support;
+- character;
+- available weights;
+- rendering;
+- licensing;
+- implementation feasibility.
+
+Determine:
+
+- scale character;
+- line length;
+- line height;
+- weight usage;
+- tracking;
+- capitalization.
+
+Do not compensate for weak hierarchy with too many font sizes.
+
+Do not use more font families than necessary.
+
+---
+
+# 12. Color
+
+Define color roles before specific values.
+
+Consider:
+
+BRAND
+
+BACKGROUND
+
+SURFACE
+
+TEXT
+
+MUTED TEXT
+
+BORDER
+
+PRIMARY ACTION
+
+SECONDARY ACTION
+
+SUCCESS
+
+WARNING
+
+ERROR
+
+INFORMATION
+
+DATA
+
+Build hierarchy through contrast.
+
+Do not use color as the only carrier of meaning.
+
+Avoid unnecessary palette breadth.
+
+Accessibility requirements constrain aesthetic choices.
+
+---
+
+# 13. Light / Dark Context
+
+Do not create dark mode automatically.
+
+Determine whether:
+
+- product environment;
+- user expectation;
+- accessibility;
+- prolonged use;
+- platform convention
+
+justify multiple themes.
+
+If multiple themes exist, design semantic relationships rather than simple color inversion.
+
+---
+
+# 14. Surfaces
+
+Decide whether the product relies on:
+
+- flat canvas;
+- sections;
+- panels;
+- cards;
+- overlays;
+- sheets;
+- modals.
+
+Use containers to communicate real grouping or layering.
+
+Do not put every piece of content inside a card.
+
+Use borders, spacing and background contrast intentionally.
+
+---
+
+# 15. Shape Language
+
+Define shape intentionally.
+
+Consider:
+
+- radius;
+- corners;
+- stroke;
+- geometry;
+- cutouts;
+- organic vs geometric forms.
+
+Use a limited coherent vocabulary.
+
+Do not default every object to the same extreme rounded radius.
+
+---
+
+# 16. Depth
+
+Determine whether depth is expressed through:
+
+- shadow;
+- border;
+- tonal contrast;
+- blur;
+- scale;
+- layering.
+
+Use depth to communicate hierarchy or interaction.
+
+Avoid decorative shadow stacks.
+
+---
+
+# 17. Imagery
+
+If imagery is relevant define:
+
+TYPE
+
+photography / illustration / render / diagram / texture.
+
+SUBJECT
+
+COMPOSITION
+
+LIGHTING
+
+COLOR RELATIONSHIP
+
+CROPPING
+
+AUTHENTICITY
+
+CONSISTENCY
+
+Avoid generic stock imagery unless intentionally appropriate.
+
+When AI-generated imagery is used, define constraints so that images remain stylistically coherent.
+
+---
+
+# 18. Iconography
+
+Define:
+
+STYLE
+
+STROKE / FILL
+
+WEIGHT
+
+SIZE
+
+OPTICAL CHARACTER
+
+Use an established icon set when it adequately fits the product.
+
+Do not mix multiple icon styles casually.
+
+Do not use icons without labels when meaning is ambiguous.
+
+---
+
+# 19. Data Visualization
+
+If the product contains data:
+
+design charts as part of the art direction.
+
+Define:
+
+- visual density;
+- axis treatment;
+- annotation style;
+- grid lines;
+- labels;
+- comparison emphasis;
+- color usage;
+- positive/negative semantics.
+
+Data must remain readable before it becomes decorative.
+
+Do not use chart colors solely for aesthetic variety.
+
+---
+
+# 20. Motion
+
+Define a motion character.
+
+Possible:
+
+CALM
+
+SNAPPY
+
+PHYSICAL
+
+EDITORIAL
+
+EXPRESSIVE
+
+MINIMAL
+
+Motion should primarily support:
+
+- hierarchy;
+- continuity;
+- response;
+- spatial understanding.
+
+Define when motion should NOT appear.
+
+Respect reduced-motion requirements where applicable.
+
+---
+
+# 21. Density
+
+Define the expected interface density according to use.
+
+Consider:
+
+CASUAL / OCCASIONAL
+
+vs
+
+PROFESSIONAL / HIGH-FREQUENCY
+
+A professional tool may need greater information density than a marketing site.
+
+Do not equate spaciousness with quality.
+
+Do not equate density with complexity.
+
+---
+
+# 22. Content Character
+
+Visual design must accommodate actual content.
+
+Test direction against:
+
+- long titles;
+- real product names;
+- numbers;
+- empty states;
+- tables;
+- user-generated content;
+- multiple languages;
+- errors.
+
+Do not design only with perfect placeholder content.
+
+---
+
+# 23. Accessibility
+
+The visual direction must preserve accessibility.
+
+For web products, use current WCAG guidance when applicable.
+
+Verify that the direction can support:
+
+- sufficient text contrast;
+- non-color-only meaning;
+- visible focus;
+- usable target sizing;
+- text scaling;
+- reflow;
+- reduced motion;
+- readable typography.
+
+Do not approve an art direction that can only work by violating accessibility.
+
+---
+
+# 24. Platform Fit
+
+Respect platform expectations where they improve usability.
+
+Use platform design guidance as input, not as mandatory visual branding.
+
+Do not make every iOS app look exactly like Apple.
+
+Do not make every Android/web app look exactly like Material.
+
+The product should feel native enough to use comfortably while retaining its own identity.
+
+---
+
+# 25. Signature Elements
+
+Identify 1–3 possible recognizable visual signatures.
+
+Examples:
+
+- distinctive title treatment;
+- recurring geometric motif;
+- specific image crop;
+- data annotation style;
+- unique spatial rhythm;
+- characteristic interaction;
+- controlled accent treatment.
+
+Do not attempt to make every element distinctive.
+
+Recognition often comes from a few consistent choices.
+
+---
+
+# 26. Restraint
+
+Define explicitly what the direction avoids.
+
+Create:
+
+DO
+
+and
+
+DO NOT
+
+rules.
+
+This is as important as defining what the design contains.
+
+---
+
+# 27. Feasibility
+
+The visual direction must be realistically implementable.
+
+Consider:
+
+- web/native technology;
+- browser support;
+- performance;
+- assets;
+- fonts;
+- animation cost;
+- responsive behavior;
+- maintainability.
+
+Do not design effects whose engineering cost is disproportionate to user value.
+
+---
+
+# 28. Exploration
+
+When appropriate produce 2–3 genuinely different visual directions.
+
+They must differ in underlying principles, not merely palette.
+
+Example:
+
+A — Editorial / authoritative.
+
+B — Technical / precise.
+
+C — Expressive / energetic.
+
+Then recommend ONE direction.
+
+Do not return endless moodboard options.
+
+---
+
+# 29. Selection
+
+Choose the recommended direction based on:
+
+PRODUCT FIT
+
+AUDIENCE FIT
+
+BRAND FIT
+
+DISTINCTIVENESS
+
+ACCESSIBILITY
+
+IMPLEMENTATION FEASIBILITY
+
+LONG-TERM CONSISTENCY
+
+Explain why the rejected directions are weaker for this specific product.
+
+---
+
+# 30. Output Format
+
+Return:
+
+# UI Art Direction
+
+## Design Intent
+
+One paragraph.
+
+## Desired Perception
+
+3–5 attributes.
+
+## Visual Principles
+
+3–7.
+
+## Reference Learnings
+
+If references exist.
+
+## Composition
+
+...
+
+## Typography
+
+...
+
+## Color Strategy
+
+Roles and behavior.
+
+## Surfaces / Depth
+
+...
+
+## Shape Language
+
+...
+
+## Imagery
+
+...
+
+## Iconography
+
+...
+
+## Data Visualization
+
+If relevant.
+
+## Motion
+
+...
+
+## Density
+
+...
+
+## Accessibility Constraints
+
+...
+
+## Signature Elements
+
+1–3.
+
+## Do
+
+- ...
+
+## Do Not
+
+- ...
+
+## Recommended Direction
+
+...
+
+## Rejected Alternatives
+
+Only meaningful alternatives.
+
+## Implementation Considerations
+
+...
+
+## Readiness
+
+Choose:
+
+READY FOR DESIGN SYSTEM
+
+READY FOR SCREEN DESIGN
+
+VISUAL EXPLORATION REQUIRED
+
+BRAND INPUT REQUIRED
+
+UX ISSUE DISCOVERED
+
+## Next
+
+Exactly one next prompt.
+
+Usually:
+
+`08 Design System`
+or
+`09 Screen Design`.
+
+---
+
+# Completion Criterion
+
+UI Art Direction is complete when another competent designer could create new screens that clearly belong to the same product without copying an existing screen pixel-for-pixel.
+
+The visual language should be recognizable, usable and implementable — not merely fashionable.

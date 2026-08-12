@@ -1,0 +1,1219 @@
+# 08 — DESIGN SYSTEM
+
+## Mission
+
+Create the smallest design system capable of keeping this product consistent, accessible and efficient to design and implement.
+
+A Design System is infrastructure.
+
+Its value comes from:
+
+- repeated decisions becoming reusable;
+- design and code staying aligned;
+- accessibility being built into components;
+- product teams solving product problems instead of rebuilding primitives.
+
+Do NOT build a large component library merely because design systems are considered best practice.
+
+Follow the approved UX and UI Art Direction.
+
+---
+
+# 1. Determine Whether a Design System Is Needed
+
+Before creating anything, assess:
+
+NUMBER OF SCREENS
+
+NUMBER OF REPEATED PATTERNS
+
+PRODUCT LIFESPAN
+
+NUMBER OF DEVELOPERS / DESIGNERS
+
+NUMBER OF PLATFORMS
+
+NUMBER OF THEMES / BRANDS
+
+EXPECTED RATE OF CHANGE
+
+EXISTING COMPONENT LIBRARY
+
+Determine the appropriate level:
+
+LEVEL 0 — NO SYSTEM
+
+A few local styles/components are sufficient.
+
+LEVEL 1 — FOUNDATIONS
+
+Tokens + basic primitives.
+
+LEVEL 2 — PRODUCT SYSTEM
+
+Foundations + reusable product components and patterns.
+
+LEVEL 3 — SHARED SYSTEM
+
+Cross-product / multi-team system with governance.
+
+Default toward the lowest level that solves the actual problem.
+
+---
+
+# 2. Audit Before Inventing
+
+If an existing product exists, inspect:
+
+- colors;
+- typography;
+- spacing;
+- radii;
+- shadows;
+- buttons;
+- inputs;
+- navigation;
+- cards;
+- tables;
+- dialogs;
+- repeated layouts;
+- state patterns.
+
+Identify:
+
+CONSISTENT
+
+INCONSISTENT
+
+DUPLICATED
+
+UNIQUE FOR A REASON
+
+LEGACY
+
+Do not normalize intentional differences blindly.
+
+---
+
+# 3. Source of Truth
+
+Define where design decisions live.
+
+Possible layers:
+
+DESIGN SOURCE
+
+Figma or equivalent.
+
+TOKEN SOURCE
+
+Structured token representation when useful.
+
+CODE SOURCE
+
+CSS variables, theme definitions, platform resources or equivalent.
+
+DOCUMENTATION
+
+Usage and behavioral guidance.
+
+Avoid having multiple manually maintained competing sources of truth.
+
+When design/code synchronization matters, define ownership explicitly.
+
+---
+
+# 4. Token Strategy
+
+Use tokens for decisions that benefit from reuse or systematic change.
+
+Possible categories:
+
+COLOR
+
+TYPOGRAPHY
+
+SPACING
+
+SIZE
+
+RADIUS
+
+BORDER
+
+SHADOW / ELEVATION
+
+MOTION
+
+BREAKPOINTS
+
+Z-INDEX
+
+Do not tokenize every arbitrary number.
+
+A token should represent a meaningful reusable design decision.
+
+---
+
+# 5. Token Layers
+
+When complexity warrants it, use layers.
+
+## Primitive / Reference
+
+Raw palette or scale.
+
+Examples:
+
+color.blue.500
+space.4
+radius.2
+
+## Semantic
+
+Meaning in the interface.
+
+Examples:
+
+color.text.primary
+color.background.surface
+color.action.primary
+color.status.error
+
+## Component
+
+Only when a component genuinely requires additional control.
+
+Example:
+
+button.primary.background.default
+
+Prefer semantic tokens for product implementation.
+
+Avoid components depending directly on raw palette values when semantic meaning exists.
+
+Do not create all three layers if the product is too small to benefit.
+
+---
+
+# 6. Token Interoperability
+
+If tokens must move between:
+
+- Figma;
+- web;
+- iOS;
+- Android;
+- multiple products;
+- external tooling;
+
+consider using a vendor-neutral Design Tokens format compatible with the current stable Design Tokens Community Group specification.
+
+Use this only when interoperability provides actual value.
+
+Do not introduce token-transformation infrastructure for a tiny single-platform project.
+
+---
+
+# 7. Naming
+
+Token and component naming must express meaning.
+
+Prefer:
+
+semantic purpose
+
+over:
+
+visual implementation.
+
+Better:
+
+color.text.secondary
+
+than:
+
+gray.600
+
+for product-facing usage.
+
+Component names should match product/design language.
+
+Avoid names based only on temporary visual appearance.
+
+---
+
+# 8. Modes
+
+Use modes only when real contexts exist.
+
+Examples:
+
+LIGHT
+
+DARK
+
+HIGH CONTRAST
+
+BRAND A / BRAND B
+
+COMPACT / COMFORTABLE
+
+PLATFORM-SPECIFIC CONTEXT
+
+Do not create modes speculatively.
+
+Where modes exist, preserve semantic relationships.
+
+Do not create dark mode by blindly inverting colors.
+
+---
+
+# 9. Color System
+
+Define semantic roles.
+
+At minimum when relevant:
+
+BACKGROUND
+
+SURFACE
+
+SURFACE ELEVATED
+
+TEXT PRIMARY
+
+TEXT SECONDARY
+
+TEXT DISABLED
+
+BORDER
+
+PRIMARY ACTION
+
+SECONDARY ACTION
+
+FOCUS
+
+SUCCESS
+
+WARNING
+
+ERROR
+
+INFORMATION
+
+Avoid exposing raw brand colors everywhere.
+
+Verify accessible combinations.
+
+Do not encode status exclusively through color.
+
+---
+
+# 10. Typography System
+
+Define roles rather than arbitrary sizes.
+
+Possible:
+
+DISPLAY
+
+HEADING
+
+TITLE
+
+BODY
+
+LABEL
+
+CAPTION
+
+DATA / NUMERIC
+
+CODE
+
+Each role should define when relevant:
+
+- family;
+- weight;
+- size;
+- line height;
+- tracking;
+- casing.
+
+Keep the scale compact.
+
+Do not create 20 typography styles without real usage.
+
+---
+
+# 11. Spacing
+
+Define a coherent spacing system.
+
+The system should support:
+
+- component internal spacing;
+- component relationships;
+- section rhythm;
+- page layout.
+
+Prefer a small useful scale.
+
+Allow exceptions when optical or content needs justify them.
+
+Do not distort the UI to obey a mathematical scale dogmatically.
+
+---
+
+# 12. Layout
+
+Define reusable layout principles.
+
+Possible:
+
+PAGE WIDTH
+
+GRID
+
+GUTTERS
+
+COLUMNS
+
+CONTENT MEASURE
+
+SECTION SPACING
+
+STACK / INLINE GAP
+
+BREAKPOINT BEHAVIOR
+
+Avoid creating dozens of layout primitives if normal CSS/layout mechanisms already provide sufficient consistency.
+
+---
+
+# 13. Shape / Radius
+
+Define a controlled radius vocabulary.
+
+Possible roles:
+
+SMALL CONTROL
+
+STANDARD
+
+LARGE CONTAINER
+
+PILL / FULL
+
+Use each intentionally.
+
+Do not automatically make every element highly rounded.
+
+---
+
+# 14. Border / Elevation
+
+Define how hierarchy and separation work.
+
+Possible mechanisms:
+
+- tonal difference;
+- border;
+- shadow;
+- overlay;
+- blur;
+- spatial separation.
+
+Prefer the minimum mechanism required.
+
+Avoid combining border + shadow + tonal background everywhere.
+
+---
+
+# 15. Motion Tokens
+
+When motion matters define reusable:
+
+DURATION
+
+EASING / PHYSICS
+
+ENTER
+
+EXIT
+
+STATE CHANGE
+
+FEEDBACK
+
+Create reduced-motion behavior where needed.
+
+Do not create an elaborate motion system for mostly static products.
+
+---
+
+# 16. Core Primitives
+
+Identify components with broad reuse.
+
+Possible:
+
+Button
+
+Link
+
+Icon
+
+Text
+
+Input
+
+Textarea
+
+Checkbox
+
+Radio
+
+Switch
+
+Select
+
+Badge
+
+Avatar
+
+Tooltip
+
+Do not create components that have no current or near-term usage.
+
+---
+
+# 17. Component Qualification
+
+Before promoting something into the system ask:
+
+IS IT REPEATED?
+
+IS ITS BEHAVIOR STABLE?
+
+DOES CONSISTENCY MATTER?
+
+DOES IT HAVE MEANINGFUL VARIANTS?
+
+WILL CENTRALIZATION REDUCE WORK?
+
+If not:
+
+keep it local.
+
+Not every UI element deserves to become a system component.
+
+---
+
+# 18. Component Anatomy
+
+For every system component define:
+
+PURPOSE
+
+ANATOMY
+
+CONTENT
+
+PROPERTIES
+
+VARIANTS
+
+STATES
+
+INTERACTIONS
+
+ACCESSIBILITY
+
+RESPONSIVE BEHAVIOR
+
+DO
+
+DO NOT
+
+Do not document obvious implementation details unless they matter to usage.
+
+---
+
+# 19. Variants
+
+Create variants only for meaningful behavioral or visual differences.
+
+Examples:
+
+Button:
+primary
+secondary
+destructive
+ghost
+
+Do not create combinatorial variant explosions.
+
+Avoid representing arbitrary styling as component variants.
+
+Prefer composition where appropriate.
+
+---
+
+# 20. States
+
+Components must account for relevant states.
+
+Possible:
+
+DEFAULT
+
+HOVER
+
+FOCUS
+
+ACTIVE / PRESSED
+
+DISABLED
+
+LOADING
+
+SELECTED
+
+ERROR
+
+SUCCESS
+
+READ ONLY
+
+Not every component needs every state.
+
+States must correspond to real behavior.
+
+---
+
+# 21. Focus
+
+Define a consistent, visible focus treatment.
+
+Focus must remain understandable against relevant backgrounds.
+
+Do not remove focus outlines without providing an equivalent or better visible alternative.
+
+Do not rely on color changes too subtle to perceive.
+
+---
+
+# 22. Controls
+
+Interactive controls should have predictable:
+
+- labels;
+- states;
+- focus;
+- hit areas;
+- keyboard behavior;
+- disabled behavior;
+- loading behavior.
+
+Do not invent non-standard controls without a strong product reason.
+
+---
+
+# 23. Forms
+
+Define shared form behavior.
+
+Include:
+
+LABEL
+
+REQUIRED / OPTIONAL
+
+HELP TEXT
+
+PLACEHOLDER
+
+VALIDATION
+
+ERROR
+
+SUCCESS
+
+DISABLED
+
+READ ONLY
+
+GROUPING
+
+Do not use placeholder text as the only label.
+
+Maintain consistent error behavior across forms.
+
+---
+
+# 24. Feedback Components
+
+Define only needed patterns such as:
+
+TOAST
+
+ALERT
+
+INLINE MESSAGE
+
+BANNER
+
+PROGRESS
+
+SKELETON
+
+Choose each based on urgency and persistence.
+
+Do not use toast notifications for critical information that disappears before users can act.
+
+---
+
+# 25. Overlays
+
+If relevant define:
+
+MODAL
+
+DIALOG
+
+SHEET
+
+POPOVER
+
+MENU
+
+TOOLTIP
+
+Clarify when each is appropriate.
+
+Avoid modal-heavy product design.
+
+Do not use overlays when normal page/context flow is clearer.
+
+---
+
+# 26. Navigation
+
+When recurring, define reusable navigation patterns.
+
+Examples:
+
+TOP NAV
+
+SIDEBAR
+
+TABS
+
+BREADCRUMBS
+
+BOTTOM NAV
+
+PAGINATION
+
+Navigation patterns must reflect information architecture.
+
+Do not let the component library determine product navigation.
+
+---
+
+# 27. Data Display
+
+For data-heavy products consider:
+
+TABLE
+
+LIST
+
+CARD
+
+STAT / KPI
+
+TIMELINE
+
+CHART SHELL
+
+EMPTY DATA
+
+LOADING DATA
+
+Define consistency without forcing every type of data into the same presentation.
+
+---
+
+# 28. Accessibility Built Into Components
+
+Accessibility should be part of component contracts.
+
+For web interfaces, use current WCAG guidance when applicable.
+
+Define when relevant:
+
+SEMANTICS
+
+ACCESSIBLE NAME
+
+KEYBOARD INTERACTION
+
+FOCUS
+
+ARIA ONLY WHEN NEEDED
+
+STATUS ANNOUNCEMENT
+
+COLOR CONTRAST
+
+TARGET SIZE
+
+ERROR ASSOCIATION
+
+REDUCED MOTION
+
+Prefer native semantic elements before recreating behavior with custom ARIA.
+
+---
+
+# 29. Responsive Components
+
+Components should adapt according to content and context rather than arbitrary device names when practical.
+
+Specify:
+
+WHAT CAN WRAP
+
+WHAT CAN COLLAPSE
+
+WHAT CHANGES ORIENTATION
+
+WHAT BECOMES FULL WIDTH
+
+WHAT MUST REMAIN VISIBLE
+
+Detailed product layouts belong to `10 Responsive + States`.
+
+---
+
+# 30. Content Rules
+
+Components should define meaningful content constraints.
+
+Examples:
+
+BUTTON
+
+Use short action-oriented text.
+
+DIALOG TITLE
+
+Describe the decision/problem.
+
+ERROR
+
+Explain recovery.
+
+BADGE
+
+Use for short status, not paragraphs.
+
+Do not treat content as arbitrary filler.
+
+---
+
+# 31. Icons
+
+Define:
+
+ICON SOURCE
+
+SIZES
+
+STROKE/FILL BEHAVIOR
+
+COLOR
+
+ALIGNMENT
+
+ACCESSIBILITY
+
+Use a consistent icon family.
+
+Allow custom icons only when product meaning requires them.
+
+---
+
+# 32. Figma Structure
+
+If Figma is used, organize reusable assets intentionally.
+
+Use where appropriate:
+
+COMPONENTS
+
+INSTANCES
+
+VARIANTS
+
+COMPONENT PROPERTIES
+
+VARIABLES
+
+MODES
+
+STYLES
+
+LIBRARIES
+
+Prefer variables for reusable values and context-dependent tokens when appropriate.
+
+Use components for reusable structures/behavior.
+
+Use libraries when assets need reuse across files or teams.
+
+Do not mirror implementation architecture blindly inside Figma.
+
+---
+
+# 33. Design ↔ Code Mapping
+
+Define how design primitives map to implementation.
+
+Example:
+
+Figma semantic variable
+↔
+code design token
+↔
+CSS custom property/theme value.
+
+Component:
+
+Figma Button
+↔
+code `<Button>`.
+
+Avoid different names for identical concepts without reason.
+
+When design and implementation diverge, determine which source is authoritative and reconcile intentionally.
+
+---
+
+# 34. Existing UI Libraries
+
+Before building primitives from scratch, evaluate the existing stack.
+
+An external component library may provide:
+
+- accessibility;
+- interaction;
+- keyboard behavior;
+- primitives;
+- development speed.
+
+The product design system can wrap or theme suitable primitives.
+
+Do not rebuild complex accessible primitives purely for visual ownership.
+
+Do not allow an external library to dictate the product's entire visual identity unless intentionally chosen.
+
+---
+
+# 35. Documentation
+
+For each important component document only what consumers need.
+
+Possible:
+
+PURPOSE
+
+WHEN TO USE
+
+WHEN NOT TO USE
+
+VARIANTS
+
+CONTENT
+
+ACCESSIBILITY
+
+EXAMPLES
+
+Do not produce encyclopedic documentation for obvious primitives.
+
+---
+
+# 36. Governance
+
+Governance must match team size.
+
+For a small project:
+
+maintainer judgment may be enough.
+
+For larger systems define:
+
+CONTRIBUTION
+
+REVIEW
+
+OWNERSHIP
+
+DEPRECATION
+
+CHANGE PROCESS
+
+Do not import enterprise governance into a two-person project.
+
+---
+
+# 37. Versioning and Change
+
+For shared systems, distinguish:
+
+ADDITION
+
+NON-BREAKING CHANGE
+
+BREAKING CHANGE
+
+DEPRECATION
+
+Communicate changes to consumers.
+
+Do not change component behavior silently when multiple surfaces depend on it.
+
+---
+
+# 38. Deprecation
+
+When replacing a component/token:
+
+mark the old item clearly.
+
+Provide replacement guidance.
+
+Allow migration time when multiple consumers exist.
+
+Remove only when safe.
+
+Do not accumulate permanent deprecated assets without a cleanup plan.
+
+---
+
+# 39. Testing
+
+Important system components should be verifiable.
+
+Depending on stack, consider:
+
+- unit tests;
+- interaction tests;
+- accessibility tests;
+- visual regression;
+- browser tests.
+
+Test behavior more than internal implementation.
+
+Do not create expensive test infrastructure for trivial visual tokens.
+
+---
+
+# 40. Visual QA
+
+Before considering a component production-ready, verify realistic examples.
+
+Test:
+
+REAL CONTENT
+
+LONG CONTENT
+
+SHORT CONTENT
+
+ERROR STATE
+
+DISABLED STATE
+
+RESPONSIVE
+
+KEYBOARD
+
+FOCUS
+
+THEMES WHEN APPLICABLE
+
+Do not approve components based only on pristine showcase examples.
+
+---
+
+# 41. Avoid Premature Components
+
+Do not create system components for:
+
+- one-off marketing artwork;
+- highly specific one-time layouts;
+- uncertain patterns;
+- components whose behavior is still changing rapidly.
+
+Let patterns stabilize before centralizing them.
+
+---
+
+# 42. System Health
+
+A good Design System should reduce decisions.
+
+If developers repeatedly need to:
+
+override;
+fight;
+detach;
+fork;
+or bypass
+
+system components:
+
+investigate the system.
+
+Do not blame consumers automatically.
+
+The abstraction may be wrong.
+
+---
+
+# 43. Output Format
+
+Return:
+
+# Design System
+
+## System Level
+
+0 / 1 / 2 / 3
+
+And why.
+
+## Source of Truth
+
+...
+
+## Foundations
+
+### Color
+...
+
+### Typography
+...
+
+### Spacing
+...
+
+### Layout
+...
+
+### Radius / Shape
+...
+
+### Border / Elevation
+...
+
+### Motion
+...
+
+## Token Architecture
+
+Primitive → Semantic → Component, only as needed.
+
+## Modes
+
+Only real modes.
+
+## Core Components
+
+Prioritized.
+
+For each important component:
+
+Purpose
+Variants
+States
+Accessibility
+Responsive behavior.
+
+## Patterns
+
+Only recurring patterns.
+
+## Accessibility Baseline
+
+...
+
+## Figma Structure
+
+If relevant.
+
+## Code Mapping
+
+...
+
+## Existing Library Strategy
+
+Reuse / wrap / replace only where justified.
+
+## Documentation
+
+...
+
+## Governance
+
+Proportional to project size.
+
+## Testing / QA
+
+...
+
+## What NOT To Systematize
+
+Explicit list.
+
+## Implementation Order
+
+Smallest useful sequence.
+
+## Readiness
+
+Choose:
+
+READY FOR SCREEN DESIGN
+
+READY FOR IMPLEMENTATION
+
+PARTIAL SYSTEM SUFFICIENT
+
+MORE UI EVIDENCE NEEDED
+
+ART DIRECTION REQUIRED
+
+## Next
+
+Exactly one next prompt.
+
+Usually:
+
+`09 Screen Design`.
+
+---
+
+# Completion Criterion
+
+The Design System is sufficient when repeated product decisions can be made consistently without forcing every interface into the same shape.
+
+A good Design System removes unnecessary decisions.
+
+It does not remove design judgment.

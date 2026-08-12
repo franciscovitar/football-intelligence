@@ -1,0 +1,961 @@
+# 14 — DATA / API DESIGN
+
+## Mission
+
+Design the minimum data model and application/API contract required by the requested product behavior.
+
+The objective is to create:
+
+- clear domain meaning;
+- correct invariants;
+- stable boundaries;
+- predictable contracts;
+- evolvable data structures;
+- explicit failure behavior.
+
+Do NOT implement the feature during this task unless explicitly requested.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+Use approved Product Discovery, Feature Specifications, Architecture Decisions and checkpoints.
+
+---
+
+# 1. Determine Scope
+
+Identify whether this task requires:
+
+DATA MODEL ONLY
+
+INTERNAL APPLICATION CONTRACT
+
+HTTP API
+
+RPC API
+
+EVENT CONTRACT
+
+PUBLIC API
+
+PRIVATE API
+
+MULTIPLE OF THE ABOVE
+
+Do not design an externally consumable API if the product only needs an internal function boundary.
+
+---
+
+# 2. Start From Product Concepts
+
+Identify the concepts users/business rules care about.
+
+Do not begin from tables or endpoints.
+
+Determine:
+
+ENTITIES / RESOURCES
+
+VALUE OBJECTS / STRUCTURED VALUES
+
+RELATIONSHIPS
+
+OWNERSHIP
+
+LIFECYCLE
+
+IMPORTANT ACTIONS
+
+INVARIANTS
+
+Avoid creating a one-to-one mapping between database tables and public API resources without reason.
+
+---
+
+# 3. Existing Contracts
+
+Inspect existing:
+
+- schema;
+- migrations;
+- API conventions;
+- naming;
+- serialization;
+- error format;
+- pagination;
+- authentication;
+- IDs;
+- timestamps;
+- versioning;
+- public consumers.
+
+Preserve consistency unless existing behavior is materially wrong.
+
+Do not invent a second API style inside the same service casually.
+
+---
+
+# 4. Source of Truth
+
+For each important piece of data determine:
+
+WHO OWNS IT?
+
+WHERE IS IT AUTHORITATIVE?
+
+WHO MAY CHANGE IT?
+
+WHO MAY READ IT?
+
+IS IT DERIVED?
+
+IS IT CACHED?
+
+Do not create multiple writable sources of truth without explicit synchronization semantics.
+
+---
+
+# 5. Entity Identity
+
+Determine appropriate identity.
+
+Consider:
+
+SYSTEM-GENERATED ID
+
+USER-SPECIFIED ID
+
+NATURAL KEY
+
+COMPOSITE KEY
+
+PUBLIC ID
+
+INTERNAL ID
+
+Avoid leaking sensitive or unstable internal identifiers when a separate public identity is warranted.
+
+Do not create multiple IDs without a reason.
+
+---
+
+# 6. Relationships
+
+Define meaningful relationships and cardinality.
+
+Examples:
+
+ONE TO ONE
+
+ONE TO MANY
+
+MANY TO MANY
+
+OWNED CHILD
+
+REFERENCE
+
+Avoid bidirectional relationships where they create unnecessary lifecycle complexity.
+
+Define deletion/ownership semantics.
+
+---
+
+# 7. Invariants
+
+List critical facts that must always remain true.
+
+Examples:
+
+UNIQUENESS
+
+NON-NEGATIVE VALUE
+
+VALID STATE TRANSITION
+
+OWNERSHIP
+
+FOREIGN KEY
+
+DATE ORDERING
+
+LIMIT
+
+Use the strongest appropriate enforcement.
+
+Possible:
+
+database constraint;
+
+transaction;
+
+domain/application rule;
+
+trusted boundary validation.
+
+Do not rely solely on UI validation for persistent invariants.
+
+---
+
+# 8. Nullability / Optionality
+
+For each important field distinguish:
+
+REQUIRED
+
+OPTIONAL
+
+UNKNOWN
+
+NOT APPLICABLE
+
+EMPTY
+
+Do not use null to mean five unrelated states.
+
+Avoid mandatory fields without a real domain requirement.
+
+---
+
+# 9. Temporal Data
+
+When time matters define:
+
+INSTANT
+
+LOCAL DATE
+
+LOCAL TIME
+
+TIME ZONE
+
+DURATION
+
+VALIDITY PERIOD
+
+CREATED / UPDATED METADATA
+
+Do not mix local wall-clock time and absolute timestamps without understanding semantics.
+
+---
+
+# 10. Money / Precision
+
+When monetary or precision-sensitive values exist, explicitly determine:
+
+UNIT
+
+CURRENCY
+
+PRECISION
+
+ROUNDING
+
+Do not use floating-point representations blindly for exact monetary semantics.
+
+---
+
+# 11. Sensitive Data
+
+Classify relevant data:
+
+PUBLIC
+
+INTERNAL
+
+PERSONAL
+
+SENSITIVE
+
+SECRET
+
+REGULATED
+
+For sensitive data determine:
+
+collection purpose;
+
+access;
+
+retention;
+
+logging;
+
+external transmission;
+
+deletion.
+
+Do not collect or return data that is not needed.
+
+---
+
+# 12. Persistence Model
+
+Design the minimum persistence model supporting current requirements.
+
+Define:
+
+TABLE / DOCUMENT / RECORD
+
+FIELDS
+
+KEYS
+
+CONSTRAINTS
+
+RELATIONSHIPS
+
+INDEXES justified by access patterns.
+
+Do not denormalize without a concrete need.
+
+Do not normalize mechanically if it makes required operations unnecessarily complex.
+
+---
+
+# 13. Transactions
+
+Identify operations requiring atomicity.
+
+Define:
+
+TRANSACTION BOUNDARY
+
+INVARIANTS PROTECTED
+
+FAILURE BEHAVIOR
+
+Do not create large distributed transaction requirements when domain boundaries can avoid them.
+
+---
+
+# 14. Concurrency
+
+Where updates can conflict, determine:
+
+LAST WRITE WINS?
+
+OPTIMISTIC CONCURRENCY?
+
+LOCKING?
+
+VERSION / ETAG?
+
+DOMAIN-SPECIFIC CONFLICT?
+
+Do not add concurrency mechanisms without a realistic concurrent update scenario.
+
+---
+
+# 15. Queries / Access Patterns
+
+List important current access patterns.
+
+For each:
+
+FILTER
+
+SORT
+
+RELATIONSHIP
+
+EXPECTED CARDINALITY
+
+LATENCY IMPORTANCE
+
+Use these to inform schema/index design.
+
+Do not index every field.
+
+Do not optimize hypothetical future queries.
+
+---
+
+# 16. Collections
+
+Any potentially growing collection needs bounded behavior.
+
+Determine when appropriate:
+
+DEFAULT LIMIT
+
+MAXIMUM LIMIT
+
+PAGINATION MODEL
+
+ORDER
+
+STABLE CURSOR / TOKEN
+
+FILTERING
+
+SORTING
+
+Do not expose unbounded list operations.
+
+---
+
+# 17. Pagination
+
+Choose a pagination strategy appropriate to the access pattern.
+
+Possible:
+
+CURSOR / TOKEN
+
+OFFSET / LIMIT
+
+KEYSET
+
+Do not choose based solely on implementation convenience.
+
+For opaque cursor/token approaches:
+
+do not require clients to understand internal token structure.
+
+Pagination tokens must not substitute for authorization.
+
+---
+
+# 18. API Style
+
+For external or service APIs choose the simplest style matching project needs.
+
+Examples:
+
+RESOURCE-ORIENTED HTTP
+
+RPC
+
+GRAPHQL
+
+EVENT CONTRACT
+
+Do not choose GraphQL because the frontend exists.
+
+Do not choose REST because "APIs should be REST."
+
+Use the style that fits requirements and existing architecture.
+
+---
+
+# 19. HTTP Resource Modeling
+
+If using resource-oriented HTTP:
+
+identify resources as meaningful nouns.
+
+Use protocol methods according to their defined semantics.
+
+Prefer standard operations when they express intent.
+
+Use explicit domain actions when normal resource operations do not model the behavior clearly.
+
+Do not create endpoints that merely expose database procedures.
+
+---
+
+# 20. URLs / Resource Names
+
+Design stable identifiers around domain/resource meaning.
+
+Avoid encoding implementation details into paths.
+
+Keep nesting proportional to meaningful ownership.
+
+Do not create extremely deep URL hierarchies.
+
+---
+
+# 21. Request Contract
+
+For each operation define:
+
+INPUT
+
+REQUIRED FIELDS
+
+OPTIONAL FIELDS
+
+DEFAULTS
+
+VALIDATION
+
+AUTHORIZATION CONTEXT
+
+IDEMPOTENCY when relevant.
+
+Do not make clients send values the server already knows authoritatively.
+
+---
+
+# 22. Response Contract
+
+Return what consumers need.
+
+Define:
+
+RESOURCE / RESULT
+
+METADATA
+
+PAGINATION
+
+CREATED/UPDATED IDENTIFIERS
+
+STATUS
+
+Do not expose large internal models by default.
+
+Avoid returning sensitive internal fields simply because serialization is automatic.
+
+---
+
+# 23. Partial Responses / Field Selection
+
+Only introduce field selection or partial response mechanisms when consumers or payload size justify them.
+
+Do not add generic query languages prematurely.
+
+---
+
+# 24. Errors
+
+Use the project's established error model.
+
+For HTTP APIs, preserve correct protocol semantics.
+
+When a standardized structured error representation benefits consumers, consider the current HTTP Problem Details standard rather than inventing another generic format.
+
+Errors should provide:
+
+MACHINE-READABLE CATEGORY
+
+APPROPRIATE STATUS
+
+ACTIONABLE HUMAN CONTEXT when useful
+
+SAFE DETAILS
+
+Do not require clients to parse human-readable error strings.
+
+---
+
+# 25. Validation Errors
+
+When multiple field validation problems can safely be returned together, provide enough structured location/context for the client to associate errors with inputs.
+
+Do not leak backend implementation details.
+
+---
+
+# 26. Authorization and Resource Existence
+
+Define information-disclosure behavior intentionally.
+
+Do not expose resource existence to users who should not be able to know about it if that creates a security issue.
+
+Follow existing security conventions.
+
+---
+
+# 27. Idempotency
+
+Determine which operations are naturally safe to repeat and which are not.
+
+For mutation operations likely to be retried, decide whether an explicit idempotency contract is needed.
+
+Possible mechanisms:
+
+CLIENT REQUEST ID
+
+IDEMPOTENCY KEY
+
+NATURAL UNIQUE IDENTIFIER
+
+TRANSACTIONAL DEDUPLICATION
+
+Do not claim idempotency if repeated execution can cause additional side effects.
+
+---
+
+# 28. Long-Running Operations
+
+If an operation can exceed normal request duration, determine whether the API should model it asynchronously.
+
+Possible result:
+
+OPERATION / JOB RESOURCE
+
+STATUS
+
+PROGRESS when meaningful
+
+RESULT
+
+ERROR
+
+CANCEL when feasible
+
+Do not hold synchronous requests open indefinitely when the work is fundamentally asynchronous.
+
+---
+
+# 29. Bulk Operations
+
+Bulk operations require explicit semantics.
+
+Determine:
+
+ATOMIC OR PARTIAL
+
+MAX SIZE
+
+PER-ITEM RESULT
+
+RETRY
+
+IDEMPOTENCY
+
+ORDERING
+
+Do not accidentally create partial-success behavior without defining how callers recover.
+
+---
+
+# 30. Compatibility
+
+For an existing API determine:
+
+WHAT CAN CHANGE SAFELY?
+
+WHAT IS PUBLIC?
+
+WHAT CLIENTS MAY DEPEND ON?
+
+Consider:
+
+adding optional fields;
+
+adding enum values;
+
+changing validation;
+
+renaming fields;
+
+removing fields;
+
+changing meanings.
+
+Prefer additive compatible evolution when practical.
+
+---
+
+# 31. Versioning
+
+Do not introduce API versioning merely because an API exists.
+
+Use versioning when incompatible evolution actually requires it.
+
+When possible prefer compatible additive change.
+
+If public versioning is needed, define support/deprecation expectations.
+
+---
+
+# 32. Schema Migration
+
+For persistence changes determine:
+
+EXPAND
+
+MIGRATE / BACKFILL
+
+SWITCH
+
+CONTRACT
+
+when phased migration is necessary.
+
+Prefer backward-compatible deployment sequences when old/new versions can overlap.
+
+Do not perform destructive schema changes before dependent code is safely migrated.
+
+---
+
+# 33. Data Deletion
+
+Define deletion semantics:
+
+HARD DELETE
+
+SOFT DELETE
+
+ARCHIVE
+
+TOMBSTONE
+
+RETENTION
+
+CASCADE / RESTRICT
+
+Do not use soft delete everywhere by default.
+
+Choose based on product, audit and recovery requirements.
+
+---
+
+# 34. Events
+
+If emitting events, distinguish:
+
+DOMAIN EVENT
+
+INTEGRATION EVENT
+
+AUDIT EVENT
+
+TELEMETRY
+
+Define:
+
+SCHEMA
+
+OWNER
+
+ORDERING EXPECTATION
+
+DELIVERY SEMANTICS
+
+VERSIONING
+
+Do not expose internal implementation events as public contracts without intent.
+
+---
+
+# 35. Observability
+
+For important API/data operations determine whether logs/metrics should expose:
+
+OPERATION
+
+RESULT
+
+LATENCY
+
+ERROR CATEGORY
+
+CORRELATION ID
+
+Do not log full request/response bodies when they may contain sensitive information.
+
+---
+
+# 36. Contract Examples
+
+Provide representative examples for important operations.
+
+Include:
+
+NORMAL
+
+IMPORTANT ERROR
+
+PAGINATION
+
+OPTIONAL FIELDS when useful.
+
+Examples must conform to the proposed contract.
+
+Do not let examples contradict formal definitions.
+
+---
+
+# 37. OpenAPI / Schema Definition
+
+When an API definition language already exists in the project, update/use it.
+
+Possible:
+
+OpenAPI
+
+Protocol Buffers
+
+GraphQL Schema
+
+JSON Schema
+
+Do not maintain two manually diverging contract definitions.
+
+---
+
+# 38. Contract Tests
+
+Identify high-value contract tests:
+
+VALID INPUT
+
+INVALID INPUT
+
+AUTHORIZATION
+
+NOT FOUND
+
+CONFLICT
+
+IDEMPOTENT REPEAT
+
+PAGINATION
+
+COMPATIBILITY
+
+Do not test framework serialization behavior unnecessarily.
+
+---
+
+# 39. Design Review
+
+Before finalizing ask:
+
+Does the model represent the domain rather than the database implementation?
+
+Are invariants enforceable?
+
+Is ownership clear?
+
+Can collections grow safely?
+
+Are contracts bounded?
+
+Are errors machine-usable?
+
+Is authorization explicit?
+
+Are mutation retries understood?
+
+Can the contract evolve?
+
+Are we exposing unnecessary data?
+
+Could the design be materially simpler?
+
+---
+
+# 40. Output Format
+
+Return:
+
+# Data / API Design
+
+## Scope
+
+...
+
+## Domain Concepts / Resources
+
+...
+
+## Ownership
+
+...
+
+## Invariants
+
+...
+
+## Data Model
+
+...
+
+## Relationships
+
+...
+
+## Access Patterns
+
+...
+
+## Transactions / Concurrency
+
+...
+
+## API Style
+
+Only if applicable.
+
+## Operations / Endpoints
+
+...
+
+## Request / Response Contracts
+
+...
+
+## Errors
+
+...
+
+## Pagination / Filtering / Sorting
+
+...
+
+## Authorization
+
+...
+
+## Idempotency
+
+...
+
+## Compatibility / Migration
+
+...
+
+## Sensitive Data
+
+...
+
+## Contract Definition
+
+OpenAPI / schema / etc. if relevant.
+
+## Test Intent
+
+...
+
+## Assumptions
+
+...
+
+## Risks / Unknowns
+
+...
+
+## Readiness
+
+Choose:
+
+READY FOR IMPLEMENTATION
+
+READY WITH ASSUMPTIONS
+
+TECHNICAL SPIKE REQUIRED
+
+ARCHITECTURE DECISION REQUIRED
+
+PRODUCT SPECIFICATION REQUIRED
+
+## Next
+
+Usually:
+
+`13 Feature Implementation`
+or
+`15 External Integration`.
+
+---
+
+# Completion Criterion
+
+Data/API Design is complete when implementation can proceed without inventing important data semantics, invariants or public contract behavior.
+
+The API should expose the product/domain contract — not accidentally expose the database.

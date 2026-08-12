@@ -1,0 +1,223 @@
+BIBLIOTECA DE PROMPTS DE INGENIERÍA DE SOFTWARE
+INSTRUCCIONES DE USO
+
+==================================================
+PARA LA IA / ORQUESTADOR
+==================================================
+
+Esta carpeta contiene 25 prompts especializados numerados del 00 al 24.
+
+REGLA PRINCIPAL:
+No ejecutar los 25 prompts por defecto.
+Elegir solamente el prompt o la cadena mínima de prompts que aporte valor para la tarea actual.
+
+Estos prompts están diseñados para trabajar junto con AGENTS.md y WORKFLOW.md cuando esos archivos existan en el repositorio.
+- AGENTS.md define cómo debe construirse el software.
+- WORKFLOW.md define cómo coordinar agentes, checkpoints, verificaciones y recursos.
+- Los prompts de esta biblioteca definen cómo abordar un tipo concreto de tarea.
+
+No repetir dentro de cada ejecución reglas ya establecidas y vigentes en AGENTS.md o WORKFLOW.md.
+
+ANTES DE ELEGIR UN PROMPT:
+1. Entender el objetivo actual del usuario.
+2. Recuperar el último checkpoint válido.
+3. Identificar qué ya fue decidido, implementado y verificado.
+4. Detectar la incertidumbre o trabajo que realmente falta.
+5. Elegir el prompt más específico capaz de resolverlo.
+6. Evitar ejecutar prompts anteriores sólo por ceremonia.
+7. Encadenar otro prompt únicamente si el resultado del actual lo recomienda o si existe una necesidad concreta.
+
+ORDEN DE PRIORIDAD OPERATIVA:
+1. Hacer directamente lo que pueda resolver de forma fiable el asistente principal.
+2. Delegar implementación local a un agente de código cuando tenga una ventaja real.
+3. Usar otro modelo/agente sólo si existe una ventaja concreta.
+4. Usar un operador externo/autenticado para infraestructura, SaaS, deployments o QA real cuando sea necesario.
+5. Pedir intervención al usuario sólo como último recurso.
+
+REGLA DE CHECKPOINT:
+Un resultado validado se reutiliza.
+No repetir análisis, tests, QA, auditorías o decisiones ya certificadas salvo que:
+- un cambio posterior pueda haberlos invalidado;
+- exista una regresión;
+- aparezca evidencia contradictoria;
+- cambie una versión/condición relevante;
+- el usuario pida revalidación.
+
+ROUTING DE LOS 25 PROMPTS
+
+00 Project Initialization
+Usar al preparar la base profesional de un proyecto nuevo o todavía no estructurado.
+
+01 Product Discovery
+Usar cuando todavía no está suficientemente claro qué problema/producto conviene construir.
+
+02 Feature Specification
+Usar para convertir una feature deseada en comportamiento, reglas y criterios implementables.
+
+03 Technical Spike
+Usar cuando una incógnita técnica importante debe resolverse con evidencia antes de decidir.
+
+04 Architecture Design
+Usar para diseñar la arquitectura global o de un subsistema cuando realmente hace falta definirla.
+
+05 Architecture Decision
+Usar para una decisión arquitectónica puntual, importante y con trade-offs.
+
+06 UX Design
+Usar para definir experiencia, journey, tareas, información e interacción antes de la estética.
+
+07 UI Art Direction
+Usar para definir la dirección visual y personalidad del producto.
+
+08 Design System
+Usar cuando la repetición/escala del producto justifica tokens, componentes y reglas reutilizables.
+
+09 Screen Design
+Usar para diseñar una pantalla o flujo concreto.
+
+10 Responsive + States
+Usar para definir adaptación por espacio disponible y estados reales de la interfaz.
+
+11 Visual QA
+Usar para comparar una implementación real con el diseño aprobado en runtime/navegador.
+
+12 Design → Code
+Usar para traducir un diseño aprobado a código respetando arquitectura y Design System.
+
+13 Feature Implementation
+Usar cuando la feature ya está suficientemente definida y debe implementarse.
+
+14 Data/API Design
+Usar cuando el modelo de datos o contrato API necesita diseño explícito antes de implementar.
+
+15 External Integration
+Usar para APIs/SaaS/proveedores externos con fallos, retries, auth, rate limits, webhooks, etc.
+
+16 Safe Refactor
+Usar para mejorar estructura interna preservando el comportamiento observable.
+
+17 Bug Diagnosis
+Usar antes de tocar código cuando hay que encontrar la causa raíz de un fallo.
+
+18 Bug Fix
+Usar después de tener un diagnóstico suficientemente confirmado.
+
+19 Test Strategy
+Usar cuando hay que decidir qué comportamientos proteger y con qué nivel de prueba.
+
+20 Code Review
+Usar para revisar un diff/PR/cambio con criterio de senior engineer.
+
+21 Security Review
+Usar cuando el riesgo o alcance justifica una revisión explícita de seguridad.
+
+22 Performance Diagnosis
+Usar cuando existe un problema de rendimiento y hay que medir antes de optimizar.
+
+23 Production Readiness
+Usar antes de exponer una release importante a usuarios reales.
+
+24 Deploy + Real QA
+Usar para desplegar y comprobar el comportamiento REAL del sistema desplegado.
+
+CADENAS TÍPICAS — NO OBLIGATORIAS
+
+Proyecto nuevo poco definido:
+01 → 00 → 04 sólo si hace falta → primera feature.
+
+Proyecto nuevo ya bien definido:
+00 → 02 → implementación.
+
+Feature normal backend:
+02 → 14 sólo si hace falta → 13 → 20.
+
+Feature visual:
+02 → 06 si el UX no está resuelto → 09 → 10 si hace falta → 12 → 11 → 20.
+
+Producto con Design System ya certificado:
+No repetir 07 ni 08 para cada pantalla.
+Normalmente: 02 → 09 → 10 si aporta → 12 → 11.
+
+Integración externa:
+02 → 15 → 13 → 20.
+Agregar 03 antes de 15 sólo si existe una incógnita técnica relevante.
+
+Decisión arquitectónica:
+03 sólo si falta evidencia → 05.
+No ejecutar 04 completo para cada decisión puntual.
+
+Bug:
+17 → 18 → 20.
+No volver a diagnosticar desde cero dentro de 18 salvo evidencia contradictoria.
+
+Refactor:
+16 → 20.
+Si luego habilita una feature: 16 → checkpoint → 13.
+
+Lanzamiento importante:
+21 sólo si el riesgo lo justifica → 22 sólo si performance es relevante/incierta → 23 → 24.
+
+REGLA DE SALTO:
+Si una etapa ya está resuelta y certificada, saltarla.
+
+REGLA DE ESPECIALIZACIÓN:
+El output de un prompt puede recomendar el siguiente.
+No obedecer esa recomendación mecánicamente: verificar que realmente sea necesaria en el contexto actual.
+
+REGLA DE INVESTIGACIÓN:
+Cuando una decisión depende de información actual, versiones, APIs, seguridad, estándares o proveedores:
+- verificar con fuentes oficiales/primarias actuales;
+- no confiar sólo en memoria del modelo.
+
+REGLA DE IMPLEMENTACIÓN:
+Los prompts de análisis/diseño no deben convertirse accidentalmente en implementación.
+Los prompts de implementación no deben reabrir análisis ya cerrado sin evidencia nueva.
+
+REGLA DE VERIFICACIÓN:
+No declarar PASS para algo que no fue ejecutado o comprobado.
+Distinguir siempre entre:
+- código escrito;
+- tests/build;
+- runtime;
+- deployment;
+- QA real.
+
+REGLA DE AUTONOMÍA:
+Resolver automáticamente decisiones locales, reversibles, de bajo riesgo y sin costo.
+Escalar solamente decisiones de producto importantes, cambios difíciles de revertir, Production, gasto, permisos, secretos/accesos faltantes o acciones sensibles.
+
+==================================================
+PARA VOS — VERSIÓN CORTITA 😄
+==================================================
+
+No tenés que aprenderte los 25 prompts ni usarlos uno por uno.
+
+Vos decís qué querés hacer:
+"quiero agregar favoritos",
+"quiero diseñar esta pantalla",
+"esto está roto",
+"quiero subirlo a producción".
+
+La IA/orquestador mira el estado del proyecto y elige sólo los prompts necesarios.
+
+Ejemplos simples:
+- Proyecto nuevo → 00.
+- No sabemos bien qué construir → 01.
+- Feature nueva → 02 y después 13.
+- Pantalla importante → 09/10, después 12 y 11.
+- Bug → 17 y después 18.
+- Refactor → 16.
+- Revisar código → 20.
+- Seguridad → 21.
+- Está lento → 22.
+- Antes de producción → 23.
+- Deploy y comprobar que anda de verdad → 24.
+
+Lo importante:
+NO es una checklist de 25 pasos.
+Es una caja de herramientas.
+Se usa la menor cantidad de prompts necesaria para hacer bien el trabajo.
+
+Y si AGENTS.md + WORKFLOW.md están en el repo, mejor:
+esos dos archivos son las reglas permanentes;
+estos 25 prompts son procedimientos especializados.

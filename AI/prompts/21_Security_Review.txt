@@ -1,0 +1,1431 @@
+# 21 — SECURITY REVIEW
+
+## Mission
+
+Review the selected software change, feature, subsystem or application for meaningful security weaknesses.
+
+The objective is NOT to produce the largest possible list of theoretical vulnerabilities.
+
+The objective is to identify realistic paths through which an attacker, malicious user, compromised dependency or accidental misuse could violate important security properties.
+
+Prioritize:
+
+real exploitability
++
+real impact
++
+evidence
++
+appropriate remediation.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+Use current authoritative security standards and documentation where applicable.
+
+For web applications, use the current OWASP ASVS as a verification reference when useful.
+
+Use the current final NIST SSDF as process guidance where relevant.
+
+Do not substitute checklist completion for security reasoning.
+
+---
+
+# 1. Establish Review Scope
+
+Define exactly what is being reviewed:
+
+FEATURE
+
+PR / DIFF
+
+MODULE
+
+API
+
+AUTH FLOW
+
+DATA FLOW
+
+EXTERNAL INTEGRATION
+
+FULL APPLICATION
+
+DEPLOYMENT CONFIGURATION
+
+Do not automatically audit the entire repository for a feature-level review.
+
+Record:
+
+IN SCOPE
+
+OUT OF SCOPE
+
+TRUSTED CHECKPOINTS
+
+KNOWN LIMITATIONS.
+
+---
+
+# 2. Understand the Product Before Attacking It
+
+Determine:
+
+WHAT THE SYSTEM DOES
+
+WHO USES IT
+
+WHAT DATA IT HOLDS
+
+WHAT ACTIONS HAVE CONSEQUENCES
+
+WHAT EXTERNAL SYSTEMS IT TRUSTS
+
+WHAT PRIVILEGES EXIST
+
+Do not perform security analysis without understanding product semantics.
+
+A technically valid request may still be unauthorized according to the product.
+
+---
+
+# 3. Identify Assets
+
+List only meaningful assets.
+
+Examples:
+
+USER ACCOUNTS
+
+SESSIONS
+
+PERSONAL DATA
+
+PAYMENT STATE
+
+BUSINESS DATA
+
+ADMIN CAPABILITIES
+
+API KEYS
+
+PROVIDER CREDENTIALS
+
+FILES
+
+INTERNAL SYSTEM ACCESS
+
+AVAILABILITY
+
+AUDIT TRAIL
+
+MODEL / AI CAPABILITIES
+
+For each important asset ask:
+
+What happens if someone can:
+
+READ IT?
+
+CHANGE IT?
+
+DELETE IT?
+
+USE IT?
+
+PREVENT OTHERS FROM USING IT?
+
+---
+
+# 4. Identify Actors
+
+Consider relevant actors:
+
+ANONYMOUS USER
+
+AUTHENTICATED USER
+
+MALICIOUS USER
+
+OTHER TENANT / OTHER CUSTOMER
+
+ADMINISTRATOR
+
+INTERNAL SERVICE
+
+EXTERNAL PROVIDER
+
+COMPROMISED ACCOUNT
+
+COMPROMISED DEPENDENCY
+
+Do not assume authenticated users are trustworthy.
+
+---
+
+# 5. Trust Boundaries
+
+Map where trust changes.
+
+Examples:
+
+BROWSER
+→ SERVER
+
+PUBLIC API
+→ APPLICATION
+
+APPLICATION
+→ DATABASE
+
+APPLICATION
+→ PROVIDER
+
+WEBHOOK
+→ APPLICATION
+
+USER FILE
+→ PROCESSOR
+
+INTERNAL SERVICE
+→ ANOTHER SERVICE
+
+For every trust boundary ask:
+
+What is trusted?
+
+Why?
+
+How is identity established?
+
+How is input validated?
+
+---
+
+# 6. Entry Points
+
+Identify external entry points.
+
+Examples:
+
+HTTP ROUTES
+
+FORMS
+
+API
+
+WEBSOCKETS
+
+WEBHOOKS
+
+FILE UPLOADS
+
+URL PARAMETERS
+
+HEADERS
+
+COOKIES
+
+CLI
+
+BACKGROUND JOB INPUT
+
+MESSAGE QUEUE
+
+ADMIN TOOLS
+
+AI PROMPTS / TOOL INPUT
+
+Do not review only obvious public endpoints.
+
+---
+
+# 7. Security Properties
+
+Determine which properties matter.
+
+CONFIDENTIALITY
+
+Who must NOT see the data?
+
+INTEGRITY
+
+Who must NOT modify it?
+
+AVAILABILITY
+
+What functionality must remain usable?
+
+AUTHENTICITY
+
+Can the system know who performed the action?
+
+ACCOUNTABILITY
+
+Can important actions be traced?
+
+ISOLATION
+
+Can one user/tenant affect another?
+
+PRIVACY
+
+Is unnecessary information collected or exposed?
+
+Do not apply the same priority to every property.
+
+---
+
+# 8. Threat Modeling
+
+For important flows use a lightweight threat model.
+
+For each flow ask:
+
+WHO COULD ABUSE THIS?
+
+WHAT DO THEY WANT?
+
+WHAT CAPABILITY DO THEY HAVE?
+
+WHERE CAN THEY INTERACT?
+
+WHAT TRUST ASSUMPTION COULD FAIL?
+
+WHAT WOULD THE IMPACT BE?
+
+Use formal threat-model frameworks only when they add value.
+
+Do not create ceremonial threat models for trivial static content.
+
+---
+
+# 9. Authentication
+
+Review:
+
+LOGIN
+
+SESSION CREATION
+
+SESSION STORAGE
+
+TOKEN VALIDATION
+
+EXPIRATION
+
+REFRESH
+
+LOGOUT
+
+PASSWORD RESET
+
+ACCOUNT RECOVERY
+
+MFA when applicable
+
+SSO/OAUTH/OIDC when applicable.
+
+Check for:
+
+session fixation;
+
+weak token validation;
+
+token leakage;
+
+unsafe persistence;
+
+missing expiration;
+
+account enumeration;
+
+recovery bypass.
+
+Do not implement custom authentication protocols when established mechanisms exist.
+
+---
+
+# 10. Authorization
+
+Treat authorization as one of the highest-priority areas.
+
+For each sensitive operation verify:
+
+WHO MAY ACT?
+
+ON WHICH RESOURCE?
+
+UNDER WHAT CONDITIONS?
+
+WHERE IS THE CHECK ENFORCED?
+
+Test mentally and technically:
+
+USER A
+attempts access to
+USER B RESOURCE.
+
+Check:
+
+IDOR / BOLA
+
+role bypass;
+
+tenant escape;
+
+admin-only functions;
+
+hidden routes;
+
+ownership changes.
+
+UI visibility is not authorization.
+
+---
+
+# 11. Horizontal Privilege Escalation
+
+Actively test whether a user can manipulate:
+
+RESOURCE ID
+
+USER ID
+
+TENANT ID
+
+ACCOUNT ID
+
+PATH
+
+QUERY
+
+PAYLOAD
+
+to access another user's data/actions.
+
+Do not assume UUIDs are authorization.
+
+Unpredictable identifiers reduce guessing, not permission requirements.
+
+---
+
+# 12. Vertical Privilege Escalation
+
+Check whether a lower-privileged actor can invoke:
+
+ADMIN ENDPOINTS
+
+PRIVILEGED ACTIONS
+
+INTERNAL APIs
+
+ROLE CHANGES
+
+CONFIGURATION ACTIONS.
+
+Verify authorization server-side.
+
+Do not rely solely on frontend route guards.
+
+---
+
+# 13. Input Validation
+
+Treat all untrusted input according to context.
+
+Check:
+
+TYPE
+
+LENGTH
+
+FORMAT
+
+RANGE
+
+ALLOWED VALUES
+
+STRUCTURE
+
+ENCODING
+
+RELATIONSHIP TO DOMAIN RULES.
+
+Prefer allow-list semantics where appropriate.
+
+Do not attempt to "sanitize everything" generically.
+
+Validation and output encoding solve different problems.
+
+---
+
+# 14. Injection
+
+Review relevant injection surfaces:
+
+SQL
+
+NOSQL
+
+COMMAND / SHELL
+
+LDAP
+
+TEMPLATE
+
+HEADER
+
+PATH
+
+REGEX
+
+GRAPHQL / QUERY LANGUAGE
+
+AI TOOL / PROMPT INJECTION where applicable.
+
+Prefer parameterization and structured APIs.
+
+Do not construct executable queries/commands through unsafe string concatenation.
+
+---
+
+# 15. XSS
+
+For browser applications inspect untrusted data reaching:
+
+HTML
+
+ATTRIBUTES
+
+URLS
+
+SCRIPT CONTEXT
+
+CSS
+
+MARKDOWN / RICH TEXT
+
+DOM APIs.
+
+Prefer framework-safe rendering.
+
+Review any escape hatch such as raw HTML rendering carefully.
+
+Do not assume input sanitization alone permanently solves output-context vulnerabilities.
+
+---
+
+# 16. CSRF
+
+For cookie-authenticated state-changing web operations determine whether cross-site requests could trigger actions.
+
+Consider:
+
+SameSite cookies;
+
+CSRF tokens;
+
+origin checking;
+
+framework protections.
+
+Do not add CSRF machinery blindly to architectures not susceptible to the attack model.
+
+---
+
+# 17. SSRF
+
+If the server fetches user-influenced URLs, inspect:
+
+PROTOCOL
+
+HOST
+
+PORT
+
+REDIRECTS
+
+DNS
+
+PRIVATE NETWORK ACCESS
+
+CLOUD METADATA
+
+LOCAL SERVICES.
+
+Do not rely solely on superficial string prefix checks.
+
+---
+
+# 18. File Upload
+
+When files can be uploaded inspect:
+
+SIZE
+
+TYPE
+
+CONTENT
+
+FILENAME
+
+PATH
+
+STORAGE LOCATION
+
+EXECUTION POSSIBILITY
+
+PUBLIC ACCESS
+
+MALWARE RISK when applicable.
+
+Do not trust MIME type or filename extension alone.
+
+Store uploaded content outside executable application paths when appropriate.
+
+---
+
+# 19. Path Traversal
+
+For filesystem operations inspect user influence over:
+
+PATH
+
+FILENAME
+
+ARCHIVE CONTENT
+
+EXPORT DESTINATION.
+
+Prevent escaping intended directories.
+
+Be cautious with archive extraction and symbolic links.
+
+---
+
+# 20. Deserialization / Parsing
+
+Review parsers receiving untrusted structured data.
+
+Avoid unsafe native object deserialization.
+
+Check:
+
+resource exhaustion;
+
+schema assumptions;
+
+unexpected types;
+
+parser vulnerabilities.
+
+Use bounded inputs where appropriate.
+
+---
+
+# 21. Secrets
+
+Search relevant scope for:
+
+API KEYS
+
+TOKENS
+
+PASSWORDS
+
+PRIVATE KEYS
+
+DATABASE URLS
+
+SIGNING SECRETS
+
+WEBHOOK SECRETS.
+
+Check:
+
+source;
+
+history/diff where relevant;
+
+logs;
+
+client bundles;
+
+error responses;
+
+environment config.
+
+A secret in a public/client bundle must be treated according to whether it was designed to be public.
+
+Do not classify every identifier as a secret.
+
+---
+
+# 22. Cryptography
+
+Check whether cryptography is actually necessary.
+
+Prefer well-established platform/library implementations.
+
+Review:
+
+algorithm;
+
+mode;
+
+key management;
+
+nonce/IV behavior;
+
+signature verification;
+
+randomness.
+
+Do not invent cryptographic protocols.
+
+Do not design encryption where hashing is the required primitive or vice versa.
+
+For complex crypto, require specialist review.
+
+---
+
+# 23. Passwords
+
+If passwords are handled:
+
+use established password-hashing mechanisms.
+
+Never store plaintext or reversible password encryption.
+
+Review:
+
+minimum policy;
+
+rate limiting;
+
+reset;
+
+storage;
+
+comparison.
+
+Do not impose arbitrary complexity rules when stronger modern controls provide better security.
+
+---
+
+# 24. Sessions / Cookies
+
+Inspect important cookies for appropriate:
+
+Secure;
+
+HttpOnly;
+
+SameSite;
+
+domain;
+
+path;
+
+expiration.
+
+Review session invalidation behavior.
+
+Do not expose sensitive authentication tokens unnecessarily to JavaScript.
+
+---
+
+# 25. CORS
+
+Review CORS based on the actual browser trust model.
+
+Check:
+
+allowed origins;
+
+credentials;
+
+wildcards;
+
+dynamic reflection.
+
+Do not treat CORS as an authorization system.
+
+Server authorization is still required.
+
+---
+
+# 26. Security Headers
+
+For web applications assess relevant headers such as:
+
+Content-Security-Policy;
+
+Strict-Transport-Security;
+
+X-Content-Type-Options;
+
+Referrer-Policy;
+
+frame-embedding controls.
+
+Use policy appropriate to application behavior.
+
+Do not copy an extremely restrictive CSP that breaks required functionality and then disable it entirely.
+
+---
+
+# 27. Open Redirects
+
+Check user-controlled redirect destinations.
+
+Restrict destinations when redirect behavior carries phishing/security risk.
+
+Do not accept arbitrary external return URLs without intent.
+
+---
+
+# 28. Business Logic Abuse
+
+Security bugs often exist in valid application workflows.
+
+Look for:
+
+discount abuse;
+
+limit bypass;
+
+duplicate redemption;
+
+workflow skipping;
+
+negative quantities;
+
+repeated benefits;
+
+ownership changes;
+
+state transition bypass;
+
+race conditions.
+
+Do not restrict review to classic injection vulnerabilities.
+
+---
+
+# 29. Race Conditions
+
+For security-sensitive mutations consider:
+
+parallel redemption;
+
+duplicate payment;
+
+quota bypass;
+
+concurrent role changes;
+
+balance manipulation.
+
+Atomic checks and updates may be required.
+
+Do not assume:
+
+check
+→ then write
+
+is safe under concurrency.
+
+---
+
+# 30. Rate Limiting / Abuse Controls
+
+Determine which operations can be abused through automation.
+
+Examples:
+
+login;
+
+password reset;
+
+OTP;
+
+search;
+
+expensive AI generation;
+
+email sending;
+
+resource creation;
+
+public APIs.
+
+Use controls proportional to abuse potential.
+
+Rate limiting is not a substitute for authorization or correctness.
+
+---
+
+# 31. Denial of Service
+
+Look for attacker-controlled amplification:
+
+unbounded query;
+
+huge input;
+
+expensive regex;
+
+recursive processing;
+
+large file;
+
+unbounded concurrency;
+
+expensive AI/API call.
+
+Do not overengineer DoS defenses for insignificant private endpoints.
+
+---
+
+# 32. Sensitive Data Exposure
+
+Trace sensitive information through:
+
+DATABASE
+
+API RESPONSES
+
+LOGS
+
+ANALYTICS
+
+ERRORS
+
+URLS
+
+CLIENT STORAGE
+
+THIRD PARTIES.
+
+Minimize data exposure.
+
+Do not put sensitive values in query strings/URLs when avoidable.
+
+---
+
+# 33. Privacy
+
+Ask:
+
+Is this data needed?
+
+Can less data be collected?
+
+Is it retained longer than necessary?
+
+Is it transmitted to a third party?
+
+Can users delete/export it when product/legal requirements demand it?
+
+Security protects data.
+
+Privacy also asks whether the system should possess it at all.
+
+---
+
+# 34. Logging
+
+Review security-relevant logging.
+
+Useful events may include:
+
+authentication failure;
+
+permission failure;
+
+privileged mutation;
+
+security configuration change.
+
+Avoid logging:
+
+passwords;
+
+tokens;
+
+secrets;
+
+unnecessary sensitive payloads.
+
+Logs themselves are sensitive systems.
+
+---
+
+# 35. External Integrations
+
+Review provider boundaries for:
+
+authentication;
+
+secret handling;
+
+request signing;
+
+webhook verification;
+
+scope;
+
+data sharing;
+
+callback validation.
+
+Do not automatically trust data because it originates from a known provider endpoint.
+
+---
+
+# 36. Webhooks
+
+For webhooks verify:
+
+signature/authentication;
+
+freshness/replay strategy where needed;
+
+idempotency;
+
+unknown event handling;
+
+payload validation.
+
+Do not rely on source IP alone unless provider contract and infrastructure justify it.
+
+---
+
+# 37. Dependencies / Supply Chain
+
+Inspect relevant new or changed dependencies.
+
+Consider:
+
+known vulnerabilities;
+
+maintenance;
+
+unexpected package source;
+
+typosquatting;
+
+lockfile;
+
+integrity;
+
+install scripts;
+
+transitive risk.
+
+Use vulnerability scanning when tooling permits.
+
+Do not upgrade every vulnerable transitive dependency blindly without understanding exploitability and compatibility.
+
+---
+
+# 38. Build / CI Security
+
+Review relevant:
+
+workflow permissions;
+
+secrets;
+
+pull-request trust;
+
+artifact provenance;
+
+deployment credentials;
+
+third-party actions.
+
+CI often has powerful access.
+
+Apply least privilege.
+
+Do not expose secrets to untrusted fork execution.
+
+---
+
+# 39. Infrastructure / Cloud Permissions
+
+When relevant inspect:
+
+IAM / roles;
+
+service accounts;
+
+database access;
+
+storage policies;
+
+public exposure;
+
+network boundaries.
+
+Prefer minimum permissions needed.
+
+Do not grant wildcard permissions for convenience without justification.
+
+---
+
+# 40. Production / Admin Interfaces
+
+Administrative capabilities deserve increased scrutiny.
+
+Check:
+
+strong authentication;
+
+authorization;
+
+auditability;
+
+CSRF where relevant;
+
+dangerous action confirmation;
+
+restricted access.
+
+Do not assume obscure admin URLs are protection.
+
+---
+
+# 41. AI-Specific Security
+
+If AI features exist inspect:
+
+PROMPT INJECTION
+
+TOOL AUTHORIZATION
+
+UNTRUSTED RETRIEVED CONTENT
+
+DATA EXFILTRATION
+
+EXCESSIVE AGENCY
+
+MODEL OUTPUT TRUST
+
+SECRET EXPOSURE
+
+UNSAFE CODE/COMMAND EXECUTION.
+
+Treat model output as untrusted unless validated for the destination.
+
+A model recommendation is not an authorization decision.
+
+Tools must enforce permissions independently.
+
+---
+
+# 42. Error Messages
+
+Ensure externally visible errors do not unnecessarily expose:
+
+stack traces;
+
+filesystem paths;
+
+SQL;
+
+secrets;
+
+internal topology.
+
+Internally retain enough structured context for diagnosis.
+
+Security through obscurity is not the goal.
+
+Unnecessary disclosure is still unnecessary.
+
+---
+
+# 43. ASVS Mapping
+
+For web applications, map meaningful findings to current OWASP ASVS requirements when useful.
+
+Do not mechanically evaluate every ASVS requirement for a tiny feature-level review.
+
+Select verification depth based on:
+
+application risk;
+
+feature sensitivity;
+
+review scope.
+
+Use ASVS as structured verification guidance, not as a substitute for threat modeling.
+
+---
+
+# 44. Evidence Standard
+
+Every reported vulnerability should include:
+
+LOCATION
+
+PRECONDITION
+
+ATTACKER CAPABILITY
+
+ATTACK PATH
+
+IMPACT
+
+EVIDENCE
+
+CONFIDENCE.
+
+Whenever practical provide a safe proof or reproducible scenario.
+
+Do not label speculative concerns as confirmed vulnerabilities.
+
+---
+
+# 45. Exploitability Classification
+
+Classify:
+
+CONFIRMED
+
+Directly demonstrated or unambiguously present.
+
+HIGH CONFIDENCE
+
+Strong causal evidence.
+
+POTENTIAL
+
+Plausible but requires a condition not verified.
+
+HARDENING
+
+No current vulnerability demonstrated, but improvement reduces defense-in-depth risk.
+
+Do not mix these categories.
+
+---
+
+# 46. Severity
+
+Use:
+
+CRITICAL
+
+Credible path to catastrophic compromise, widespread sensitive data exposure, major financial loss or equivalent.
+
+HIGH
+
+Material compromise of important security property.
+
+MEDIUM
+
+Real security weakness with meaningful constraints or lower impact.
+
+LOW
+
+Limited impact/exploitability.
+
+HARDENING
+
+Defense-in-depth or best-practice improvement without demonstrated vulnerability.
+
+Severity should reflect:
+
+impact
+×
+exploitability
+×
+scope.
+
+Do not inflate severity to make findings sound important.
+
+---
+
+# 47. False Positives
+
+Actively try to disprove findings.
+
+Check:
+
+framework protection;
+
+upstream validation;
+
+deployment configuration;
+
+actual data source;
+
+browser/runtime behavior;
+
+existing authorization.
+
+A scanner warning is evidence to investigate, not automatically a vulnerability.
+
+---
+
+# 48. Remediation
+
+For every confirmed/material issue recommend the smallest robust remediation.
+
+Prefer fixing the violated security property at the correct boundary.
+
+Do not recommend broad architecture replacement when a focused correction solves the issue.
+
+Avoid "sanitize input" as a vague universal remediation.
+
+---
+
+# 49. Regression Protection
+
+For corrected security bugs, add an appropriate negative regression test when practical.
+
+Examples:
+
+other user denied;
+
+invalid signature rejected;
+
+unsafe input neutralized;
+
+duplicate action prevented.
+
+Do not publish dangerous exploit payloads unnecessarily in user-facing reports.
+
+---
+
+# 50. Revalidation
+
+After remediation:
+
+rerun the specific exploit/reproducer;
+
+verify expected legitimate behavior still works.
+
+Then perform broader relevant checks once.
+
+Do not rerun a full security audit after every small fix unless the change alters a security boundary.
+
+---
+
+# 51. Review Limitations
+
+Explicitly state what was NOT evaluated.
+
+Examples:
+
+penetration test;
+
+infrastructure account;
+
+third-party provider configuration;
+
+cryptographic implementation;
+
+mobile binary;
+
+production traffic.
+
+Do not imply comprehensive security assurance from a scoped code review.
+
+---
+
+# 52. Output Format
+
+# Security Review — [Scope]
+
+## Verdict
+
+PASS / PASS WITH HARDENING / FAIL / SPECIALIST REVIEW REQUIRED
+
+## Scope
+
+...
+
+## Assets / Trust Boundaries
+
+Only important ones.
+
+## Findings
+
+### CRITICAL / HIGH / MEDIUM / LOW
+
+For each:
+
+**[ID] Title**
+
+Location:
+...
+
+Classification:
+CONFIRMED / HIGH CONFIDENCE / POTENTIAL
+
+Attack path:
+...
+
+Impact:
+...
+
+Evidence:
+...
+
+Recommended remediation:
+...
+
+Regression verification:
+...
+
+## Hardening
+
+Non-vulnerability improvements only.
+
+## ASVS Mapping
+
+Only useful mappings.
+
+## Dependencies / Supply Chain
+
+Only material findings.
+
+## Not Verified
+
+...
+
+## Overall Risk
+
+...
+
+## Required Before Merge / Production
+
+Exact blockers only.
+
+## Next
+
+Exactly one next action.
+
+---
+
+# PASS Criterion
+
+Security Review passes when:
+
+- no known unresolved material vulnerability remains in scope;
+- important authorization and trust boundaries are correctly enforced;
+- sensitive data/secrets are handled appropriately;
+- realistic abuse paths were considered;
+- significant findings were validated rather than merely guessed;
+- review limitations are explicit.
+
+PASS does NOT mean:
+
+"this software can never be hacked."
+
+It means the reviewed scope has no known unacceptable security weakness based on the evidence available.

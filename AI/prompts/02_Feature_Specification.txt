@@ -1,0 +1,775 @@
+# 02 — FEATURE SPECIFICATION
+
+## Mission
+
+Turn a product feature request into an implementation-ready specification.
+
+The specification must define WHAT the feature must achieve and the important constraints around it without prematurely dictating HOW every line of code must be implemented.
+
+The result should allow an implementation agent to work with minimal ambiguity.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+Do not repeat their general engineering rules.
+
+Do not implement the feature during this task unless explicitly requested.
+
+---
+
+# 1. Inspect Existing Context
+
+Before specifying the feature:
+
+- read the feature request;
+- inspect relevant product context;
+- inspect relevant existing code when available;
+- inspect current behavior;
+- identify existing patterns;
+- identify relevant architecture;
+- identify existing checkpoints;
+- identify related features.
+
+Do not specify behavior that conflicts with the existing product without explicitly identifying the conflict.
+
+Do not re-audit the entire repository.
+
+Inspect only what is relevant.
+
+---
+
+# 2. Clarify the Outcome
+
+Define:
+
+USER / ACTOR
+Who is using or triggering the feature?
+
+TRIGGER
+What starts the flow?
+
+GOAL
+What outcome are they trying to achieve?
+
+SUCCESS
+What does successful completion look like?
+
+VALUE
+Why does this capability exist?
+
+Do not confuse UI implementation with user outcome.
+
+---
+
+# 3. Evidence and Decisions
+
+Separate:
+
+EXPLICIT
+Directly requested behavior.
+
+EXISTING
+Behavior already established by the product.
+
+INFERRED
+Behavior strongly implied by context.
+
+ASSUMED
+Reversible decision made to remove minor ambiguity.
+
+OPEN
+A decision that cannot responsibly be inferred.
+
+Do not silently turn assumptions into requirements.
+
+Minimize OPEN decisions.
+
+Escalate only those that materially change product behavior or risk.
+
+---
+
+# 4. Scope
+
+Define clearly:
+
+IN SCOPE
+
+OUT OF SCOPE
+
+UNCHANGED
+
+FUTURE / NOT NOW
+
+This prevents implementation from expanding into unrelated improvements.
+
+---
+
+# 5. Primary User Flow
+
+Describe the shortest normal flow from trigger to successful outcome.
+
+Use numbered steps.
+
+Example structure:
+
+1. User performs X.
+2. System validates Y.
+3. System performs Z.
+4. User receives result.
+
+Do not specify code structure here.
+
+---
+
+# 6. Alternative Flows
+
+Identify meaningful variations such as:
+
+- first-time user;
+- returning user;
+- optional paths;
+- different permission levels;
+- existing data vs new data;
+- partial completion.
+
+Only include flows that materially affect implementation or UX.
+
+---
+
+# 7. Functional Requirements
+
+Assign stable IDs.
+
+Example:
+
+FR-01
+The authenticated user can save an item.
+
+FR-02
+The same item cannot be saved twice by the same user.
+
+FR-03
+Removing a saved item makes it immediately disappear from the user's saved list.
+
+Requirements should be:
+
+- clear;
+- individually testable where practical;
+- implementation-neutral unless implementation is itself constrained.
+
+Avoid vague words such as:
+
+- fast;
+- easy;
+- seamless;
+- intuitive;
+- robust
+
+unless converted into verifiable behavior.
+
+---
+
+# 8. Business Rules and Invariants
+
+Document rules that must always remain true.
+
+Examples:
+
+- uniqueness;
+- ownership;
+- allowed transitions;
+- date/time constraints;
+- quantity limits;
+- pricing rules;
+- permission rules;
+- data consistency rules.
+
+Give these stable IDs when useful:
+
+BR-01
+BR-02
+...
+
+Important invariants should not exist only in UI behavior.
+
+---
+
+# 9. Permissions
+
+If permissions are relevant, define:
+
+WHO CAN VIEW
+
+WHO CAN CREATE
+
+WHO CAN CHANGE
+
+WHO CAN DELETE
+
+WHO CAN TRIGGER SENSITIVE ACTIONS
+
+Consider:
+
+- unauthenticated users;
+- authenticated users;
+- owners;
+- administrators;
+- service accounts;
+- other roles.
+
+Do not assume authentication automatically grants authorization.
+
+---
+
+# 10. Data
+
+Identify only data relevant to this feature.
+
+For each important piece of data specify:
+
+- meaning;
+- source;
+- required/optional;
+- ownership;
+- validation;
+- persistence;
+- sensitivity;
+- retention/deletion considerations when relevant.
+
+Identify new or changed entities/fields conceptually.
+
+Do not prematurely design the full schema unless requested.
+
+Use `14 Data/API Design` later if detailed data/API design is warranted.
+
+---
+
+# 11. External Systems
+
+Identify any dependency on:
+
+- APIs;
+- authentication providers;
+- payment systems;
+- email;
+- storage;
+- analytics;
+- AI models;
+- third-party SaaS;
+- webhooks;
+- queues.
+
+Specify expected behavior when the dependency is:
+
+- unavailable;
+- slow;
+- rate limited;
+- returning invalid data.
+
+Detailed integration design belongs to `15 External Integration` if complexity warrants it.
+
+---
+
+# 12. UI / UX Behavior
+
+If the feature has a UI, define behavior rather than aesthetics.
+
+Identify:
+
+- entry point;
+- primary action;
+- navigation effect;
+- confirmation;
+- feedback;
+- validation;
+- cancellation;
+- destructive action handling.
+
+If the screen/interaction itself requires meaningful design work, use:
+
+`09 Screen Design`
+
+before implementation.
+
+Do not invent a complete visual direction here.
+
+---
+
+# 13. Required UI States
+
+Consider relevant states:
+
+- initial;
+- loading;
+- success;
+- empty;
+- no results;
+- validation error;
+- server error;
+- permission denied;
+- unavailable dependency;
+- submitting;
+- disabled;
+- partial data;
+- stale data;
+- offline, if relevant.
+
+Use `10 Responsive + States` when the interface requires detailed state/responsive design.
+
+Do not require irrelevant states mechanically.
+
+---
+
+# 14. Validation
+
+Define important input validation.
+
+Distinguish:
+
+CLIENT-SIDE VALIDATION
+UX feedback.
+
+SERVER / TRUST-BOUNDARY VALIDATION
+Authoritative validation.
+
+Specify:
+
+- required values;
+- formats;
+- ranges;
+- lengths;
+- invalid combinations;
+- business constraints.
+
+Do not rely on client validation for security or integrity.
+
+---
+
+# 15. Error Behavior
+
+For each important failure class determine:
+
+- what the system should do;
+- what the user should see;
+- whether retry is allowed;
+- whether the operation is safe to retry;
+- whether partial state must be cleaned up.
+
+Do not expose sensitive internal information.
+
+---
+
+# 16. Concurrency and Idempotency
+
+Evaluate whether this feature can be:
+
+- submitted twice;
+- retried;
+- triggered concurrently;
+- processed asynchronously;
+- executed after stale data was loaded.
+
+When relevant, define expected behavior.
+
+Do not introduce complex concurrency mechanisms when the feature does not need them.
+
+---
+
+# 17. Accessibility
+
+For user-facing interfaces, include applicable accessibility requirements.
+
+Consider:
+
+- semantic meaning;
+- keyboard operation;
+- focus behavior;
+- accessible names;
+- error association;
+- status announcements;
+- non-color-only communication;
+- touch target behavior.
+
+Use current WCAG guidance where applicable.
+
+Do not turn this section into a complete accessibility audit.
+
+---
+
+# 18. Quality Requirements
+
+Only include non-functional requirements that materially affect this feature.
+
+Consider:
+
+PERFORMANCE
+Does latency matter?
+
+RELIABILITY
+Can failure lose important state?
+
+SECURITY
+Is this security-sensitive?
+
+PRIVACY
+Does it handle personal/sensitive data?
+
+AVAILABILITY
+Does degraded behavior matter?
+
+OBSERVABILITY
+Would failures need production diagnosis?
+
+ACCESSIBILITY
+Are there specific interaction requirements?
+
+Define measurable/verifiable criteria where practical.
+
+Do not write generic requirements that apply to every feature.
+
+---
+
+# 19. Analytics / Product Measurement
+
+Only when useful, identify events or metrics needed to determine whether the feature succeeds.
+
+For each event specify conceptually:
+
+- event;
+- trigger;
+- useful properties;
+- why it is needed.
+
+Do not collect data without a clear purpose.
+
+Avoid sensitive information in analytics.
+
+---
+
+# 20. Observability
+
+For operationally important behavior, determine whether we need:
+
+- logs;
+- metrics;
+- error reporting;
+- traces;
+- alerts.
+
+Specify what must be diagnosable.
+
+Do not add telemetry for trivial behavior.
+
+---
+
+# 21. Edge Cases
+
+Actively search for realistic edge cases.
+
+Consider:
+
+- missing data;
+- duplicate actions;
+- stale state;
+- partial state;
+- boundaries;
+- invalid order of operations;
+- deleted related records;
+- permission changes;
+- dependency failure;
+- expired sessions;
+- large inputs;
+- time zones/dates;
+- retries.
+
+Prioritize plausible cases.
+
+Do not generate dozens of theoretical edge cases with negligible value.
+
+---
+
+# 22. Acceptance Criteria
+
+Create acceptance criteria linked to requirements.
+
+Use stable IDs:
+
+AC-01
+AC-02
+...
+
+Acceptance criteria must be objectively verifiable.
+
+Given/When/Then may be used where it improves clarity but is not mandatory.
+
+Examples:
+
+AC-01 → FR-01
+Given an authenticated user and an unsaved item,
+when the user saves it,
+then the item appears in their saved list.
+
+Include:
+
+- happy path;
+- important negative paths;
+- permission behavior;
+- important boundaries.
+
+Do not duplicate every requirement word-for-word.
+
+---
+
+# 23. Test Intent
+
+Define what needs confidence, not exact test implementation.
+
+Classify where useful:
+
+UNIT
+Important isolated logic.
+
+INTEGRATION
+Database/API/service boundaries.
+
+E2E
+Critical user journeys.
+
+MANUAL / VISUAL
+Behavior that cannot be reliably covered otherwise.
+
+Do not mandate E2E tests for every requirement.
+
+Detailed testing strategy belongs to `19 Test Strategy` when warranted.
+
+---
+
+# 24. Backward Compatibility
+
+Determine whether the feature affects:
+
+- public APIs;
+- stored data;
+- existing users;
+- old clients;
+- URLs;
+- external integrations;
+- deployment compatibility.
+
+If yes, specify compatibility expectations.
+
+---
+
+# 25. Migration / Rollout
+
+If existing data or production behavior changes, determine whether implementation needs:
+
+- schema migration;
+- data backfill;
+- feature flag;
+- staged rollout;
+- dual read/write;
+- rollback plan.
+
+Do not add rollout infrastructure for low-risk features without reason.
+
+---
+
+# 26. Dependencies
+
+List prerequisites.
+
+Examples:
+
+- another feature;
+- schema change;
+- external API access;
+- product decision;
+- design decision;
+- technical spike.
+
+Do not allow implementation to start while a blocking dependency remains undefined.
+
+---
+
+# 27. Open Questions
+
+Keep this section small.
+
+For every unresolved question indicate:
+
+BLOCKING
+Implementation cannot safely proceed.
+
+NON-BLOCKING
+Use documented assumption and continue.
+
+Try to resolve questions through available context or tools before asking the user.
+
+---
+
+# 28. Implementation Readiness Review
+
+Before finishing, verify:
+
+- primary outcome is clear;
+- scope is bounded;
+- flows are coherent;
+- business rules are explicit;
+- permissions are understood;
+- data impact is known;
+- failure behavior is defined;
+- relevant states exist;
+- acceptance criteria are testable;
+- no major decision is being silently guessed.
+
+---
+
+# 29. Output Format
+
+Return exactly this structure when applicable:
+
+# Feature
+
+Name.
+
+## Objective
+
+One concise paragraph.
+
+## Actor / User
+
+Who and why.
+
+## Scope
+
+### In
+- ...
+
+### Out
+- ...
+
+### Unchanged
+- ...
+
+## Primary Flow
+
+1. ...
+2. ...
+
+## Alternative Flows
+
+Only meaningful alternatives.
+
+## Functional Requirements
+
+FR-01 ...
+FR-02 ...
+
+## Business Rules
+
+BR-01 ...
+BR-02 ...
+
+## Permissions
+
+...
+
+## Data Impact
+
+...
+
+## Integrations
+
+...
+
+## UX Behavior
+
+...
+
+## UI States
+
+...
+
+## Validation
+
+...
+
+## Error Behavior
+
+...
+
+## Edge Cases
+
+...
+
+## Quality Requirements
+
+...
+
+## Analytics / Observability
+
+Only if relevant.
+
+## Acceptance Criteria
+
+AC-01 → FR-...
+...
+
+## Test Intent
+
+...
+
+## Migration / Rollout
+
+Only if relevant.
+
+## Assumptions
+
+...
+
+## Open Questions
+
+Only unresolved material questions.
+
+## Dependencies
+
+...
+
+## Readiness
+
+Choose:
+
+READY
+Specification is sufficient for implementation.
+
+READY WITH ASSUMPTIONS
+Implementation may proceed using explicitly documented reversible assumptions.
+
+DESIGN REQUIRED
+Run the relevant Design prompt first.
+
+TECHNICAL SPIKE REQUIRED
+Run `03 Technical Spike`.
+
+PRODUCT DECISION REQUIRED
+One or more material product decisions remain unresolved.
+
+## Next
+
+Recommend exactly one next prompt.
+
+Usually:
+
+`09 Screen Design`
+`14 Data/API Design`
+`15 External Integration`
+or
+`13 Feature Implementation`.
+
+---
+
+# Completion Criterion
+
+A Feature Specification is complete when a competent implementation agent can build the intended behavior without inventing important product requirements.
+
+The specification should remove dangerous ambiguity, not remove every implementation decision from the engineer.

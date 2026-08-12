@@ -6,6 +6,8 @@ These rules define the default engineering standards for this repository.
 
 Also follow `WORKFLOW.md` for orchestration, delegation, checkpoints and resource efficiency.
 
+When present, `AI/PROMPT_ROUTER.md` selects task-specific procedures from `AI/prompts/`. Those procedures supplement these engineering rules; they do not replace or override them.
+
 The goal is not maximum architecture, abstraction, patterns, tests, files or documentation.
 
 The goal is the simplest solution that correctly satisfies the requirements while remaining secure, maintainable, testable and evolvable.
@@ -706,6 +708,8 @@ Evaluate creating:
 - AGENTS.md;
 - WORKFLOW.md;
 - CLAUDE.md;
+- `AI/PROMPT_ROUTER.md`;
+- `AI/prompts/` when the specialized prompt library is intentionally included;
 - `.env.example`;
 - `docs/ARCHITECTURE.md`;
 - `docs/QUALITY_ATTRIBUTES.md`;

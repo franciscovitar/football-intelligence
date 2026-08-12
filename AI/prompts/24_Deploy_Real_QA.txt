@@ -1,0 +1,936 @@
+# 24 — DEPLOY + REAL QA
+
+# Mission
+
+Release the approved software into its target environment safely and verify that the REAL deployed system performs the intended user behavior.
+
+This workflow distinguishes:
+
+BUILD
+
+Artifact created successfully.
+
+DEPLOYMENT
+
+Artifact exists in target infrastructure.
+
+RELEASE / PROMOTION
+
+Target users receive the new version.
+
+REAL QA
+
+User-visible production behavior has been verified.
+
+A successful build or deployment is NOT sufficient evidence that the release works.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+Use the latest Production Readiness checkpoint.
+
+Do not repeat validated development work unless deployment can affect it.
+
+---
+
+# 1. Precondition
+
+Require an appropriate Production Readiness outcome:
+
+READY
+
+or
+
+READY WITH ACCEPTED RISK.
+
+If NOT READY:
+
+do not deploy merely to see what happens.
+
+If emergency release:
+
+explicitly identify emergency conditions and reduced gates.
+
+---
+
+# 2. Identify Release Artifact
+
+Know exactly what is being released.
+
+Record when relevant:
+
+BRANCH
+
+COMMIT SHA
+
+BUILD / ARTIFACT
+
+VERSION
+
+ENVIRONMENT
+
+MIGRATION VERSION
+
+FEATURE FLAGS.
+
+Do not deploy an ambiguous local working tree accidentally.
+
+---
+
+# 3. Verify Target
+
+Explicitly identify:
+
+PREVIEW
+
+STAGING
+
+PRODUCTION
+
+OTHER.
+
+Do not infer destination from command defaults for sensitive releases.
+
+Before destructive/environment-changing actions, confirm programmatically when possible.
+
+---
+
+# 4. Deployment Strategy
+
+Choose the simplest safe strategy.
+
+Possible:
+
+DIRECT
+
+PROMOTION OF VERIFIED BUILD
+
+ROLLING
+
+CANARY
+
+BLUE/GREEN
+
+FEATURE FLAG.
+
+Use risk to select strategy.
+
+Do not create complex rollout infrastructure for low-risk changes.
+
+---
+
+# 5. Prefer Artifact Promotion
+
+Where platform supports it, prefer promoting the exact artifact that passed pre-release QA rather than rebuilding different source/configuration for Production.
+
+This reduces:
+
+build drift;
+
+dependency drift;
+
+configuration surprises.
+
+When rebuild is unavoidable, verify equivalence appropriately.
+
+---
+
+# 6. Deployment Checks
+
+Use automated blocking checks where platform/project supports them.
+
+Potential:
+
+BUILD
+
+LINT
+
+TYPECHECK
+
+TESTS
+
+E2E
+
+SECURITY
+
+PERFORMANCE
+
+CUSTOM HEALTH CHECK.
+
+Only checks that materially protect the release should block it.
+
+Do not bypass failing required checks merely because deployment is urgent without explicitly accepting the risk.
+
+---
+
+# 7. Production Credentials
+
+Use Production credentials only in the target production environment.
+
+Do not copy them into local logs, prompts or artifacts.
+
+Verify presence without exposing values.
+
+---
+
+# 8. Migration Ordering
+
+If release includes database migration define order.
+
+Possible:
+
+EXPAND SCHEMA
+
+→ DEPLOY COMPATIBLE CODE
+
+→ BACKFILL
+
+→ SWITCH
+
+→ CONTRACT OLD SCHEMA.
+
+Do not deploy code requiring schema that does not yet exist.
+
+Do not remove schema still used by live old instances.
+
+---
+
+# 9. Backup / Recovery Point
+
+Before high-risk destructive migration, ensure the required recovery state exists.
+
+Do not create redundant backup ceremony when platform recovery and risk already justify existing checkpoint.
+
+---
+
+# 10. External Configuration
+
+Before promotion verify relevant production-side configuration:
+
+provider callback;
+
+webhook;
+
+domain;
+
+secret;
+
+OAuth redirect;
+
+queue;
+
+bucket;
+
+API permission.
+
+Do not assume code deployment configures third-party systems automatically unless it actually does.
+
+---
+
+# 11. Execute Deployment
+
+Perform deployment through the established mechanism.
+
+Do not introduce a new release method during ordinary deployment.
+
+Capture:
+
+deployment identifier;
+
+artifact/version;
+
+status.
+
+Do not declare success yet.
+
+---
+
+# 12. Build Failure
+
+If build fails:
+
+do not repeatedly redeploy blindly.
+
+Diagnose:
+
+code;
+
+dependency;
+
+config;
+
+environment;
+
+platform.
+
+Preserve previous Production.
+
+A failed candidate build should not destabilize current healthy production.
+
+---
+
+# 13. Deployment Ready
+
+When platform reports READY/SUCCESS, interpret that only as infrastructure/build success.
+
+Proceed to verification.
+
+READY ≠ QA PASS.
+
+---
+
+# 14. Pre-Promotion QA
+
+If the platform offers an isolated deployment/preview containing the real production artifact, perform high-value checks BEFORE sending production traffic.
+
+Verify:
+
+critical routes;
+
+assets;
+
+runtime;
+
+database connectivity;
+
+provider connectivity;
+
+configuration.
+
+Promote only after candidate passes.
+
+---
+
+# 15. Promote
+
+Release the verified candidate to actual users.
+
+Record exact release/deployment identifier.
+
+Avoid unnecessary rebuild between QA and promotion.
+
+---
+
+# 16. Immediate Smoke Tests
+
+Immediately after promotion exercise the smallest critical set.
+
+Examples:
+
+PUBLIC ROUTE
+
+LOGIN
+
+PRIMARY READ
+
+PRIMARY WRITE
+
+DATABASE
+
+CRITICAL PROVIDER.
+
+Use actual Production safely.
+
+Do not generate destructive/sample customer data unnecessarily.
+
+Use dedicated safe test accounts/resources where appropriate.
+
+---
+
+# 17. Verify User Perspective
+
+Test through the actual public entry point.
+
+Not only:
+
+internal deployment URL.
+
+Verify when relevant:
+
+DNS;
+
+TLS;
+
+CDN;
+
+routing;
+
+middleware;
+
+auth;
+
+cookies;
+
+real domain.
+
+A deployment can work internally while the production domain is broken.
+
+---
+
+# 18. Functional QA
+
+Execute representative critical user journeys.
+
+Use actual application behavior.
+
+For each:
+
+INPUT
+
+ACTION
+
+EXPECTED
+
+OBSERVED
+
+PASS / FAIL.
+
+Do not claim entire product QA from checking homepage HTTP 200.
+
+---
+
+# 19. Negative QA
+
+Test high-value negative cases where safe:
+
+unauthorized request;
+
+invalid input;
+
+duplicate action;
+
+missing resource.
+
+Do not perform destructive adversarial penetration testing against Production without explicit scope.
+
+---
+
+# 20. Visual QA
+
+For visual changes inspect actual Production rendering.
+
+Use representative:
+
+desktop/expanded;
+
+compact/mobile;
+
+important states.
+
+Do not rely only on preview if Production has different fonts/CDN/config.
+
+Use `11 Visual QA` principles without repeating an entire certified visual audit unless environment changes can affect it.
+
+---
+
+# 21. Browser Runtime
+
+Inspect:
+
+console errors;
+
+network failures;
+
+missing assets;
+
+hydration/runtime errors;
+
+CSP;
+
+third-party scripts.
+
+A visually correct first paint may hide runtime failures.
+
+---
+
+# 22. API QA
+
+Verify relevant production endpoints through real routing.
+
+Check:
+
+status;
+
+payload;
+
+authorization;
+
+latency;
+
+errors.
+
+Do not expose sensitive test results publicly.
+
+---
+
+# 23. Database QA
+
+For schema/data releases verify:
+
+migration version;
+
+new columns/tables;
+
+representative read/write;
+
+constraints;
+
+backfill when applicable.
+
+Avoid broad write experiments on real data.
+
+---
+
+# 24. Provider QA
+
+For changed integrations exercise a safe real Production flow when feasible.
+
+Verify:
+
+real credential;
+
+live endpoint;
+
+callback;
+
+webhook;
+
+provider response.
+
+Sandbox PASS does not prove live configuration is correct.
+
+Use low-risk controlled transactions/actions.
+
+---
+
+# 25. Webhook QA
+
+When changed verify an actual provider-originated event where practical.
+
+Confirm:
+
+received;
+
+authenticated;
+
+processed;
+
+idempotent;
+
+final state.
+
+Do not fabricate webhook success from direct handler invocation if production provider registration is what could fail.
+
+---
+
+# 26. Logs
+
+Observe release logs during QA.
+
+Look for:
+
+new exceptions;
+
+5xx;
+
+auth failures;
+
+provider failures;
+
+migration errors.
+
+Do not panic over known harmless warnings.
+
+Compare against baseline where possible.
+
+---
+
+# 27. Metrics
+
+Watch meaningful release indicators.
+
+Examples:
+
+error rate;
+
+latency;
+
+successful primary action;
+
+queue depth;
+
+provider failures.
+
+Do not declare stable operation based only on CPU.
+
+---
+
+# 28. Error Budget / SLO
+
+If SLOs exist, determine whether release materially degrades them.
+
+Do not introduce SRE ceremony to projects that have no SLO model.
+
+---
+
+# 29. Performance Regression
+
+Compare important metrics to baseline.
+
+For web UI when relevant inspect real-user/field metrics as they become available; immediate lab/synthetic checks can catch large regressions sooner.
+
+Do not expect real-user aggregate metrics to become meaningful instantly.
+
+---
+
+# 30. Cache
+
+Deployment may alter cache behavior.
+
+Verify relevant:
+
+CDN;
+
+ISR;
+
+application cache;
+
+service worker;
+
+API cache.
+
+Look for stale old asset/code mismatch.
+
+Do not purge global caches unless needed.
+
+---
+
+# 31. Feature Flags
+
+If rollout is flag-controlled verify:
+
+targeting;
+
+default;
+
+percentage/audience;
+
+fallback.
+
+Ensure kill-switch behavior is understood when relevant.
+
+---
+
+# 32. Gradual Release
+
+For high-risk release, increase exposure progressively.
+
+At each stage:
+
+observe;
+
+compare;
+
+continue or rollback.
+
+Do not proceed mechanically if metrics degrade.
+
+---
+
+# 33. Stop Conditions
+
+Stop rollout if:
+
+critical user flow fails;
+
+security issue appears;
+
+data corruption occurs;
+
+error rate materially spikes;
+
+latency crosses critical limit;
+
+unexpected financial side effect appears.
+
+Do not continue merely because release is "almost done."
+
+---
+
+# 34. Rollback Decision
+
+When Production is materially broken, prioritize restoring service.
+
+If previous deployment is known healthy and rollback is safe:
+
+ROLL BACK.
+
+Then diagnose.
+
+Do not spend excessive time live-debugging while users remain impacted when immediate restoration is available.
+
+---
+
+# 35. Rollback Safety
+
+Before rollback consider:
+
+database migration compatibility;
+
+external side effects;
+
+data written by new version;
+
+provider contract changes.
+
+Do not rollback code blindly if old code cannot safely operate on current state.
+
+---
+
+# 36. Forward Fix
+
+If rollback is unsafe:
+
+contain;
+
+disable feature;
+
+use flag;
+
+apply minimal forward fix.
+
+Choose the fastest safe recovery path.
+
+---
+
+# 37. Verify Recovery
+
+After rollback/fix:
+
+repeat failing critical check.
+
+Then inspect:
+
+errors;
+
+metrics;
+
+user path.
+
+Do not assume rollback restored service merely because command succeeded.
+
+---
+
+# 38. Failed Release Preservation
+
+Preserve useful evidence:
+
+deployment ID;
+
+commit;
+
+logs;
+
+failed smoke test;
+
+metric change.
+
+Do not destroy all failed artifacts immediately if they are needed to diagnose.
+
+Remove cost-generating unsafe resources once evidence is captured.
+
+---
+
+# 39. No Full Re-Audit
+
+After deployment, do not rerun:
+
+architecture review;
+
+whole repository code review;
+
+all prior analysis
+
+without evidence deployment changed those properties.
+
+Real QA focuses on deployment-sensitive behavior.
+
+---
+
+# 40. Production Data Hygiene
+
+Clean up test artifacts created during QA where appropriate.
+
+Examples:
+
+test account;
+
+sample record;
+
+test order.
+
+Do not delete audit data or provider evidence that should remain.
+
+Avoid contaminating production analytics with unnecessary QA activity where practical.
+
+---
+
+# 41. Deployment Checkpoint
+
+After PASS preserve:
+
+RELEASE VERSION
+
+COMMIT
+
+DEPLOYMENT ID
+
+PRODUCTION URL
+
+MIGRATION VERSION
+
+FEATURE FLAGS
+
+SMOKE TESTS
+
+REAL QA
+
+KNOWN RISKS.
+
+This becomes the new trusted Production checkpoint.
+
+---
+
+# 42. Certify Layers Separately
+
+Report independently:
+
+CODE
+
+BUILD
+
+DEPLOYMENT
+
+PROMOTION
+
+REAL QA
+
+Do not collapse them into one "done."
+
+Example:
+
+Code: PASS
+Build: PASS
+Deployment: PASS
+Production promotion: PASS
+Real QA: PASS
+
+This prevents false completion.
+
+---
+
+# 43. Output Format
+
+# Deploy + Real QA — [Release]
+
+## Verdict
+
+PASS / PARTIAL / FAIL / ROLLED BACK
+
+## Release
+
+Branch:
+Commit:
+Artifact:
+Deployment:
+Environment:
+
+## Pre-Deployment Checkpoint
+
+...
+
+## Deployment
+
+What was actually deployed.
+
+## Promotion
+
+What is serving users.
+
+## Migration
+
+Only if applicable.
+
+## Smoke Tests
+
+| Flow | Result | Evidence |
+|---|---|---|
+
+## Real QA
+
+...
+
+## Visual QA
+
+PASS / FAIL / NOT APPLICABLE.
+
+## Integrations
+
+...
+
+## Logs / Metrics
+
+...
+
+## Issues Found
+
+...
+
+## Recovery / Rollback
+
+None or exact action performed.
+
+## Certification
+
+Code: PASS / FAIL
+Build: PASS / FAIL
+Deployment: PASS / FAIL
+Promotion: PASS / FAIL
+Real QA: PASS / FAIL
+
+## Not Verified
+
+...
+
+## Remaining Risks
+
+...
+
+## Production Checkpoint
+
+...
+
+## User Action
+
+None unless genuinely unavoidable.
+
+## Next
+
+Exactly one logical next action.
+
+---
+
+# PASS Criterion
+
+Deploy + Real QA passes only when:
+
+- the intended artifact is actually serving the intended users;
+- critical production journeys work through the real production boundary;
+- important integrations/configuration work in the real environment;
+- no material release regression is observed;
+- logs/metrics show no obvious new critical failure;
+- rollback/recovery remains understood;
+- the exact released version is recorded.
+
+A green deployment status is not enough.
+
+Production is certified only after real behavior is verified.

@@ -1,0 +1,817 @@
+# 13 — FEATURE IMPLEMENTATION
+
+## Mission
+
+Implement the requested feature completely and safely from the current verified project state.
+
+The objective is to deliver working production-quality behavior with the smallest coherent change set.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+Treat existing approved specifications, architecture decisions, design decisions and checkpoints as authoritative.
+
+Do not repeat completed analysis unless implementation reveals contradictory evidence.
+
+---
+
+# 1. Establish the Goal
+
+Before modifying code, identify:
+
+FEATURE
+
+USER OUTCOME
+
+SCOPE
+
+ACCEPTANCE CRITERIA
+
+CURRENT CHECKPOINT
+
+DEPENDENCIES
+
+Do not reinterpret the product requirement unless an actual contradiction is discovered.
+
+If a Feature Specification exists:
+
+use it.
+
+Do not regenerate it.
+
+---
+
+# 2. Determine Readiness
+
+Before implementation classify:
+
+READY
+
+Requirements are sufficient.
+
+READY WITH ASSUMPTIONS
+
+Only low-risk reversible details remain.
+
+BLOCKED BY PRODUCT
+
+A material behavior decision is missing.
+
+BLOCKED BY DESIGN
+
+Important UX/UI behavior is undefined.
+
+BLOCKED BY TECHNICAL UNKNOWN
+
+A feasibility assumption requires `03 Technical Spike`.
+
+Do not use "blocked" for trivial implementation decisions you can safely make yourself.
+
+---
+
+# 3. Start From the Latest Checkpoint
+
+Identify what is already validated.
+
+Examples:
+
+- branch;
+- commit;
+- passing tests;
+- working deployment;
+- verified architecture;
+- existing migrations;
+- existing components;
+- prior QA.
+
+Do not repeat certified work unless this feature can affect it.
+
+Preserve valid state.
+
+---
+
+# 4. Inspect Only Relevant Code
+
+Read the smallest useful repository surface first.
+
+Identify:
+
+ENTRY POINTS
+
+RELATED MODULES
+
+CURRENT DATA FLOW
+
+EXISTING COMPONENTS
+
+EXISTING TESTS
+
+PUBLIC CONTRACTS
+
+RELEVANT CONFIGURATION
+
+Expand investigation only when necessary.
+
+Do not scan the entire repository without evidence that broad understanding is needed.
+
+---
+
+# 5. Reuse Existing Patterns
+
+Before creating something new, search for existing:
+
+- components;
+- functions;
+- domain concepts;
+- services;
+- validators;
+- schemas;
+- API patterns;
+- error patterns;
+- test helpers;
+- utilities.
+
+Reuse when semantics match.
+
+Do not create duplicate abstractions because finding the existing implementation requires a small amount of investigation.
+
+Do not force reuse when the existing abstraction is semantically wrong.
+
+---
+
+# 6. Implementation Plan
+
+For non-trivial work, form a concise internal plan.
+
+Prefer coherent vertical increments.
+
+Example:
+
+data/schema
+→ domain/application behavior
+→ API/boundary
+→ UI
+→ focused tests
+→ runtime verification.
+
+Do not create an elaborate project plan for a small feature.
+
+---
+
+# 7. Make the Smallest Coherent Change
+
+Implement everything necessary for the feature to work correctly.
+
+Do not artificially minimize the diff if doing so leaves an incomplete or fragile implementation.
+
+But do not include:
+
+- unrelated refactors;
+- dependency upgrades;
+- cleanup outside affected areas;
+- speculative abstractions;
+- future features.
+
+The correct scope is:
+
+everything required
++
+nothing unrelated.
+
+---
+
+# 8. Follow Existing Architecture
+
+Respect:
+
+MODULE BOUNDARIES
+
+DEPENDENCY DIRECTION
+
+DATA OWNERSHIP
+
+SERVER / CLIENT BOUNDARIES
+
+DESIGN SYSTEM
+
+ERROR CONTRACTS
+
+CONFIGURATION PATTERNS
+
+Do not bypass architecture simply because a shortcut is faster.
+
+If the architecture materially prevents correct implementation:
+
+do not silently work around it.
+
+Report the architectural issue and use `05 Architecture Decision` if needed.
+
+---
+
+# 9. Do Not Over-Abstract
+
+Do not automatically introduce:
+
+- interfaces;
+- repositories;
+- factories;
+- services;
+- strategies;
+- adapters;
+- generic helpers
+
+unless they solve a demonstrated problem.
+
+Prefer direct readable code for local behavior.
+
+Extract abstraction when:
+
+- responsibility becomes clearer;
+- meaningful reuse exists;
+- a boundary needs isolation;
+- complexity becomes materially easier to manage.
+
+---
+
+# 10. Data Changes
+
+If the feature changes persistent data:
+
+understand existing schema and migration mechanism first.
+
+Define:
+
+NEW DATA
+
+CHANGED DATA
+
+INVARIANTS
+
+RELATIONSHIPS
+
+MIGRATION
+
+BACKWARD COMPATIBILITY
+
+ROLLBACK / RECOVERY when relevant.
+
+Use database constraints for critical invariants when appropriate.
+
+Do not silently modify or destroy existing production data.
+
+Use `14 Data/API Design` first if the data model itself requires meaningful design work.
+
+---
+
+# 11. API Changes
+
+If the feature changes an API:
+
+preserve existing public contracts unless change is explicitly required.
+
+Consider:
+
+- input;
+- output;
+- validation;
+- permissions;
+- errors;
+- compatibility;
+- pagination;
+- idempotency;
+- concurrency.
+
+Do not expose persistence structure simply because it is convenient.
+
+Use `14 Data/API Design` first if the contract itself remains undecided.
+
+---
+
+# 12. External Integrations
+
+If the feature depends on an external provider:
+
+use the existing integration abstraction/pattern where appropriate.
+
+Verify current provider documentation for version-sensitive behavior.
+
+Do not invent provider APIs.
+
+Handle relevant:
+
+- timeout;
+- errors;
+- authentication;
+- rate limits;
+- retry;
+- duplicate execution;
+- malformed/unexpected responses.
+
+Use `15 External Integration` first if integration behavior is non-trivial.
+
+---
+
+# 13. Authorization
+
+For every protected operation ask:
+
+WHO MAY DO THIS?
+
+ON WHICH RESOURCE?
+
+UNDER WHAT CONDITIONS?
+
+Where applicable enforce authorization at the trusted server boundary.
+
+Do not rely solely on hidden UI controls.
+
+Do not confuse authentication with authorization.
+
+---
+
+# 14. Validation
+
+Validate untrusted input at the appropriate boundary.
+
+Keep validation proportional.
+
+Distinguish:
+
+SYNTAX / SHAPE
+
+DOMAIN RULE
+
+SECURITY RULE
+
+PERSISTENCE INVARIANT
+
+Avoid scattering the same rule inconsistently across multiple layers.
+
+Do not trust client-side validation as authoritative.
+
+---
+
+# 15. Error Behavior
+
+Implement expected failures intentionally.
+
+Use existing project error conventions.
+
+Errors should be:
+
+- actionable where appropriate;
+- machine-readable when clients require it;
+- safe;
+- consistent.
+
+Do not expose internal stack traces or secrets.
+
+Do not silently swallow unexpected errors.
+
+---
+
+# 16. Concurrency
+
+When the feature mutates shared state, consider:
+
+DUPLICATE SUBMISSION
+
+CONCURRENT UPDATE
+
+STALE DATA
+
+RETRY
+
+ATOMICITY
+
+Only introduce concurrency control when a realistic race exists.
+
+Do not solve imaginary distributed-systems problems.
+
+---
+
+# 17. Idempotency
+
+For operations likely to be retried or executed more than once, determine whether repeated execution is safe.
+
+Examples:
+
+- payment initiation;
+- resource creation;
+- webhook handling;
+- job scheduling;
+- external mutation.
+
+When duplicate side effects would be harmful, implement an appropriate idempotency strategy.
+
+Do not add idempotency infrastructure to operations that do not need it.
+
+---
+
+# 18. UI Implementation
+
+If UI is included:
+
+follow approved:
+
+- UX;
+- Screen Design;
+- Design System;
+- Responsive + States specification.
+
+Reuse existing components.
+
+Do not redesign during implementation.
+
+Implement relevant:
+
+- loading;
+- empty;
+- error;
+- disabled;
+- submitting;
+- success;
+- permission states.
+
+For significant designed UI, use `12 Design → Code`.
+
+---
+
+# 19. Accessibility
+
+User-facing behavior must remain accessible.
+
+Implement relevant:
+
+- semantics;
+- keyboard behavior;
+- focus;
+- labels;
+- error association;
+- status communication;
+- reduced motion.
+
+Prefer native behavior before custom recreation.
+
+Do not postpone obvious accessibility defects until QA.
+
+---
+
+# 20. Configuration
+
+If new configuration is required:
+
+use the repository's established mechanism.
+
+Update examples/documentation when needed.
+
+Never commit real secrets.
+
+Do not create environment variables for values that belong in normal application configuration/code.
+
+---
+
+# 21. Dependencies
+
+Before adding a dependency:
+
+confirm the project does not already solve the problem.
+
+Evaluate necessity.
+
+Prefer the existing ecosystem/framework capability when sufficient.
+
+Do not introduce major dependency upgrades as side effects of feature work.
+
+---
+
+# 22. Tests Before or During Implementation
+
+Inspect existing relevant tests.
+
+If a requirement is behaviorally important, create or update the appropriate test.
+
+Use:
+
+UNIT
+
+for isolated rules.
+
+INTEGRATION
+
+for meaningful boundaries.
+
+E2E
+
+for critical user journeys.
+
+Do not write tests that merely assert internal implementation structure.
+
+---
+
+# 23. Focused Verification Loop
+
+During implementation use:
+
+CHANGE
+
+→ FOCUSED CHECK
+
+→ FIX
+
+→ FOCUSED CHECK PASS.
+
+Examples:
+
+changed parser
+→ parser tests.
+
+changed API
+→ API integration tests.
+
+changed component
+→ component/browser check.
+
+Do not run the full expensive suite after every edit.
+
+---
+
+# 24. Bug Discovery During Implementation
+
+If you discover an unrelated bug:
+
+determine whether it blocks this feature.
+
+If NO:
+
+record it without expanding scope.
+
+If YES:
+
+make the smallest safe fix necessary and explain why.
+
+Do not turn feature implementation into repository cleanup.
+
+---
+
+# 25. Contradictory Evidence
+
+If implementation reveals that a prior assumption or design decision is wrong:
+
+STOP relying on the invalid assumption.
+
+Preserve working progress.
+
+Identify:
+
+EXPECTED
+
+OBSERVED
+
+IMPACT
+
+DECISION AFFECTED
+
+Then route appropriately:
+
+product issue
+→ `02 Feature Specification`.
+
+technical feasibility
+→ `03 Technical Spike`.
+
+architecture
+→ `05 Architecture Decision`.
+
+Do not force the original plan after evidence disproves it.
+
+---
+
+# 26. No Blind Retry
+
+If essentially the same implementation approach fails twice:
+
+reconsider the diagnosis.
+
+Do not repeatedly patch around the same failure.
+
+Inspect root cause or change strategy.
+
+Follow `WORKFLOW.md`.
+
+---
+
+# 27. Cleanup
+
+Before final validation remove:
+
+- debug logging;
+- temporary fixtures;
+- unused imports;
+- temporary flags;
+- dead experimental code;
+- commented alternatives;
+- unsafe test credentials;
+- temporary files.
+
+Do not remove unrelated pre-existing debug/dead code unless necessary.
+
+---
+
+# 28. Diff Review
+
+Before declaring completion inspect the complete feature diff.
+
+Ask:
+
+DID WE IMPLEMENT THE REQUEST?
+
+ANY UNRELATED CHANGE?
+
+ANY DUPLICATED LOGIC?
+
+ANY ACCIDENTAL PUBLIC CONTRACT CHANGE?
+
+ANY SECURITY ISSUE?
+
+ANY DATA-RISK CHANGE?
+
+ANY TEMPORARY ARTIFACT?
+
+ANY UNNECESSARY ABSTRACTION?
+
+ANY MISSING TEST?
+
+Review the diff as if reviewing another engineer's change.
+
+---
+
+# 29. Broader Validation
+
+After focused checks pass, execute the smallest complete validation justified by the feature.
+
+Depending on project:
+
+- format;
+- lint;
+- type check;
+- relevant unit tests;
+- relevant integration tests;
+- E2E;
+- build.
+
+Run broader/full suites when risk or project convention justifies them.
+
+Do not claim PASS for checks that were not executed.
+
+---
+
+# 30. Runtime Verification
+
+When feasible, verify actual behavior.
+
+Backend:
+
+exercise the real endpoint/flow.
+
+Frontend:
+
+open the real UI.
+
+Integration:
+
+exercise representative external/sandbox flow.
+
+Do not treat compilation as proof that the feature works.
+
+---
+
+# 31. Visual QA
+
+For meaningful visual changes:
+
+run `11 Visual QA`.
+
+Do not declare visual fidelity based only on code inspection.
+
+---
+
+# 32. Documentation
+
+Update documentation only if behavior, setup, architecture or operational workflow has materially changed.
+
+Do not generate documentation because code changed.
+
+---
+
+# 33. Checkpoint
+
+After successful completion create/preserve a checkpoint containing when relevant:
+
+STATUS
+
+BRANCH / COMMIT
+
+FEATURE
+
+TESTS
+
+BUILD
+
+MIGRATION STATE
+
+QA
+
+KNOWN LIMITATIONS
+
+NEXT STEP
+
+Future agents must be able to continue without repeating this work.
+
+---
+
+# 34. Output Format
+
+Return:
+
+# Feature Implementation — [Feature]
+
+## Status
+
+PASS / PARTIAL / FAIL
+
+## Implemented
+
+- ...
+
+## Important Decisions
+
+Only decisions made during implementation.
+
+## Files Changed
+
+Relevant files only.
+
+## Data / API Changes
+
+Only if applicable.
+
+## Tests Added / Changed
+
+- ...
+
+## Verification
+
+Exactly what was executed and result.
+
+## Runtime QA
+
+What was actually exercised.
+
+## Visual QA
+
+PASS / FAIL / NOT APPLICABLE / NOT EXECUTED.
+
+## Assumptions
+
+Only assumptions future work must know.
+
+## Not Verified
+
+...
+
+## Remaining Risks
+
+...
+
+## Checkpoint
+
+Concise reusable state.
+
+## Next
+
+Exactly one logical next action.
+
+## User Action
+
+None unless genuinely unavoidable.
+
+---
+
+# PASS Criterion
+
+Feature Implementation passes when:
+
+- requested behavior is complete;
+- acceptance criteria are satisfied;
+- important negative behavior works;
+- existing architecture is respected;
+- relevant tests pass;
+- the diff contains no unintended work;
+- actual behavior has been verified when possible;
+- no known blocker remains.
+
+"Code was written" is not PASS.
+
+"Build passed" alone is not PASS.
+
+The feature must work.

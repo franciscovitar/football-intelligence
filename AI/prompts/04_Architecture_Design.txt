@@ -1,0 +1,998 @@
+# 04 — ARCHITECTURE DESIGN
+
+## Mission
+
+Design the simplest architecture that reliably satisfies the product's known requirements, constraints and important quality attributes.
+
+Architecture is not a demonstration of sophistication.
+
+Architecture exists to enable the product while controlling complexity and risk.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+Use existing Product Discovery, Feature Specifications, Technical Spikes and checkpoints when available.
+
+Do not redo validated work.
+
+---
+
+# 1. Determine Architecture Scope
+
+First identify what is being designed:
+
+NEW SYSTEM
+
+EXISTING SYSTEM EVOLUTION
+
+SUBSYSTEM
+
+MAJOR FEATURE
+
+INTEGRATION
+
+DEPLOYMENT ARCHITECTURE
+
+Do not redesign the entire system when only one bounded area requires architectural work.
+
+---
+
+# 2. Establish Inputs
+
+Gather only relevant inputs.
+
+At minimum determine:
+
+PRODUCT GOALS
+
+CORE USE CASES
+
+FUNCTIONAL REQUIREMENTS
+
+BUSINESS RULES
+
+HARD CONSTRAINTS
+
+IMPORTANT QUALITY ATTRIBUTES
+
+EXPECTED SCALE
+
+SECURITY / PRIVACY REQUIREMENTS
+
+EXTERNAL SYSTEMS
+
+CURRENT ARCHITECTURE
+
+EXISTING CHECKPOINTS
+
+KNOWN TECHNICAL RISKS
+
+Do not invent missing product requirements.
+
+If product uncertainty blocks responsible design:
+
+use `01 Product Discovery` or `02 Feature Specification`.
+
+If technical feasibility blocks responsible design:
+
+use `03 Technical Spike`.
+
+---
+
+# 3. Separate Facts From Assumptions
+
+Classify important architectural inputs:
+
+KNOWN
+
+INFERRED
+
+ASSUMED
+
+UNKNOWN
+
+Do not hide architecture-critical assumptions.
+
+Prefer reversible design around uncertainty.
+
+Escalate only when an unknown materially changes the architecture and cannot be safely deferred.
+
+---
+
+# 4. Rank Architecture Drivers
+
+Identify the few requirements that actually shape the architecture.
+
+Examples:
+
+- data consistency;
+- security isolation;
+- latency;
+- availability;
+- offline capability;
+- deployment independence;
+- development speed;
+- scale;
+- interoperability;
+- auditability;
+- geographic constraints;
+- cost ceiling.
+
+Rank them.
+
+Do not treat every requirement as equally architecture-significant.
+
+---
+
+# 5. Quality Attribute Scenarios
+
+For architecture-driving quality attributes, define concrete scenarios.
+
+Use when helpful:
+
+SOURCE
+Who/what triggers the event?
+
+STIMULUS
+What happens?
+
+ENVIRONMENT
+Under what conditions?
+
+ARTIFACT
+What part of the system is affected?
+
+RESPONSE
+What should the system do?
+
+MEASURE
+How do we know the requirement is met?
+
+Avoid vague requirements.
+
+Example:
+
+Instead of:
+"High availability."
+
+Prefer:
+"During failure of one application instance, normal read traffic continues without user-visible interruption beyond the agreed recovery threshold."
+
+Only define scenarios that materially affect design.
+
+---
+
+# 6. Start With the Simplest Viable Shape
+
+Begin from the least distributed architecture that can satisfy the requirements.
+
+For many applications, evaluate first:
+
+MODULAR MONOLITH / MODULAR APPLICATION
+
+Only introduce additional runtime boundaries when justified.
+
+Do not begin from:
+
+- microservices;
+- queues;
+- event buses;
+- distributed caches;
+- multiple databases;
+- Kubernetes;
+- service mesh;
+- CQRS;
+- event sourcing
+
+unless requirements create a concrete need.
+
+---
+
+# 7. Architecture Style
+
+If selecting an architectural style, explain:
+
+WHY THIS STYLE
+
+WHICH REQUIREMENTS IT SUPPORTS
+
+CONSTRAINTS IT INTRODUCES
+
+BENEFITS
+
+COSTS
+
+FAILURE MODES
+
+OPERATIONAL CONSEQUENCES
+
+WHEN IT WOULD STOP BEING APPROPRIATE
+
+Do not pursue architectural purity.
+
+A style is a tool and a set of constraints, not the objective.
+
+---
+
+# 8. System Context
+
+Define the system boundary.
+
+Identify:
+
+USERS / ACTORS
+
+SYSTEM
+
+EXTERNAL SYSTEMS
+
+EXTERNAL DATA SOURCES
+
+TRUST BOUNDARIES
+
+MAJOR INTERACTIONS
+
+A simple context diagram should make clear what belongs inside and outside the system.
+
+Prefer a compact C4-style or equivalent context representation when useful.
+
+Do not create a diagram merely for decoration.
+
+---
+
+# 9. Containers / Major Runtime Units
+
+Identify major independently running units only when useful.
+
+Examples:
+
+- web application;
+- backend application;
+- worker;
+- database;
+- object storage;
+- external provider.
+
+For each define:
+
+RESPONSIBILITY
+
+TECHNOLOGY ROLE
+
+DATA OWNERSHIP
+
+INTERFACES
+
+DEPENDENCIES
+
+DEPLOYMENT RELATIONSHIP
+
+Do not confuse source-code modules with deployment containers.
+
+---
+
+# 10. Modules / Components
+
+Within the application, define major logical modules.
+
+For each module identify:
+
+PURPOSE
+
+RESPONSIBILITIES
+
+OWNED DOMAIN CONCEPTS
+
+PUBLIC CONTRACT
+
+DEPENDENCIES
+
+DATA OWNERSHIP
+
+Avoid decomposing to class-level detail.
+
+Architecture should define boundaries, not pre-write implementation.
+
+---
+
+# 11. Dependency Direction
+
+Make important dependency relationships explicit.
+
+Prefer dependencies that point toward stable concepts.
+
+Avoid:
+
+- cycles;
+- unrelated cross-module access;
+- hidden shared state;
+- direct database-table coupling between independent modules;
+- unnecessary framework leakage into business rules.
+
+Do not introduce interfaces solely to reverse every dependency.
+
+Use indirection only when it has architectural value.
+
+---
+
+# 12. Primary Data Flows
+
+Describe important end-to-end flows.
+
+For each critical flow show, when relevant:
+
+actor
+→ entry point
+→ application/module
+→ data store
+→ external systems
+→ result.
+
+Include asynchronous boundaries where they actually exist.
+
+Do not diagram every CRUD operation.
+
+Focus on flows that explain or stress the architecture.
+
+---
+
+# 13. Data Architecture
+
+Define:
+
+AUTHORITATIVE DATA SOURCES
+
+OWNERSHIP
+
+MAIN STORAGE TECHNOLOGY
+
+CONSISTENCY REQUIREMENTS
+
+TRANSACTION BOUNDARIES
+
+IMPORTANT INVARIANTS
+
+LIFECYCLE
+
+BACKUP / RECOVERY EXPECTATIONS
+
+Do not choose multiple data stores without a clear reason.
+
+Prefer one fit-for-purpose primary database when sufficient.
+
+---
+
+# 14. Consistency
+
+Determine where the product requires:
+
+STRONG CONSISTENCY
+
+EVENTUAL CONSISTENCY
+
+NO CROSS-COMPONENT CONSISTENCY GUARANTEE
+
+Do not introduce eventual consistency simply because the architecture is distributed.
+
+If eventual consistency exists, define:
+
+- what can be temporarily inconsistent;
+- maximum acceptable staleness when relevant;
+- user-visible behavior;
+- duplicate handling;
+- recovery/reconciliation.
+
+---
+
+# 15. Communication
+
+Choose communication mechanisms based on actual requirements.
+
+Possible:
+
+- in-process call;
+- database transaction;
+- HTTP;
+- RPC;
+- event;
+- queue;
+- stream;
+- WebSocket;
+- SSE.
+
+For each distributed boundary justify:
+
+WHY DISTRIBUTED COMMUNICATION EXISTS
+
+SYNC OR ASYNC
+
+TIMEOUT
+
+RETRY
+
+IDEMPOTENCY
+
+FAILURE BEHAVIOR
+
+Do not add asynchronous messaging solely to "decouple" code that could remain in-process.
+
+---
+
+# 16. External Integrations
+
+For each significant external dependency define:
+
+PURPOSE
+
+CONTRACT
+
+AUTHENTICATION
+
+OWNERSHIP
+
+TIMEOUT
+
+FAILURE BEHAVIOR
+
+RATE LIMIT CONSIDERATIONS
+
+RETRY POLICY
+
+DATA VALIDATION
+
+OBSERVABILITY
+
+FALLBACK / DEGRADATION WHEN RELEVANT
+
+Use `15 External Integration` for detailed integration design.
+
+---
+
+# 17. Security Architecture
+
+Identify:
+
+TRUST BOUNDARIES
+
+AUTHENTICATION
+
+AUTHORIZATION
+
+PRIVILEGED OPERATIONS
+
+SECRET MANAGEMENT
+
+SENSITIVE DATA
+
+DATA IN TRANSIT
+
+DATA AT REST
+
+ATTACK SURFACES
+
+ADMINISTRATIVE ACCESS
+
+EXTERNAL ENTRY POINTS
+
+Apply least privilege.
+
+Do not assume internal network location equals trust.
+
+When security materially shapes architecture, recommend explicit threat modeling/security review.
+
+---
+
+# 18. Privacy
+
+When personal or sensitive data exists, determine:
+
+- why it is collected;
+- where it flows;
+- where it is stored;
+- who can access it;
+- retention;
+- deletion;
+- exposure to external processors;
+- logging/analytics constraints.
+
+Minimize unnecessary data movement and duplication.
+
+---
+
+# 19. Reliability
+
+For critical flows determine:
+
+- acceptable failure behavior;
+- redundancy needs;
+- recovery expectations;
+- dependency failure behavior;
+- graceful degradation;
+- backup requirements;
+- data-loss tolerance.
+
+Do not add high-availability infrastructure without a requirement.
+
+Reliability targets should follow user/business impact.
+
+---
+
+# 20. Failure Modes
+
+For architecture-significant components ask:
+
+What can fail?
+
+What detects it?
+
+What happens to users?
+
+What data can be affected?
+
+How does the system recover?
+
+Consider only realistic/high-impact failure modes.
+
+Do not produce a massive theoretical FMEA unless requested.
+
+---
+
+# 21. Scalability
+
+Start from realistic load.
+
+Identify:
+
+EXPECTED LOAD
+
+LIKELY GROWTH
+
+DOMINANT RESOURCE
+
+KNOWN BOTTLENECKS
+
+SCALING UNIT
+
+Prefer stateless horizontal scaling where useful, but do not architect for hypothetical internet-scale traffic.
+
+Do not shard, distribute or partition before requirements justify it.
+
+---
+
+# 22. Performance
+
+Identify latency-sensitive flows.
+
+Consider:
+
+- number of network hops;
+- database access;
+- serialization;
+- client/server boundary;
+- external services;
+- synchronous dependencies.
+
+Avoid adding caches without a demonstrated need and invalidation strategy.
+
+When uncertainty is significant, recommend `03 Technical Spike` or `22 Performance Diagnosis`.
+
+---
+
+# 23. Operability
+
+Architecture must be operable.
+
+Determine when relevant:
+
+DEPLOYMENT
+
+CONFIGURATION
+
+OBSERVABILITY
+
+HEALTH CHECKS
+
+FAILURE DIAGNOSIS
+
+BACKUPS
+
+RESTORE
+
+ROLLBACK
+
+MIGRATIONS
+
+ROUTINE OPERATIONS
+
+EMERGENCY OPERATIONS
+
+Do not require humans to manually coordinate routine operations when simple automation is feasible.
+
+---
+
+# 24. Observability
+
+For critical boundaries determine which signals would answer:
+
+What failed?
+
+Where?
+
+Why?
+
+How often?
+
+For whom/which operation?
+
+Consider:
+
+- structured logs;
+- metrics;
+- traces;
+- error reporting;
+- business-critical operational signals.
+
+Do not add telemetry with no consumer or purpose.
+
+---
+
+# 25. Deployment Architecture
+
+Define only what matters:
+
+ENVIRONMENTS
+
+RUNTIME
+
+HOSTING
+
+NETWORK BOUNDARIES
+
+STATEFUL SERVICES
+
+SECRETS
+
+DEPLOYMENT UNIT
+
+MIGRATION ORDER
+
+ROLLBACK CAPABILITY
+
+Do not make Production the default development target.
+
+Prefer infrastructure/configuration that is reproducible when appropriate.
+
+---
+
+# 26. Change and Evolution
+
+Prefer architecture that can evolve incrementally.
+
+For likely change areas identify:
+
+STABLE CORE
+
+VOLATILE BOUNDARIES
+
+EXTERNAL DEPENDENCIES
+
+POTENTIAL FUTURE PRESSURE
+
+Do not build future features.
+
+Only avoid unnecessarily locking the architecture against changes that are genuinely foreseeable.
+
+---
+
+# 27. Reversibility
+
+Classify important architectural decisions:
+
+EASY TO REVERSE
+
+MODERATELY EXPENSIVE
+
+HARD TO REVERSE
+
+Spend analysis effort in proportion to reversibility.
+
+Do not spend days optimizing a decision that can be safely changed in minutes.
+
+For hard-to-reverse uncertain decisions, prefer a Technical Spike before commitment.
+
+---
+
+# 28. Cost
+
+Consider cost as an architectural quality when meaningful.
+
+Identify major drivers:
+
+- compute;
+- storage;
+- database;
+- data transfer;
+- third-party APIs;
+- managed services;
+- operational labor.
+
+Avoid increasing fixed operational cost to solve hypothetical future load.
+
+Do not optimize trivial costs at the expense of major engineering complexity.
+
+---
+
+# 29. Build vs Buy / Managed vs Self-Hosted
+
+For significant capabilities evaluate whether the system should:
+
+BUILD
+
+USE FRAMEWORK/PLATFORM CAPABILITY
+
+USE MANAGED SERVICE
+
+BUY/INTEGRATE THIRD-PARTY PRODUCT
+
+Consider:
+
+- strategic differentiation;
+- complexity;
+- reliability;
+- security;
+- team expertise;
+- operational ownership;
+- cost;
+- lock-in;
+- exit difficulty.
+
+Prefer not owning infrastructure that provides no product advantage.
+
+---
+
+# 30. Architecture Risks
+
+Identify only meaningful risks.
+
+For each:
+
+RISK
+
+LIKELIHOOD
+
+IMPACT
+
+MITIGATION
+
+VALIDATION NEEDED
+
+Distinguish architectural risks from generic project risks.
+
+High-impact uncertain technical risks should become Technical Spikes.
+
+---
+
+# 31. Trade-offs
+
+For each important design choice explicitly state:
+
+WE GAIN
+
+WE GIVE UP
+
+WHY THIS IS ACCEPTABLE
+
+Architecture with no trade-offs documented is probably hiding them.
+
+Do not describe a chosen architecture only through advantages.
+
+---
+
+# 32. Alternatives Considered
+
+Include realistic alternatives.
+
+For each:
+
+ALTERNATIVE
+
+WHY IT WAS PLAUSIBLE
+
+WHY IT WAS NOT SELECTED NOW
+
+WHEN IT MIGHT BECOME BETTER
+
+Do not include absurd alternatives merely to make the selected design appear superior.
+
+---
+
+# 33. Architectural Decisions
+
+Identify decisions deserving a durable ADR.
+
+Do not write an ADR for every technology.
+
+Examples that may deserve one:
+
+- primary data model/storage strategy;
+- architecture style;
+- major runtime boundary;
+- consistency model;
+- authentication model;
+- major provider/platform;
+- public integration contract.
+
+Use `05 Architecture Decision` for decisions requiring dedicated analysis.
+
+---
+
+# 34. Diagrams
+
+Create diagrams only when they improve understanding.
+
+Preferred minimum when warranted:
+
+SYSTEM CONTEXT
+
+MAJOR CONTAINERS / RUNTIME UNITS
+
+ONE OR MORE CRITICAL DATA FLOWS
+
+DEPLOYMENT VIEW
+
+Use Mermaid, C4-compatible notation or another text-based representation when practical.
+
+Every diagram must have a purpose.
+
+Do not create class diagrams before implementation unless the domain genuinely requires it.
+
+---
+
+# 35. Architecture Validation
+
+Before finishing, challenge the design.
+
+Ask:
+
+Does it satisfy the important functional requirements?
+
+Does it satisfy architecture-driving quality attributes?
+
+Are responsibilities coherent?
+
+Are boundaries justified?
+
+Is anything distributed unnecessarily?
+
+Are there hidden single points of failure that matter?
+
+Are important trust boundaries understood?
+
+Can critical failures be diagnosed?
+
+Can the system be deployed and rolled back?
+
+Is data ownership clear?
+
+Could a materially simpler architecture satisfy the same requirements?
+
+If yes:
+
+prefer the simpler architecture.
+
+---
+
+# 36. Output Format
+
+Return:
+
+# Architecture Design
+
+## 1. Scope
+
+What is being designed.
+
+## 2. Architecture Drivers
+
+Ranked.
+
+## 3. Constraints
+
+Hard constraints and relevant assumptions.
+
+## 4. Recommended Architecture
+
+Short explanation.
+
+## 5. System Context
+
+Diagram + explanation when useful.
+
+## 6. Major Runtime Units
+
+Responsibilities and relationships.
+
+## 7. Modules / Boundaries
+
+Logical structure.
+
+## 8. Critical Flows
+
+Only architecture-significant flows.
+
+## 9. Data Architecture
+
+Ownership, consistency and storage.
+
+## 10. Integrations
+
+Important external boundaries.
+
+## 11. Security / Trust Boundaries
+
+...
+
+## 12. Reliability / Failure Behavior
+
+...
+
+## 13. Performance / Scale
+
+...
+
+## 14. Deployment / Operations
+
+...
+
+## 15. Observability
+
+...
+
+## 16. Key Trade-offs
+
+...
+
+## 17. Alternatives Considered
+
+...
+
+## 18. Architecture Risks
+
+...
+
+## 19. Technical Spikes Required
+
+None or explicit list.
+
+## 20. ADRs Required
+
+None or explicit list.
+
+## 21. Implementation Order
+
+Smallest coherent sequence of architectural increments.
+
+## 22. Readiness
+
+Choose:
+
+READY
+
+READY WITH EXPLICIT ASSUMPTIONS
+
+TECHNICAL SPIKE REQUIRED
+
+PRODUCT CLARIFICATION REQUIRED
+
+ARCHITECTURE DECISION REQUIRED
+
+## 23. Next
+
+Exactly one next prompt/action.
+
+---
+
+# Completion Criterion
+
+Architecture Design is complete when the system has enough explicit structure and constraints to guide implementation without unnecessarily constraining implementation details.
+
+The architecture should make the important decisions obvious and leave inexpensive decisions to the engineers implementing the system.

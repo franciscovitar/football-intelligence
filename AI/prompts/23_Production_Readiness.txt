@@ -1,0 +1,1145 @@
+# 23 — PRODUCTION READINESS
+
+## Mission
+
+Determine whether the application, feature, service or release is genuinely ready to serve real users in its intended production environment.
+
+Production readiness is broader than:
+
+"tests pass"
+
+or
+
+"deployment succeeded."
+
+Evaluate the system as something that must:
+
+operate;
+
+fail;
+
+recover;
+
+be secured;
+
+be observed;
+
+be maintained
+
+under real conditions.
+
+Follow `AGENTS.md` and `WORKFLOW.md`.
+
+Use existing certified checkpoints.
+
+Do not repeat validated work without a reason.
+
+---
+
+# 1. Define Readiness Scope
+
+Determine what is being evaluated:
+
+NEW APPLICATION LAUNCH
+
+MAJOR FEATURE
+
+SERVICE
+
+MIGRATION
+
+HIGH-RISK CHANGE
+
+PUBLIC API
+
+INTEGRATION
+
+INTERNAL TOOL.
+
+Production requirements must be proportional to impact.
+
+Do not apply global-scale infrastructure requirements to a tiny internal application.
+
+---
+
+# 2. Define Production
+
+Identify the actual production environment.
+
+Determine:
+
+HOSTING
+
+REGION
+
+DATABASE
+
+STORAGE
+
+EXTERNAL PROVIDERS
+
+DOMAIN
+
+AUTH
+
+TRAFFIC
+
+USER TYPE
+
+SENSITIVE DATA
+
+BUSINESS CRITICALITY.
+
+"Production ready" has no meaning without a target environment.
+
+---
+
+# 3. Current Checkpoint
+
+Collect existing evidence:
+
+CODE REVIEW
+
+TESTS
+
+SECURITY REVIEW
+
+BUILD
+
+VISUAL QA
+
+PERFORMANCE TEST
+
+MIGRATION TEST
+
+DEPLOYMENT PREVIEW
+
+ARCHITECTURE DECISIONS.
+
+Do not rerun everything automatically.
+
+Identify only missing or invalidated evidence.
+
+---
+
+# 4. Critical User Journeys
+
+Identify the small set of flows whose failure would make launch unsuccessful.
+
+Examples:
+
+SIGN UP
+
+LOGIN
+
+PRIMARY PRODUCT ACTION
+
+PAYMENT
+
+SAVE / SUBMIT
+
+ADMIN CRITICAL ACTION.
+
+Each critical journey must have sufficient verification.
+
+Do not require E2E coverage of every minor interaction.
+
+---
+
+# 5. Functional Readiness
+
+Verify:
+
+CORE REQUIREMENTS COMPLETE
+
+ACCEPTANCE CRITERIA PASS
+
+IMPORTANT ERROR PATHS WORK
+
+NO KNOWN BLOCKING BUG
+
+NO PLACEHOLDER FUNCTIONALITY
+
+NO BROKEN FEATURE FLAG STATE.
+
+Do not launch with known critical behavior replaced by TODO/fake implementation unless explicitly intended.
+
+---
+
+# 6. Build / Quality Gates
+
+Check applicable:
+
+FORMAT
+
+LINT
+
+TYPECHECK
+
+UNIT TEST
+
+INTEGRATION TEST
+
+E2E
+
+BUILD.
+
+Do not require every possible check.
+
+Do require project-defined gates to be understood and passing.
+
+Never ignore a failing required check silently.
+
+---
+
+# 7. Environment Reproducibility
+
+Ensure production behavior is configured intentionally.
+
+Verify:
+
+runtime;
+
+version;
+
+environment variables;
+
+build configuration;
+
+region;
+
+dependencies.
+
+Avoid undocumented manual production-only setup.
+
+---
+
+# 8. Secrets
+
+Verify production secrets:
+
+exist;
+
+are scoped correctly;
+
+are not committed;
+
+are not public;
+
+have appropriate permissions;
+
+refer to correct environment/provider.
+
+Do not print secret values merely to prove they exist.
+
+Verify metadata or safe functionality instead.
+
+---
+
+# 9. Authentication
+
+If applicable verify real production-like behavior for:
+
+LOGIN
+
+LOGOUT
+
+SESSION
+
+EXPIRATION
+
+RESET
+
+OAUTH CALLBACK
+
+MFA when relevant.
+
+Do not rely solely on local auth mocks before launch.
+
+---
+
+# 10. Authorization
+
+Verify important permission boundaries.
+
+Include at minimum relevant negative cases:
+
+unauthenticated;
+
+wrong user;
+
+wrong tenant;
+
+non-admin.
+
+Do not assume authorization works because happy-path users succeed.
+
+---
+
+# 11. Security Readiness
+
+Determine whether the release requires `21 Security Review`.
+
+Ensure no known material security finding remains unresolved.
+
+Verify when relevant:
+
+security headers;
+
+TLS;
+
+secret handling;
+
+rate controls;
+
+deployment access;
+
+admin access;
+
+dependency risk;
+
+file handling;
+
+webhook verification.
+
+Do not check security controls irrelevant to the architecture merely to complete a checklist.
+
+---
+
+# 12. Sensitive Data
+
+Verify:
+
+collection;
+
+storage;
+
+transmission;
+
+logging;
+
+analytics;
+
+provider exposure;
+
+retention
+
+match intended behavior.
+
+Production logs must not accidentally become a sensitive-data dump.
+
+---
+
+# 13. Database Readiness
+
+Verify:
+
+PRODUCTION DATABASE EXISTS
+
+CORRECT CONNECTION
+
+SCHEMA
+
+MIGRATIONS
+
+CONSTRAINTS
+
+INDEXES REQUIRED FOR KNOWN WORKLOAD
+
+BACKUP when needed
+
+RECOVERY strategy.
+
+Do not manually modify production schema outside the controlled migration process unless emergency procedure requires it.
+
+---
+
+# 14. Migration Safety
+
+For pending schema/data changes verify:
+
+migration tested;
+
+old/new version compatibility when needed;
+
+duration/lock implications;
+
+backup/recovery;
+
+rollback or forward-fix strategy;
+
+data validation after migration.
+
+Destructive migrations require greater evidence.
+
+---
+
+# 15. Existing Data
+
+If launch involves migration/backfill/import verify representative real/sanitized data.
+
+Test:
+
+missing;
+
+legacy;
+
+edge;
+
+large records.
+
+Do not assume clean development fixtures represent production data.
+
+---
+
+# 16. Backup
+
+For important persistent data determine:
+
+WHAT IS BACKED UP?
+
+HOW OFTEN?
+
+WHERE?
+
+WHO CAN RESTORE?
+
+Do not enable backup and automatically assume recovery is solved.
+
+---
+
+# 17. Restore
+
+For sufficiently important systems, know how restoration works.
+
+A backup that has never been restorable may provide false confidence.
+
+Test restore proportionally to data criticality.
+
+Do not require elaborate disaster-recovery exercises for disposable data.
+
+---
+
+# 18. Data Loss Tolerance
+
+When relevant define:
+
+RPO
+
+acceptable data-loss window.
+
+RTO
+
+acceptable recovery time.
+
+Use business impact, not arbitrary enterprise numbers.
+
+---
+
+# 19. External Providers
+
+Verify production configuration for each critical provider:
+
+CREDENTIAL
+
+ENVIRONMENT / LIVE MODE
+
+CALLBACK
+
+WEBHOOK
+
+DOMAIN
+
+REGION
+
+QUOTA
+
+RATE LIMIT
+
+BILLING.
+
+Do not accidentally ship sandbox keys/routes to production or vice versa.
+
+---
+
+# 20. Webhooks
+
+For production webhooks verify:
+
+public route;
+
+signature secret;
+
+provider registration;
+
+actual delivery;
+
+duplicate handling;
+
+failure/retry.
+
+Do not claim webhook readiness based only on calling the handler manually.
+
+---
+
+# 21. Email / Messaging
+
+When relevant verify:
+
+sender/domain;
+
+provider production permission;
+
+recipient behavior;
+
+templates;
+
+unsubscribe/compliance when applicable;
+
+failure behavior.
+
+Prevent accidental bulk sends during launch testing.
+
+---
+
+# 22. DNS / Domain
+
+Verify:
+
+domain ownership;
+
+DNS;
+
+TLS;
+
+canonical host;
+
+redirect behavior;
+
+www/non-www if relevant.
+
+Do not change DNS destructively without understanding current routing.
+
+---
+
+# 23. Configuration
+
+Compare environment-specific configuration intentionally.
+
+Look for accidental differences such as:
+
+DEBUG ENABLED
+
+TEST PROVIDER
+
+LOCAL URL
+
+INSECURE COOKIE
+
+WRONG CALLBACK
+
+DEVELOPMENT FEATURE FLAG.
+
+Do not copy local `.env` into Production wholesale.
+
+---
+
+# 24. Feature Flags
+
+For flags verify:
+
+default;
+
+target audience;
+
+production value;
+
+rollback capability;
+
+stale flags.
+
+Do not allow an old forgotten flag to control critical security behavior ambiguously.
+
+---
+
+# 25. Observability
+
+Production should provide enough visibility to diagnose meaningful failures.
+
+Evaluate:
+
+ERROR REPORTING
+
+STRUCTURED LOGS
+
+METRICS
+
+TRACING where useful
+
+HEALTH SIGNALS.
+
+Ask:
+
+Can we know when the product's critical journey is broken?
+
+Do not instrument every function.
+
+---
+
+# 26. User-Centric Monitoring
+
+Prefer signals tied to actual product health.
+
+Examples:
+
+successful checkouts;
+
+successful submissions;
+
+job completion;
+
+API success;
+
+web vital;
+
+error rate.
+
+Infrastructure CPU alone does not prove the product works.
+
+---
+
+# 27. Logs
+
+Ensure logs:
+
+contain useful context;
+
+can be accessed after deployment;
+
+do not expose secrets;
+
+retain according to need.
+
+Know how to locate logs for a specific deployment/request.
+
+---
+
+# 28. Alerts
+
+For important services define actionable alerts.
+
+Good alerts answer:
+
+something users care about is or soon will be broken.
+
+Avoid alerts for every transient anomaly.
+
+Avoid launch with zero way to notice a major outage when reliability matters.
+
+---
+
+# 29. SLO / Reliability Objective
+
+For systems where reliability matters, define realistic expectations.
+
+Possible:
+
+availability;
+
+success rate;
+
+latency;
+
+job completion.
+
+Do not create ceremonial SLOs no one will monitor.
+
+---
+
+# 30. Dependency Failure
+
+For critical dependencies know what users experience if they fail.
+
+Possible:
+
+FAIL EXPLICITLY
+
+DEGRADE
+
+USE CACHED DATA
+
+QUEUE ACTION
+
+DISABLE CAPABILITY.
+
+A provider outage should not unnecessarily disable unrelated functionality.
+
+---
+
+# 31. Timeouts / Retries
+
+Verify external requests have appropriate bounded behavior.
+
+Check retry safety and idempotency.
+
+Do not let a failed provider cause infinite request accumulation.
+
+---
+
+# 32. Capacity
+
+Determine whether expected launch traffic can be handled.
+
+For low-risk small applications, architecture knowledge may be enough.
+
+For material/uncertain workloads use performance testing.
+
+Do not perform load testing ceremonially when expected traffic is trivial and architecture has huge margin.
+
+---
+
+# 33. Performance Readiness
+
+Check known important performance requirements.
+
+For web products review relevant user metrics.
+
+For backend workloads review representative:
+
+latency;
+
+throughput;
+
+resource behavior.
+
+If performance is uncertain and business-critical:
+
+use `22 Performance Diagnosis` / load testing.
+
+---
+
+# 34. Scalability Limits
+
+Know obvious current limitations.
+
+Example:
+
+single worker can process N/min.
+
+provider quota X/day.
+
+database connection limit.
+
+Do not claim infinite scalability.
+
+Document only limits likely to matter.
+
+---
+
+# 35. Cost
+
+Identify potentially unbounded production costs.
+
+Examples:
+
+AI calls;
+
+email;
+
+SMS;
+
+storage;
+
+image processing;
+
+egress;
+
+serverless execution;
+
+external API.
+
+Add budgets/limits/alerts where financial exposure justifies them.
+
+Do not build elaborate cost control for negligible fixed-cost workloads.
+
+---
+
+# 36. Abuse
+
+Consider whether public launch creates abuse paths.
+
+Examples:
+
+bot signup;
+
+AI generation;
+
+email spam;
+
+file upload;
+
+scraping;
+
+expensive public API.
+
+Use appropriate rate limits/quotas/verification.
+
+Do not block legitimate users unnecessarily.
+
+---
+
+# 37. Client Compatibility
+
+Verify relevant:
+
+browsers;
+
+mobile sizes;
+
+device/platform;
+
+API clients.
+
+Use actual product requirements.
+
+Do not test obsolete environments unless supported.
+
+---
+
+# 38. Accessibility
+
+For public user-facing applications verify important accessibility fundamentals and any project-defined standard.
+
+Do not declare accessibility from automated tooling alone.
+
+For material UI release, include actual keyboard/focus verification.
+
+---
+
+# 39. SEO / Metadata
+
+Only for products where discoverability matters verify:
+
+titles;
+
+description;
+
+canonical;
+
+robots;
+
+sitemap;
+
+social metadata;
+
+structured data when relevant.
+
+Do not make SEO a launch blocker for private applications.
+
+---
+
+# 40. Analytics
+
+If product measurement matters verify:
+
+analytics events;
+
+production property/environment;
+
+consent behavior when applicable;
+
+no sensitive data leakage.
+
+Do not block launch solely because vanity analytics are absent.
+
+---
+
+# 41. Error Pages
+
+Verify important production error scenarios:
+
+404;
+
+500;
+
+permission denied;
+
+offline/unavailable where relevant.
+
+Users should not receive raw stack traces.
+
+---
+
+# 42. Operational Ownership
+
+Determine:
+
+WHO OWNS THE SYSTEM?
+
+WHO RESPONDS IF IT BREAKS?
+
+HOW DO THEY ACCESS DIAGNOSTICS?
+
+For small projects this may simply be one person.
+
+Do not create enterprise incident organizations unnecessarily.
+
+---
+
+# 43. Incident Path
+
+Know the minimum path:
+
+DETECT
+
+→ ASSESS
+
+→ CONTAIN / ROLLBACK
+
+→ RECOVER
+
+→ DIAGNOSE.
+
+Do not require a 40-page incident manual.
+
+Critical actions should be known.
+
+---
+
+# 44. Rollback
+
+Before launch know whether code can be rolled back safely.
+
+Verify:
+
+previous good deployment;
+
+deployment mechanism;
+
+migration compatibility;
+
+feature flag when relevant.
+
+Rollback that restores old code but cannot read the new database schema is not a complete rollback.
+
+---
+
+# 45. Forward Fix
+
+Some changes cannot safely roll back.
+
+Examples:
+
+destructive migration;
+
+external side effect;
+
+irreversible data change.
+
+Define a forward-fix/recovery strategy instead.
+
+Do not claim rollback capability that does not exist.
+
+---
+
+# 46. Deployment Permissions
+
+Verify who/what may release Production.
+
+Apply minimum practical permissions.
+
+Do not use highly privileged personal credentials in automation when scoped credentials exist.
+
+---
+
+# 47. Release Safety
+
+Determine appropriate release mechanism:
+
+DIRECT RELEASE
+
+MANUAL PROMOTION
+
+FEATURE FLAG
+
+CANARY
+
+ROLLING
+
+LIMITED AUDIENCE.
+
+Use sophistication proportional to risk.
+
+Do not implement canary infrastructure for every static site.
+
+---
+
+# 48. Smoke Tests
+
+Define the smallest set of high-value production checks.
+
+Examples:
+
+homepage/health endpoint;
+
+login;
+
+primary action;
+
+database write/read;
+
+critical provider.
+
+Smoke tests should detect catastrophic release failures quickly.
+
+---
+
+# 49. Known Issues
+
+List unresolved known issues.
+
+Classify:
+
+BLOCKER
+
+ACCEPTED RISK
+
+POST-LAUNCH.
+
+Do not hide known problems merely to achieve READY status.
+
+---
+
+# 50. Evidence Matrix
+
+For important readiness area record:
+
+PASS
+
+FAIL
+
+NOT APPLICABLE
+
+NOT VERIFIED.
+
+Do not treat NOT VERIFIED as PASS.
+
+---
+
+# 51. Readiness Decision
+
+Choose:
+
+READY
+
+All material launch requirements satisfied.
+
+READY WITH ACCEPTED RISK
+
+Non-blocking known risks explicitly understood.
+
+NOT READY
+
+One or more material blockers.
+
+CONDITIONAL
+
+A specific external/manual prerequisite remains.
+
+Do not return vague:
+
+"mostly ready."
+
+---
+
+# 52. Output Format
+
+# Production Readiness — [Release]
+
+## Verdict
+
+READY / READY WITH ACCEPTED RISK / NOT READY / CONDITIONAL
+
+## Release Scope
+
+...
+
+## Certified Checkpoints Reused
+
+...
+
+## Critical Journeys
+
+...
+
+## Readiness Matrix
+
+| Area | Status | Evidence | Action |
+|---|---|---|---|
+
+Areas only as applicable:
+Functional
+Tests
+Security
+Data
+Migrations
+Integrations
+Observability
+Reliability
+Performance
+Accessibility
+Cost
+Operations
+Rollback
+
+## Blockers
+
+Only actual blockers.
+
+## Accepted Risks
+
+...
+
+## Not Verified
+
+...
+
+## Production Configuration Actions
+
+Only missing actions.
+
+## Rollback / Recovery
+
+...
+
+## Smoke Test Plan
+
+...
+
+## User Intervention
+
+Prefer none.
+
+## Next
+
+Usually:
+
+`24 Deploy + Real QA`.
+
+---
+
+# READY Criterion
+
+READY means there is enough evidence to responsibly expose the release to its intended real users.
+
+It does NOT mean:
+
+perfect;
+
+infinitely scalable;
+
+zero future incidents;
+
+every possible checklist item completed.
+
+Production readiness is proportional risk management backed by evidence.
