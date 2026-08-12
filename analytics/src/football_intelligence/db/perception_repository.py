@@ -120,13 +120,12 @@ class PerceptionRepository:
                 where source_id = %s
                   and (
                     canonical_url = %s
-                    or (%s is not null and external_id = %s)
+                    or external_id = %s
                   )
                 """,
                 (
                     source_id,
                     evidence.canonical_url,
-                    evidence.external_id,
                     evidence.external_id,
                 ),
             ).fetchall()
