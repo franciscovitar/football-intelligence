@@ -221,7 +221,7 @@ jobs:
             > "$RUNNER_TEMP/team.html"
           grep -q "Web Smoke City" "$RUNNER_TEMP/team.html"
           grep -q "Resultados por encima del proceso" "$RUNNER_TEMP/team.html"
-          grep -q "Tactical Intelligence" "$RUNNER_TEMP/team.html"
+          grep -q "TACTICAL INTELLIGENCE" "$RUNNER_TEMP/team.html"
           grep -q "4-4-2" "$RUNNER_TEMP/team.html"
 
           curl -fsS \
