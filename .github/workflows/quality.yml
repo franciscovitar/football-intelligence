@@ -74,18 +74,26 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_test
     steps:
       - uses: actions/checkout@v6.0.2
-      - name: Apply data foundation migration
-        run: >-
-          psql -v ON_ERROR_STOP=1
-          -f database/migrations/20260811181000_create_data_foundation.sql
+      - name: Apply migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            echo "Applying $migration"
+            psql -v ON_ERROR_STOP=1 -f "$migration"
+          done
       - name: Apply core seeds
         run: >-
           psql -v ON_ERROR_STOP=1
           -f database/seeds/001_core_catalog.sql
       - name: Verify schema contracts
-        run: >-
-          psql -v ON_ERROR_STOP=1
-          -f database/tests/001_schema_contract.sql
+        shell: bash
+        run: |
+          set -euo pipefail
+          for contract in database/tests/*.sql; do
+            echo "Checking $contract"
+            psql -v ON_ERROR_STOP=1 -f "$contract"
+          done
       - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.13"
@@ -94,6 +102,6 @@ jobs:
           enable-cache: true
       - working-directory: analytics
         run: uv sync --dev --locked
-      - name: Verify provider persistence integration
+      - name: Verify PostgreSQL integrations
         working-directory: analytics
-        run: uv run pytest tests/integration/test_provider_persistence.py
+        run: uv run pytest tests/integration

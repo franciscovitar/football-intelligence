@@ -45,6 +45,12 @@ jobs:
           --max-fixtures-per-league 8
           --raw-dir "$RUNNER_TEMP/core-sync-raw"
           --report "$RUNNER_TEMP/core-sync-report.json"
+      - name: Calculate player analytics
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-player-analytics
+          --season "$CORE_SYNC_SEASON"
+          --report "$RUNNER_TEMP/player-analytics-report.json"
       - name: Upload sync evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -52,6 +58,7 @@ jobs:
           name: core-sync-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/core-sync-report.json
+            ${{ runner.temp }}/player-analytics-report.json
             ${{ runner.temp }}/core-sync-raw
           if-no-files-found: warn
           retention-days: 30

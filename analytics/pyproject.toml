@@ -14,6 +14,7 @@ dependencies = [
 [project.scripts]
 football-intelligence-audit = "football_intelligence.jobs.audit_provider:main"
 football-intelligence-sync = "football_intelligence.jobs.sync_core_leagues:main"
+football-intelligence-player-analytics = "football_intelligence.jobs.calculate_player_analytics:main"
 
 [dependency-groups]
 dev = [
