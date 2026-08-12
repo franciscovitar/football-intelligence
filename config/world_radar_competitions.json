@@ -1,0 +1,6 @@
+[
+  { "code": "NED_ED", "name": "Eredivisie", "country": "Netherlands" },
+  { "code": "POR_PL", "name": "Primeira Liga", "country": "Portugal" },
+  { "code": "BRA_A", "name": "Serie A", "country": "Brazil" },
+  { "code": "USA_MLS", "name": "Major League Soccer", "country": "USA" }
+]

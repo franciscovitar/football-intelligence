@@ -20,6 +20,8 @@ football-intelligence-meta-analytics = "football_intelligence.jobs.calculate_met
 football-intelligence-perception-ingest = "football_intelligence.jobs.ingest_perception:main"
 football-intelligence-rating-analytics = "football_intelligence.jobs.calculate_rating_intelligence:main"
 football-intelligence-tactical-analytics = "football_intelligence.jobs.calculate_tactical_intelligence:main"
+football-intelligence-world-radar = "football_intelligence.jobs.sync_world_radar:main"
+football-intelligence-validate-v1 = "football_intelligence.jobs.validate_v1:main"
 
 [dependency-groups]
 dev = [

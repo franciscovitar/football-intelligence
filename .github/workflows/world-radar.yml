@@ -1,0 +1,62 @@
+name: World Radar
+
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Provider season year (e.g. 2024)"
+        required: true
+        type: string
+      request_budget:
+        description: "Hard cap on logical provider requests"
+        required: false
+        type: string
+        default: "12"
+
+concurrency:
+  group: world-radar
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  radar:
+    name: External competition radar
+    runs-on: ubuntu-latest
+    env:
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Validate runtime configuration
+        shell: bash
+        run: |
+          test -n "$API_FOOTBALL_KEY" || { echo "API_FOOTBALL_KEY secret is required"; exit 1; }
+          test -n "$DATABASE_URL" || { echo "DATABASE_URL secret is required"; exit 1; }
+      - working-directory: analytics
+        run: uv sync --locked
+      - name: Run World Radar
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-world-radar
+          --season "${{ inputs.season }}"
+          --request-budget "${{ inputs.request_budget }}"
+          --raw-dir "$RUNNER_TEMP/world-radar-raw"
+          --report "$RUNNER_TEMP/world-radar-report.json"
+      - name: Upload World Radar evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: world-radar-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/world-radar-report.json
+            ${{ runner.temp }}/world-radar-raw
+          if-no-files-found: warn
+          retention-days: 30

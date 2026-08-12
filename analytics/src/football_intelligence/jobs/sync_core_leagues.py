@@ -18,6 +18,9 @@ from football_intelligence.providers.api_football import ApiFootballClient, ApiF
 
 _FINISHED = {"FT", "AET", "PEN"}
 
+DEFAULT_REQUEST_BUDGET = 60
+REQUESTS_PER_FIXTURE_LIST = 1
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Synchronize the six core football leagues")
@@ -26,10 +29,26 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lookback-days", type=int, default=3)
     parser.add_argument("--from-date", type=date.fromisoformat)
     parser.add_argument("--to-date", type=date.fromisoformat)
+    parser.add_argument("--request-budget", type=int, default=DEFAULT_REQUEST_BUDGET)
     parser.add_argument("--raw-dir", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--database-url", default=None)
     return parser
+
+
+def check_request_budget(
+    *, league_count: int, max_fixtures_per_league: int, request_budget: int
+) -> int:
+    """Return planned_requests, or raise SystemExit before any network call is made."""
+
+    planned_requests = league_count * (REQUESTS_PER_FIXTURE_LIST + max_fixtures_per_league)
+    if planned_requests > request_budget:
+        raise SystemExit(
+            f"core sync planned_requests={planned_requests} exceeds "
+            f"--request-budget={request_budget}; lower --max-fixtures-per-league "
+            "or raise the budget"
+        )
+    return planned_requests
 
 
 def main() -> None:
@@ -38,6 +57,14 @@ def main() -> None:
         raise SystemExit("--max-fixtures-per-league must be between 1 and 20")
     if args.lookback_days < 1 or args.lookback_days > 14:
         raise SystemExit("--lookback-days must be between 1 and 14")
+    if args.request_budget < 1:
+        raise SystemExit("--request-budget must be at least 1")
+
+    planned_requests = check_request_budget(
+        league_count=len(CORE_LEAGUES),
+        max_fixtures_per_league=args.max_fixtures_per_league,
+        request_budget=args.request_budget,
+    )
 
     api_key = os.environ.get("API_FOOTBALL_KEY", "").strip()
     if not api_key:
@@ -75,6 +102,8 @@ def main() -> None:
         "season": args.season,
         "window": {"from": from_date.isoformat(), "to": to_date.isoformat()},
         "generated_at": datetime.now(UTC).isoformat(),
+        "request_budget": args.request_budget,
+        "planned_requests": planned_requests,
         "request_count": total_requests,
         "league_count": len(league_reports),
         "leagues": league_reports,

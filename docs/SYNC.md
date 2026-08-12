@@ -44,6 +44,20 @@ Raw audit/sync payloads are uploaded as a short-retention GitHub Actions artifac
 for operational evidence. The long-term private Supabase Storage adapter remains
 an infrastructure task before production retention guarantees are claimed.
 
+## Request budget
+
+Block 12 adds an explicit `--request-budget` argument (default `60`). Before
+any provider request is made, the job computes the logical ceiling —
+`league_count * (1 fixture-list request + max_fixtures_per_league detail
+requests)` — and fails immediately if that ceiling exceeds the budget. With
+the default six leagues and `--max-fixtures-per-league 8`, the ceiling is
+`6 * 9 = 54`, comfortably inside the default `60`. This means a larger
+`--max-fixtures-per-league` can no longer silently overspend quota; the run
+fails fast with a clear message instead.
+
+World Radar (external, non-core-league competitions) is a separate, manual
+workflow — see [`WORLD_RADAR.md`](WORLD_RADAR.md).
+
 ## Provider-plan constraint
 
 The API-Football Free plan is limited to 100 requests/day and limits available

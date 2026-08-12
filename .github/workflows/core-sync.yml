@@ -43,6 +43,7 @@ jobs:
           --season "$CORE_SYNC_SEASON"
           --lookback-days 3
           --max-fixtures-per-league 8
+          --request-budget 60
           --raw-dir "$RUNNER_TEMP/core-sync-raw"
           --report "$RUNNER_TEMP/core-sync-report.json"
       - name: Calculate player analytics
@@ -75,6 +76,11 @@ jobs:
           uv run football-intelligence-rating-analytics
           --season "$CORE_SYNC_SEASON"
           --report "$RUNNER_TEMP/rating-analytics-report.json"
+      - name: Run V1 Validation
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-validate-v1
+          --report "$RUNNER_TEMP/validation-report.json"
       - name: Upload sync evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -87,6 +93,7 @@ jobs:
             ${{ runner.temp }}/tactical-analytics-report.json
             ${{ runner.temp }}/meta-analytics-report.json
             ${{ runner.temp }}/rating-analytics-report.json
+            ${{ runner.temp }}/validation-report.json
             ${{ runner.temp }}/core-sync-raw
           if-no-files-found: warn
           retention-days: 30

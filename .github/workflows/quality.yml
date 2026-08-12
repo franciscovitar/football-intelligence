@@ -137,6 +137,15 @@ jobs:
           uv run football-intelligence-tactical-analytics
           --season web-smoke
           --report "$RUNNER_TEMP/tactical-smoke-report.json"
+      - name: Seed deterministic World Radar smoke evidence
+        run: >-
+          psql -v ON_ERROR_STOP=1
+          -f database/fixtures/004_world_radar_smoke.sql
+      - name: Run V1 Validation on smoke DB
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-validate-v1
+          --report "$RUNNER_TEMP/validation-smoke-report.json"
       - name: Verify Next.js PostgreSQL read path
         shell: bash
         run: |
@@ -231,7 +240,15 @@ jobs:
           grep -q "Formación y estilo observable" "$RUNNER_TEMP/tactics.html"
 
           curl -fsS \
+            "http://127.0.0.1:3000/radar?confidence=0" \
+            > "$RUNNER_TEMP/radar.html"
+          grep -q "Web Smoke Radar Forward" "$RUNNER_TEMP/radar.html"
+          grep -q "World Radar V1 detecta" "$RUNNER_TEMP/radar.html"
+
+          curl -fsS \
             "http://127.0.0.1:3000/lab" \
             > "$RUNNER_TEMP/lab.html"
           grep -q "core:web-smoke" "$RUNNER_TEMP/lab.html"
           grep -q "competition:ENG_PL:web-smoke" "$RUNNER_TEMP/lab.html"
+          grep -q "V1 VALIDATION" "$RUNNER_TEMP/lab.html"
+          grep -q "validation-v1.0" "$RUNNER_TEMP/lab.html"

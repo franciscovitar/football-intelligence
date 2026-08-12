@@ -4,6 +4,7 @@ import pytest
 
 from football_intelligence.jobs.sync_core_leagues import (
     _resolve_window,
+    check_request_budget,
     select_finished_fixture_ids,
 )
 
@@ -32,3 +33,15 @@ def test_explicit_window_rejects_reverse_dates() -> None:
             explicit_to=date(2024, 5, 1),
             lookback_days=3,
         )
+
+
+def test_check_request_budget_accepts_default_shape() -> None:
+    # 6 leagues * (1 fixture-list + 8 detail) = 54, within the default budget of 60.
+    planned = check_request_budget(league_count=6, max_fixtures_per_league=8, request_budget=60)
+    assert planned == 54
+
+
+def test_check_request_budget_rejects_overspend_before_network() -> None:
+    # A larger --max-fixtures-per-league must not silently exceed the default budget.
+    with pytest.raises(SystemExit):
+        check_request_budget(league_count=6, max_fixtures_per_league=20, request_budget=60)
