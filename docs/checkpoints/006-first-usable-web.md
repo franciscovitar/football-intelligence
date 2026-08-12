@@ -2,7 +2,7 @@
 
 ## Status
 
-**PASS**
+**PASS / SECURITY-CERTIFIED**
 
 ## Objective
 
@@ -56,6 +56,26 @@ fallback data.
   explicitly enabled.
 - The UI reads versioned snapshots and does not recalculate quantitative model
   scores.
+
+## Security follow-up
+
+- Cause: Next.js `16.2.9` was affected by current framework advisories and
+  resolved vulnerable transitive releases of PostCSS `8.4.31` and sharp
+  `0.34.5`.
+- Solution: update Next.js and `eslint-config-next` to stable `16.3.0`,
+  regenerate `package-lock.json` with npm, and add one
+  `npm audit --audit-level=high` gate to the Web CI job. No dependency
+  overrides were required.
+- Final dependency tree: Next.js `16.3.0`, `eslint-config-next` `16.3.0`,
+  PostCSS `8.5.23`, and sharp `0.35.3`.
+- Reproducible `npm ci`: PASS.
+- `npm audit --audit-level=high`: PASS with zero HIGH and zero CRITICAL
+  vulnerabilities.
+- Security fix commit: `ca9c0713960ce17e5f33dbb138b06abc1243e3a9`.
+- Main integration commit: `e813b23ad217f565cf70c1c6fceef84022cde118`.
+- CI validating `main`: https://github.com/franciscovitar/football-intelligence/actions/runs/31591404045
+  (Web, Analytics, and Database PASS, including PostgreSQL integrations and
+  the Next.js/PostgreSQL smoke path).
 
 ## Product/model boundaries
 
