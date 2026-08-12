@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 
 import { DataNotice } from "@/features/players/data-notice";
+import { formatSigned, SURPRISE_LABELS, TREND_LABELS, WATCHLIST_LABELS } from "@/lib/meta-display";
 import {
   DIMENSION_LABELS,
   formatConfidence,
@@ -14,6 +15,7 @@ import {
   ROLE_LABELS_SINGULAR,
   WINDOW_LABELS,
 } from "@/lib/player-display";
+import { getPlayerMeta } from "@/lib/queries/meta-analytics";
 import {
   getPlayerDetail,
   type AnalyticsWindow,
@@ -53,7 +55,10 @@ export default async function PlayerPage({
     notFound();
   }
 
-  const result = await getPlayerDetail(playerId);
+  const [result, metaResult] = await Promise.all([
+    getPlayerDetail(playerId),
+    getPlayerMeta(playerId),
+  ]);
 
   if (result.status !== "ready") {
     return (
@@ -139,6 +144,40 @@ export default async function PlayerPage({
           })}
         </div>
       </section>
+
+      {metaResult.status === "ready" && metaResult.data ? (
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">EXPECTATION & META</p>
+              <h2>Expectativa histórica y nivel estable</h2>
+            </div>
+            <p>El baseline histórico no es una predicción ni una valoración de mercado.</p>
+          </div>
+          <div className="window-grid">
+            <article className="window-card">
+              <span>Nivel estable</span>
+              <strong>{formatScore(metaResult.data.stableScore)}</strong>
+              <small>conf. {formatConfidence(metaResult.data.stableConfidence)}</small>
+            </article>
+            <article className="window-card">
+              <span>Expectativa histórica</span>
+              <strong>{metaResult.data.expectationScore === null ? "—" : formatScore(metaResult.data.expectationScore)}</strong>
+              <small>{SURPRISE_LABELS[metaResult.data.surpriseSignal] ?? metaResult.data.surpriseSignal} · {formatSigned(metaResult.data.surpriseDelta)}</small>
+            </article>
+            <article className="window-card">
+              <span>Tendencia</span>
+              <strong>{formatSigned(metaResult.data.trendDelta)}</strong>
+              <small>{TREND_LABELS[metaResult.data.trendSignal] ?? metaResult.data.trendSignal}</small>
+            </article>
+            <article className="window-card">
+              <span>Watchlist</span>
+              <strong>{formatScore(metaResult.data.watchlistScore)}</strong>
+              <small>{WATCHLIST_LABELS[metaResult.data.watchlistSignal] ?? metaResult.data.watchlistSignal}</small>
+            </article>
+          </div>
+        </section>
+      ) : null}
 
       <section className="player-analysis-grid">
         <div className="panel">

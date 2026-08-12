@@ -51,6 +51,18 @@ jobs:
           uv run football-intelligence-player-analytics
           --season "$CORE_SYNC_SEASON"
           --report "$RUNNER_TEMP/player-analytics-report.json"
+      - name: Calculate team analytics
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-team-analytics
+          --season "$CORE_SYNC_SEASON"
+          --report "$RUNNER_TEMP/team-analytics-report.json"
+      - name: Calculate expectation and meta analytics
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-meta-analytics
+          --season "$CORE_SYNC_SEASON"
+          --report "$RUNNER_TEMP/meta-analytics-report.json"
       - name: Upload sync evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -59,6 +71,8 @@ jobs:
           path: |
             ${{ runner.temp }}/core-sync-report.json
             ${{ runner.temp }}/player-analytics-report.json
+            ${{ runner.temp }}/team-analytics-report.json
+            ${{ runner.temp }}/meta-analytics-report.json
             ${{ runner.temp }}/core-sync-raw
           if-no-files-found: warn
           retention-days: 30
