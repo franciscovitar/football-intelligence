@@ -9,7 +9,7 @@ Each block ends with focused verification and a checkpoint. A block is not compl
 - [x] **Block 3 — Provider + Data Audit** — PASS
 - [x] **Block 4 — Core League Sync** — PASS
 - [x] **Block 5 — Player Analytics V1** — PASS
-- [ ] **Block 6 — First Usable Web**
+- [x] **Block 6 — First Usable Web** — PASS
 - [ ] **Block 7 — Team Intelligence**
 - [ ] **Block 8 — Expectation & Meta Intelligence**
 - [ ] **Block 9 — Perception Intelligence**
