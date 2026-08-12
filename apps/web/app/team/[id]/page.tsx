@@ -10,6 +10,12 @@ import {
   type TeamFeature,
   type TeamWindow,
 } from "@/lib/queries/team-analytics";
+import { getTeamTactical } from "@/lib/queries/tactical-intelligence";
+import {
+  FORMATION_SIGNAL_LABELS,
+  TACTICAL_DEFENSE_LABELS,
+  TACTICAL_STYLE_LABELS,
+} from "@/lib/tactical-display";
 import {
   DIAGNOSTIC_LABELS,
   diagnosticSignals,
@@ -55,7 +61,10 @@ export default async function TeamPage({
   const teamId = validId(id);
   if (teamId === null) notFound();
   const competitionCode = firstValue(query.competition).trim().slice(0, 32);
-  const result = await getTeamDetail(teamId, competitionCode);
+  const [result, tacticalResult] = await Promise.all([
+    getTeamDetail(teamId, competitionCode),
+    getTeamTactical(teamId, competitionCode),
+  ]);
 
   if (result.status !== "ready") {
     return (
@@ -112,6 +121,66 @@ export default async function TeamPage({
           })}
         </div>
       </section>
+
+      {tacticalResult.status === "ready" && tacticalResult.data ? (
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">TACTICAL INTELLIGENCE</p>
+              <h2>Formación y estilo observable</h2>
+            </div>
+            <p>
+              Formación nominal + proxies de Team V1. No infiere presión, bloque,
+              contraataque ni movimientos sin evidencia espacial.
+            </p>
+          </div>
+          <p className="hero-copy team-copy">{tacticalResult.data.summary}</p>
+          <div className="window-grid">
+            <article className="window-card">
+              <span>Formación nominal</span>
+              <strong>{tacticalResult.data.primaryFormation ?? "—"}</strong>
+              <small>
+                {FORMATION_SIGNAL_LABELS[tacticalResult.data.formationSignal] ??
+                  tacticalResult.data.formationSignal} ·{" "}
+                {tacticalResult.data.formationMatches}/{tacticalResult.data.matches} observadas
+              </small>
+            </article>
+            <article className="window-card">
+              <span>Control</span>
+              <strong>
+                {tacticalResult.data.controlScore === null
+                  ? "—"
+                  : formatScore(tacticalResult.data.controlScore)}
+              </strong>
+              <small>
+                {TACTICAL_STYLE_LABELS[tacticalResult.data.styleSignal] ??
+                  tacticalResult.data.styleSignal}
+              </small>
+            </article>
+            <article className="window-card">
+              <span>Volumen ofensivo</span>
+              <strong>
+                {tacticalResult.data.attackingVolumeScore === null
+                  ? "—"
+                  : formatScore(tacticalResult.data.attackingVolumeScore)}
+              </strong>
+              <small>Proxy de Chance Generation</small>
+            </article>
+            <article className="window-card">
+              <span>Resistencia defensiva</span>
+              <strong>
+                {tacticalResult.data.defensiveResistanceScore === null
+                  ? "—"
+                  : formatScore(tacticalResult.data.defensiveResistanceScore)}
+              </strong>
+              <small>
+                {TACTICAL_DEFENSE_LABELS[tacticalResult.data.defensiveSignal] ??
+                  tacticalResult.data.defensiveSignal}
+              </small>
+            </article>
+          </div>
+        </section>
+      ) : null}
 
       <section className="player-analysis-grid">
         <div className="panel">

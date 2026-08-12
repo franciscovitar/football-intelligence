@@ -58,6 +58,14 @@ class TeamMatchStatsRecord:
 
 
 @dataclass(frozen=True)
+class TeamLineupRecord:
+    match_external_id: str
+    team_external_id: str
+    formation: str | None
+    coach_name: str | None
+
+
+@dataclass(frozen=True)
 class PlayerAppearanceRecord:
     match_external_id: str
     player_external_id: str
@@ -105,3 +113,4 @@ class NormalizedFixtureBatch:
     team_match_stats: tuple[TeamMatchStatsRecord, ...]
     appearances: tuple[PlayerAppearanceRecord, ...]
     player_match_stats: tuple[PlayerMatchStatsRecord, ...]
+    team_lineups: tuple[TeamLineupRecord, ...] = ()

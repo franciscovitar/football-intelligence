@@ -127,6 +127,16 @@ jobs:
           uv run football-intelligence-rating-analytics
           --season web-smoke
           --report "$RUNNER_TEMP/rating-smoke-report.json"
+      - name: Seed deterministic tactical smoke evidence
+        run: >-
+          psql -v ON_ERROR_STOP=1
+          -f database/fixtures/003_tactical_smoke.sql
+      - name: Calculate deterministic tactical smoke
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-tactical-analytics
+          --season web-smoke
+          --report "$RUNNER_TEMP/tactical-smoke-report.json"
       - name: Verify Next.js PostgreSQL read path
         shell: bash
         run: |
@@ -211,6 +221,14 @@ jobs:
             > "$RUNNER_TEMP/team.html"
           grep -q "Web Smoke City" "$RUNNER_TEMP/team.html"
           grep -q "Resultados por encima del proceso" "$RUNNER_TEMP/team.html"
+          grep -q "Tactical Intelligence" "$RUNNER_TEMP/team.html"
+          grep -q "4-4-2" "$RUNNER_TEMP/team.html"
+
+          curl -fsS \
+            "http://127.0.0.1:3000/tactics?competition=ENG_PL&confidence=0" \
+            > "$RUNNER_TEMP/tactics.html"
+          grep -q "Web Smoke City" "$RUNNER_TEMP/tactics.html"
+          grep -q "Formación y estilo observable" "$RUNNER_TEMP/tactics.html"
 
           curl -fsS \
             "http://127.0.0.1:3000/lab" \
