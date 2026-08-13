@@ -50,6 +50,16 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def update_remaining_quota(current: int | None, new: int | None) -> int | None:
+    """Keep the freshest known remaining-quota reading, including zero.
+
+    `new` must win whenever it is not None -- a `0` remaining quota is a real,
+    meaningful reading and must never be discarded in favor of a stale value.
+    """
+
+    return new if new is not None else current
+
+
 def check_request_budget(competition_count: int, request_budget: int) -> int:
     """Return planned_requests, or raise SystemExit before any network call is made."""
 
@@ -219,7 +229,9 @@ def _process_competition(
     )
     responses.append(scorers_response)
     raw_refs.append(_store(raw_store, scorers_response))
-    remaining_quota = scorers_response.request_count_remaining or remaining_quota
+    remaining_quota = update_remaining_quota(
+        remaining_quota, scorers_response.request_count_remaining
+    )
 
     assists_response = client.get(
         "players/topassists",
@@ -227,7 +239,9 @@ def _process_competition(
     )
     responses.append(assists_response)
     raw_refs.append(_store(raw_store, assists_response))
-    remaining_quota = assists_response.request_count_remaining or remaining_quota
+    remaining_quota = update_remaining_quota(
+        remaining_quota, assists_response.request_count_remaining
+    )
 
     scorer_entries = parse_player_feed(scorers_response.payload, source_list="topscorers")
     assist_entries = parse_player_feed(assists_response.payload, source_list="topassists")

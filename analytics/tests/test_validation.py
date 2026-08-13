@@ -62,6 +62,7 @@ def test_elo_backtest_insufficient_sample() -> None:
     result = calculate_elo_backtest(rows)
     assert result.status == "insufficient_data"
     assert result.brier_score is None
+    assert result.calibration_error is None
 
 
 def test_elo_backtest_known_brier_baseline_and_skill() -> None:
@@ -72,6 +73,7 @@ def test_elo_backtest_known_brier_baseline_and_skill() -> None:
     assert result.brier_score == 0.0
     assert result.baseline_brier_score == pytest.approx(0.25)
     assert result.skill_vs_baseline == pytest.approx(1.0)
+    assert result.calibration_error == pytest.approx(0.0)
 
 
 def test_elo_backtest_warn_when_worse_than_baseline() -> None:
@@ -81,6 +83,21 @@ def test_elo_backtest_warn_when_worse_than_baseline() -> None:
     assert result.status == "warn"
     assert result.skill_vs_baseline is not None
     assert result.skill_vs_baseline < 0
+
+
+def test_elo_backtest_calibration_error_matches_known_weighted_bin_gap() -> None:
+    # 30 rows in the [0.8, 1.0) bin with a 0.1 gap, 20 rows in the [0.2, 0.4)
+    # bin with a 0.3 gap: ECE = (30/50)*0.1 + (20/50)*0.3 = 0.18.
+    rows = [(0.9, 1.0)] * 30 + [(0.3, 0.0)] * 20
+    result = calculate_elo_backtest(rows)
+    assert result.sample_size == 50
+    assert result.calibration_error == pytest.approx(0.18)
+
+    bins_by_low = {bin_item["range_low"]: bin_item for bin_item in result.calibration_bins}
+    assert bins_by_low[0.8]["absolute_error"] == pytest.approx(0.1)
+    assert bins_by_low[0.2]["absolute_error"] == pytest.approx(0.3)
+    assert bins_by_low[0.8]["sample_size"] == 30
+    assert bins_by_low[0.2]["sample_size"] == 20
 
 
 def test_player_stability_insufficient_sample() -> None:

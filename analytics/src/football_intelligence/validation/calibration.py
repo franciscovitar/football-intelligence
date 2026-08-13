@@ -2,9 +2,11 @@
 
 Elo calibration is measured against real `analytics.team_elo_history`
 ground truth (expected vs actual result) using Brier score against a
-neutral 0.5 baseline. Player stability measures rank correlation between
+neutral 0.5 baseline, plus an Expected Calibration Error (ECE) across
+prediction bins. Player stability measures rank correlation between
 season and last-10 windows; it is a stability/coverage signal, not a claim
-of predictive accuracy. Neither check adjusts model weights automatically.
+of predictive accuracy. None of this adjusts model weights automatically;
+ECE is informative only and never a hard gate.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ class EloBacktestResult:
     average_prediction: float | None
     average_outcome: float | None
     calibration_bins: tuple[dict[str, float | int], ...]
+    calibration_error: float | None
 
 
 def calculate_elo_backtest(rows: list[tuple[float, float]]) -> EloBacktestResult:
@@ -44,6 +47,7 @@ def calculate_elo_backtest(rows: list[tuple[float, float]]) -> EloBacktestResult
             average_prediction=None,
             average_outcome=None,
             calibration_bins=(),
+            calibration_error=None,
         )
 
     brier = sum((expected - actual) ** 2 for expected, actual in rows) / sample_size
@@ -52,6 +56,8 @@ def calculate_elo_backtest(rows: list[tuple[float, float]]) -> EloBacktestResult
     average_prediction = sum(expected for expected, _ in rows) / sample_size
     average_outcome = sum(actual for _, actual in rows) / sample_size
     status = "pass" if skill > 0 else "warn"
+    calibration_bins = _calibration_bins(rows)
+    calibration_error = _expected_calibration_error(calibration_bins, total_sample_size=sample_size)
 
     return EloBacktestResult(
         sample_size=sample_size,
@@ -61,7 +67,8 @@ def calculate_elo_backtest(rows: list[tuple[float, float]]) -> EloBacktestResult
         skill_vs_baseline=round(skill, 6),
         average_prediction=round(average_prediction, 6),
         average_outcome=round(average_outcome, 6),
-        calibration_bins=_calibration_bins(rows),
+        calibration_bins=calibration_bins,
+        calibration_error=round(calibration_error, 6),
     )
 
 
@@ -73,6 +80,7 @@ def _calibration_bins(rows: list[tuple[float, float]]) -> tuple[dict[str, float 
             continue
         avg_expected = sum(expected for expected, _ in bucket) / len(bucket)
         avg_actual = sum(actual for _, actual in bucket) / len(bucket)
+        absolute_error = abs(avg_expected - avg_actual)
         bins.append(
             {
                 "range_low": lower,
@@ -80,9 +88,25 @@ def _calibration_bins(rows: list[tuple[float, float]]) -> tuple[dict[str, float 
                 "sample_size": len(bucket),
                 "average_prediction": round(avg_expected, 4),
                 "average_outcome": round(avg_actual, 4),
+                "absolute_error": round(absolute_error, 4),
             }
         )
     return tuple(bins)
+
+
+def _expected_calibration_error(
+    bins: tuple[dict[str, float | int], ...],
+    *,
+    total_sample_size: int,
+) -> float:
+    """ECE = sum((bin_size / total) * abs(bin_average_prediction - bin_average_outcome))."""
+
+    if total_sample_size <= 0:
+        return 0.0
+    return sum(
+        (float(bin_item["sample_size"]) / total_sample_size) * float(bin_item["absolute_error"])
+        for bin_item in bins
+    )
 
 
 @dataclass(frozen=True, slots=True)

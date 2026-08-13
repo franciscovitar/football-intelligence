@@ -101,6 +101,7 @@ def build_report_payload(report: ValidationReport) -> dict[str, Any]:
             "average_prediction": report.elo.average_prediction,
             "average_outcome": report.elo.average_outcome,
             "calibration_bins": list(report.elo.calibration_bins),
+            "calibration_error": report.elo.calibration_error,
         },
         "player_stability": [
             {
@@ -147,6 +148,7 @@ def build_summary_payload(report: ValidationReport) -> dict[str, Any]:
         "config_violation_count": len(report.config_violations),
         "elo_sample_size": report.elo.sample_size,
         "elo_skill_vs_baseline": report.elo.skill_vs_baseline,
+        "elo_calibration_error": report.elo.calibration_error,
         "player_stability_measured_roles": [
             item.role for item in report.stability if item.status == "measured"
         ],

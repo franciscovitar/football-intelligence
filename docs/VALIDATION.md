@@ -42,13 +42,21 @@ real ground truth:
 - **baseline Brier**: `mean((0.5 - actual)^2)` (a neutral, always-50/50
   predictor);
 - **skill vs baseline**: `1 - model_brier / baseline_brier`;
-- calibration bins (prediction buckets vs realized outcome);
+- calibration bins (prediction buckets vs realized outcome), each carrying
+  its own `absolute_error`;
+- **Expected Calibration Error (ECE)** — a weighted mean of the absolute
+  prediction/outcome gap across bins:
+  `sum((bin_sample_size / total_sample_size) * abs(bin_average_prediction -
+  bin_average_outcome))`;
 - average prediction and average outcome.
 
-With `sample_size < 50`: `status = insufficient_data` (not a failure).
-With `sample_size >= 50`: `status = pass` when `skill > 0`, else `status =
-warn`. `ELO_K_FACTOR` and `ELO_HOME_ADVANTAGE` are never changed
-automatically by this check.
+With `sample_size < 50`: `status = insufficient_data` and
+`calibration_error = None` (not a failure). With `sample_size >= 50`:
+`status = pass` when `skill > 0`, else `status = warn`; `calibration_error`
+is always computed once the sample is sufficient. ECE is **informative
+only**: it is never a hard gate and never changes `calibration_status`.
+`ELO_K_FACTOR` and `ELO_HOME_ADVANTAGE` are never changed automatically by
+this check.
 
 ## B3 — Player stability (informative)
 

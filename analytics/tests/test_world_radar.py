@@ -6,6 +6,7 @@ from football_intelligence.config.world_radar_competitions import parse_radar_co
 from football_intelligence.jobs.sync_world_radar import (
     REQUESTS_PER_COMPETITION,
     check_request_budget,
+    update_remaining_quota,
 )
 from football_intelligence.world_radar.engine import (
     ATTACKER_WEIGHTS,
@@ -280,6 +281,25 @@ def test_check_request_budget_rejects_overspend_before_network() -> None:
 
 def test_check_request_budget_accepts_within_budget() -> None:
     assert check_request_budget(4, 12) == 4 * REQUESTS_PER_COMPETITION
+
+
+def test_update_remaining_quota_preserves_zero() -> None:
+    # A remaining quota of 0 is a real, meaningful reading -- it must never be
+    # discarded in favor of a stale prior value just because 0 is falsy.
+    assert update_remaining_quota(42, 0) == 0
+
+
+def test_update_remaining_quota_uses_new_value_when_present() -> None:
+    assert update_remaining_quota(42, 17) == 17
+
+
+def test_update_remaining_quota_keeps_current_when_new_is_none() -> None:
+    assert update_remaining_quota(42, None) == 42
+
+
+def test_update_remaining_quota_starts_from_none() -> None:
+    assert update_remaining_quota(None, 5) == 5
+    assert update_remaining_quota(None, None) is None
 
 
 def test_parse_radar_competitions_requires_exact_schema() -> None:
