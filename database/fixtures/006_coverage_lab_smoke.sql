@@ -15,37 +15,37 @@ begin
     select id into football_data_org_id from ingestion.providers where code = 'football-data-org';
 
     insert into ingestion.coverage_snapshots (
-        provider_id, competition_code, metric_name, entity_type,
+        provider_id, competition_code, metric_name, granularity, entity_type,
         freshness_role, state, sample_size, observed_count,
         source_reference, last_checked_at
     )
     values
         (
-            thesportsdb_id, 'GER_BL1', 'home_score', 'match',
+            thesportsdb_id, 'GER_BL1', 'home_score', 'match', 'match',
             'current', 'current_available', 15, 15,
             'eventsseason.php?id=4331', now()
         ),
         (
-            thesportsdb_id, 'ENG_PL', 'home_score', 'match',
+            thesportsdb_id, 'ENG_PL', 'home_score', 'match', 'match',
             'current', 'not_probed', 0, 0,
             null, now()
         ),
         (
-            statsbomb_id, 'GER_BL1', 'shots_total', 'player',
+            statsbomb_id, 'GER_BL1', 'shots_total', 'player_match', 'player',
             'historical', 'historical_only', 2, 2,
             'statsbomb-open/data', now()
         ),
         (
-            statsbomb_id, 'GER_BL1', 'home_score', 'match',
+            statsbomb_id, 'GER_BL1', 'home_score', 'match', 'match',
             'historical', 'partial', 306, 34,
             'statsbomb-open/data', now()
         ),
         (
-            football_data_org_id, 'ENG_PL', 'home_score', 'match',
+            football_data_org_id, 'ENG_PL', 'home_score', 'match', 'match',
             'current', 'token_required', 0, 0,
             null, now()
         )
-    on conflict (provider_id, competition_code, metric_name, entity_type, freshness_role)
+    on conflict (provider_id, competition_code, metric_name, granularity, freshness_role)
     do update set
         state = excluded.state,
         sample_size = excluded.sample_size,

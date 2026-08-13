@@ -37,6 +37,12 @@ class CoverageEntry:
     provider_code: str
     competition_code: str
     metric_name: str
+    # The true target-catalog identity is (metric_name, granularity), not
+    # metric_name alone (the same name can exist at two granularities, e.g.
+    # "shots_total" at both team and player_match) -- stored explicitly
+    # rather than inferred from the coarser, lossy `entity_type` bucket, so
+    # product-level union aggregation can group requirements precisely.
+    granularity: str
     entity_type: str
     freshness_role: FreshnessRole
     state: CoverageState

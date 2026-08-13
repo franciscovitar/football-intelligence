@@ -23,6 +23,14 @@ create table ingestion.coverage_snapshots (
         references ingestion.providers(id) on delete restrict,
     competition_code text not null,
     metric_name text not null,
+    -- The true target-catalog identity is (metric_name, granularity), not
+    -- metric_name alone: the same name can legitimately exist at two
+    -- granularities (e.g. "shots_total" at both team and player_match).
+    -- Stored explicitly rather than inferred from the coarser `entity_type`
+    -- bucket (player_appearance and player_match both collapse to
+    -- "player"), so product-level union coverage can group requirements
+    -- precisely instead of relying on an implicit, lossy proxy.
+    granularity text not null,
     entity_type text not null,
     freshness_role text not null,
     state text not null,
@@ -36,6 +44,12 @@ create table ingestion.coverage_snapshots (
         check (btrim(competition_code) <> ''),
     constraint coverage_snapshots_metric_not_blank_check
         check (btrim(metric_name) <> ''),
+    constraint coverage_snapshots_granularity_check
+        check (
+            granularity in (
+                'competition', 'team', 'match', 'player_appearance', 'player_match'
+            )
+        ),
     constraint coverage_snapshots_entity_type_check
         check (entity_type in ('competition', 'team', 'match', 'player')),
     constraint coverage_snapshots_freshness_role_check
@@ -57,7 +71,7 @@ create table ingestion.coverage_snapshots (
     constraint coverage_snapshots_observed_count_check
         check (observed_count >= 0 and observed_count <= sample_size),
     constraint coverage_snapshots_natural_key
-        unique (provider_id, competition_code, metric_name, entity_type, freshness_role)
+        unique (provider_id, competition_code, metric_name, granularity, freshness_role)
 );
 
 create index coverage_snapshots_lookup_idx
@@ -65,6 +79,12 @@ create index coverage_snapshots_lookup_idx
 
 create index coverage_snapshots_provider_idx
     on ingestion.coverage_snapshots (provider_id, state);
+
+-- Supports the product-level union query (web `/sources` and any future
+-- reporting): "for this freshness role, group by requirement identity and
+-- check whether ANY provider satisfies it" -- independent of provider count.
+create index coverage_snapshots_product_union_idx
+    on ingestion.coverage_snapshots (freshness_role, competition_code, metric_name, granularity);
 
 revoke all on ingestion.coverage_snapshots from public;
 

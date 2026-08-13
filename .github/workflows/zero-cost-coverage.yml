@@ -53,11 +53,17 @@ jobs:
           # as a failure, and no request is spent on it.
           FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
           DATABASE_URL: ${{ inputs.persist == true && secrets.DATABASE_URL || '' }}
+          # workflow_dispatch inputs are attacker-controllable free text;
+          # routed through env instead of interpolated directly into the
+          # shell command so they can never be parsed as shell syntax.
+          CURRENT_SEASON: ${{ inputs.current_season }}
+          STATSBOMB_COMPETITION_NAME: ${{ inputs.statsbomb_competition_name }}
+          STATSBOMB_SEASON_NAME: ${{ inputs.statsbomb_season_name }}
         run: >-
           uv run football-intelligence-zero-cost-coverage
-          --current-season "${{ inputs.current_season }}"
-          --statsbomb-competition-name "${{ inputs.statsbomb_competition_name }}"
-          --statsbomb-season-name "${{ inputs.statsbomb_season_name }}"
+          --current-season "$CURRENT_SEASON"
+          --statsbomb-competition-name "$STATSBOMB_COMPETITION_NAME"
+          --statsbomb-season-name "$STATSBOMB_SEASON_NAME"
           --raw-dir "$RUNNER_TEMP/coverage-raw"
           --report "$RUNNER_TEMP/coverage-report.json"
       - name: Upload coverage evidence

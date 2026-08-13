@@ -21,12 +21,12 @@ begin
     end if;
 
     insert into ingestion.coverage_snapshots (
-        provider_id, competition_code, metric_name, entity_type,
+        provider_id, competition_code, metric_name, granularity, entity_type,
         freshness_role, state, sample_size, observed_count,
         source_reference, last_checked_at
     )
     values (
-        statsbomb_id, 'GER_BL1', 'shots_total', 'player',
+        statsbomb_id, 'GER_BL1', 'shots_total', 'player_match', 'player',
         'historical', 'historical_only', 34, 34,
         'data/events/contract.json', now()
     );
@@ -37,16 +37,16 @@ begin
 
     -- Idempotent upsert on the natural key.
     insert into ingestion.coverage_snapshots (
-        provider_id, competition_code, metric_name, entity_type,
+        provider_id, competition_code, metric_name, granularity, entity_type,
         freshness_role, state, sample_size, observed_count,
         source_reference, last_checked_at
     )
     values (
-        statsbomb_id, 'GER_BL1', 'shots_total', 'player',
+        statsbomb_id, 'GER_BL1', 'shots_total', 'player_match', 'player',
         'historical', 'historical_only', 34, 30,
         'data/events/contract.json', now()
     )
-    on conflict (provider_id, competition_code, metric_name, entity_type, freshness_role)
+    on conflict (provider_id, competition_code, metric_name, granularity, freshness_role)
     do update set
         state = excluded.state,
         sample_size = excluded.sample_size,
@@ -64,11 +64,11 @@ begin
 
     begin
         insert into ingestion.coverage_snapshots (
-            provider_id, competition_code, metric_name, entity_type,
+            provider_id, competition_code, metric_name, granularity, entity_type,
             freshness_role, state, sample_size, observed_count, last_checked_at
         )
         values (
-            statsbomb_id, 'GER_BL1', 'contract-bad-state', 'player',
+            statsbomb_id, 'GER_BL1', 'contract-bad-state', 'player_match', 'player',
             'historical', 'guessed', 1, 1, now()
         );
         raise exception 'expected invalid coverage state to be rejected';
@@ -78,14 +78,28 @@ begin
 
     begin
         insert into ingestion.coverage_snapshots (
-            provider_id, competition_code, metric_name, entity_type,
+            provider_id, competition_code, metric_name, granularity, entity_type,
             freshness_role, state, sample_size, observed_count, last_checked_at
         )
         values (
-            statsbomb_id, 'GER_BL1', 'contract-bad-count', 'player',
+            statsbomb_id, 'GER_BL1', 'contract-bad-count', 'player_match', 'player',
             'current', 'partial', 5, 10, now()
         );
         raise exception 'expected observed_count exceeding sample_size to be rejected';
+    exception
+        when check_violation then null;
+    end;
+
+    begin
+        insert into ingestion.coverage_snapshots (
+            provider_id, competition_code, metric_name, granularity, entity_type,
+            freshness_role, state, sample_size, observed_count, last_checked_at
+        )
+        values (
+            statsbomb_id, 'GER_BL1', 'contract-bad-granularity', 'season', 'player',
+            'historical', 'historical_only', 1, 1, now()
+        );
+        raise exception 'expected invalid granularity to be rejected';
     exception
         when check_violation then null;
     end;

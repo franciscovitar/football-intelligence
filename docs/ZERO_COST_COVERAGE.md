@@ -51,10 +51,45 @@ Only `current_available` satisfies a *current*-data need
 underlying metric is genuinely supported -- that is the entire point of
 separating the two.
 
-Percentages are never blended: `current_coverage` and
-`historical_deep_coverage` are always reported as separate
-numerator/denominator pairs in the report, never combined into one
-misleading ratio.
+Percentages are never blended: current and historical/deep coverage are
+always reported as separate numerator/denominator pairs, never combined
+into one misleading ratio.
+
+### Product coverage vs provider diagnostics
+
+`compute_coverage` (`engine.py`) produces one `CoverageEntry` per (provider,
+competition, metric) combination -- real evidence about what any single
+provider does, but the wrong denominator for the product question. Its row
+count scales with provider count (e.g. 4 providers x 10 competitions x 48
+metrics = 1920 rows), so adding a provider that supports nothing would make
+a naive "numerator / all rows" percentage look *worse* even though nothing
+about real coverage changed.
+
+`product_coverage.py` answers the actual product question instead: "can
+Football Intelligence cover this metric, for this competition, from ANY
+free source of the relevant freshness role?" A requirement -- identified by
+`(competition_code, metric.granularity, metric.metric_name)`, not bare
+`metric_name` alone, since the same name can exist at two granularities --
+is satisfied when AT LEAST ONE provider of that freshness role has a
+satisfying state for it. The denominator is always
+`target_metric_count x target_competition_count` (48 x 10 = 480),
+independent of how many providers exist. Adding a provider that supports
+nothing leaves this number exactly unchanged; adding a provider that covers
+something new can only ever raise it.
+
+The job report exposes both concepts explicitly and never conflates them:
+`product_current_coverage` / `product_historical_deep_coverage` (the
+480-denominator product answer) and `provider_diagnostics.current_entries` /
+`provider_diagnostics.historical_entries` (the provider-row-count
+evidence). `missing_critical_current_metrics` at the top level is
+product-level (a gap key like `GER_BL1:match:home_score` means no current
+provider covers it); the provider-qualified equivalent
+(`football-data-org:GER_BL1:home_score`) lives under
+`provider_diagnostics.missing_critical_current_metrics` as evidence, not as
+the product-level answer. `CoverageEntry.granularity` is stored explicitly
+(not inferred from the coarser `entity_type` bucket, which collapses
+`player_appearance` and `player_match` into one value) so this grouping is
+precise by construction rather than by incidental non-collision.
 
 ## Provider capability manifests
 
@@ -74,11 +109,37 @@ Unchanged from Block 13: `home_score`, `away_score` (full), `status`
 
 Environment variable: `FOOTBALL_DATA_ORG_KEY`. **CI never requires this
 token.** Without it, every football-data.org coverage row is
-`token_required` -- never a failure. Free tier only: `home_score`,
-`away_score`, `status`. No deep player statistics are claimed (the Free
-tier does not expose them). Verified: base URL `https://api.football-data.org/v4`,
-`X-Auth-Token` header, 10 requests/minute free-tier limit,
-`GET /v4/competitions` endpoint.
+`token_required` -- never a failure, zero requests spent. Free tier only:
+`home_score`, `away_score`, `status`. No deep player statistics are claimed
+(the Free tier does not expose them). Verified: base URL
+`https://api.football-data.org/v4`, `X-Auth-Token` header, 10
+requests/minute free-tier limit, `GET /v4/competitions` and
+`GET /v4/competitions/{code}/matches` endpoints.
+
+`status` is capability-mapped `partial`, not `full`: the adapter only ever
+proxies a cross-source finished/not-finished boolean (`FINISHED` ->
+finished; `SCHEDULED`/`TIMED`/`IN_PLAY`/`PAUSED` -> not finished), never the
+provider's full status vocabulary. `SUSPENDED`/`POSTPONED`/`CANCELLED`/
+`AWARDED` and any unrecognized value produce no status observation at all
+(missing, never a guessed `not_finished`) -- the same discipline
+TheSportsDB's adapter already applies to its own status vocabulary.
+
+**Token-present path actually probes matches, not just the competitions
+catalog.** A `GET /v4/competitions` response alone is discovery evidence --
+it proves a competition is *listed*, not that its match facts were
+fetched -- so a token-present run also confirms which of an explicit,
+reviewed table of football-data.org competition codes
+(`data_mesh/entity_resolution.py`'s `COMPETITION_MAPPINGS`, e.g. `BL1` ->
+`GER_BL1`, `PL` -> `ENG_PL`, `PD` -> `ESP_LL`, `SA` -> `ITA_SA`, `FL1` ->
+`FRA_L1`, `DED` -> `NED_ED`, `PPL` -> `POR_PL`, `BSA` -> `BRA_A`) are
+actually present in that run's live response, then spends one bounded
+`GET /v4/competitions/{code}/matches` request for the job's canonical probe
+competition (GER_BL1/`BL1`, matching the other current sources). `ARG_LPF`
+and `USA_MLS` are deliberately absent from that table: football-data.org's
+Free tier does not expose Liga Profesional Argentina or MLS, and a mapping
+with no live-confirmed entry is never treated as coverage. A target
+competition that is mapped but not live-confirmed, or a matches request
+that fails, stays `not_probed` for this run -- never fabricated.
 
 ### StatsBomb Open Data (historical/deep)
 
@@ -143,21 +204,33 @@ result -> exactly one `CoverageEntry`. No network I/O. The precedence is:
 unsupported > token_required > not_probed > (from the probe) missing >
 partial > historical_only/current_available. This ordering is what
 guarantees a historical source can never satisfy a current query and a
-zero-observation probe can never be reported as coverage.
+zero-observation probe can never be reported as coverage. Each entry stores
+`granularity` explicitly (from the originating `TargetMetric`), because the
+true requirement identity is `(metric_name, granularity)` -- the same name
+can exist at two granularities (e.g. `shots_total` at both `team` and
+`player_match`) -- not the coarser, lossy `entity_type` bucket that
+`player_appearance` and `player_match` both collapse into.
+
+`analytics/.../coverage_lab/product_coverage.py` is a second, equally pure
+function that takes the full list of provider-level `CoverageEntry` rows and
+computes the product-level union answer described above (see "Product
+coverage vs provider diagnostics").
 
 ## Live probes and request budget
 
 The CLI (`football-intelligence-zero-cost-coverage`) reuses Block 13's
 Bundesliga `CompetitionMapping` for TheSportsDB/OpenLigaDB (current data),
 adds the bounded StatsBomb deep sample above, and optionally probes
-football-data.org once if a token is configured. Total planned requests:
-`2 (current) + 4 (StatsBomb) + [1 if token]` = 6 or 7, checked against
-`--request-budget` (default 7, hard-capped 20) **before any network call**.
+football-data.org if a token is configured (competitions catalog, then one
+bounded matches request -- see above). Total planned requests:
+`2 (current) + 4 (StatsBomb) + [2 if token]` = 6 or 8, checked against
+`--request-budget` (default 8, hard-capped 20) **before any network call**.
 
 ## Persistence
 
 `ingestion.coverage_snapshots` (new migration, `ingestion` schema, not
-`football.*`). **Not** an extension of the existing
+`football.*`), keyed on `(provider_id, competition_code, metric_name,
+granularity, freshness_role)`. **Not** an extension of the existing
 `ingestion.data_capabilities` table: that table is scoped per
 `(provider, entity_type, metric_name)` with no competition dimension (it
 summarizes core-league sync capability across all core leagues combined),
@@ -165,7 +238,7 @@ and altering its primary key/constraints would risk the write path
 `sync_core_leagues.py` already depends on. A small, purpose-built table
 keeps both concepts correct without duplicating logic -- see the migration
 file for the full reasoning. Idempotent upsert on
-`(provider_id, competition_code, metric_name, entity_type, freshness_role)`.
+`(provider_id, competition_code, metric_name, granularity, freshness_role)`.
 
 ## Future promotion contract (not implemented in Block 14)
 
@@ -185,11 +258,17 @@ Block 14 measures and documents this contract; it does not enable it.
 
 ## Web
 
-`/sources` shows a competition x provider coverage matrix (dominant state
-per cell, textually labeled ACTUAL/HISTÓRICO/PARCIAL/TOKEN/FALTANTE/etc.)
-alongside the existing Block 13 reconciliation health. No fake percentages
-are shown when no coverage snapshot exists -- an honest empty state instead.
-Player/Team/Rating pages do not consume Coverage Lab values.
+`/sources` shows product-level coverage stats (current and historical/deep,
+`numerator/denominator` against the fixed 480-requirement target catalog,
+clearly separate from the raw provider-row count) alongside a competition x
+provider coverage matrix. Each matrix cell shows every non-zero state it
+actually has (e.g. `2 ACTUAL · 1 PARCIAL · 45 NO SOPORTADO`), never a single
+majority-derived verdict -- a provider that covers 2 of 48 metrics and
+structurally lacks the other 46 must show both facts, not collapse to one
+"NO SOPORTADO" badge that hides the 2 it does cover. This sits alongside the
+existing Block 13 reconciliation health. No fake percentages are shown when
+no coverage snapshot exists -- an honest empty state instead. Player/Team/
+Rating pages do not consume Coverage Lab values.
 
 ## Scheduling
 

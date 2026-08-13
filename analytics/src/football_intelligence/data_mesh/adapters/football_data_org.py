@@ -16,7 +16,26 @@ SOURCE_CODE = "football-data-org"
 SOURCE_TYPE: SourceType = "objective_structured"
 SEMANTIC_VERSION = "football-data-org-v0.1"
 
+# football-data.org v4's real `status` vocabulary is richer than a boolean
+# (SCHEDULED, TIMED, IN_PLAY, PAUSED, FINISHED, SUSPENDED, POSTPONED,
+# CANCELLED, AWARDED), but this adapter only ever proxies a cross-source
+# finished/not-finished signal (see `provider_capabilities.py`, which marks
+# this metric "partial" for exactly that reason) -- so only values with an
+# unambiguous, verified meaning are mapped. SUSPENDED/POSTPONED/CANCELLED/
+# AWARDED are real provider states, not "not yet played", so collapsing them
+# into `not_finished` would fabricate a specific claim the data doesn't
+# support; they -- and any future/unrecognized value -- produce no status
+# observation at all, missing rather than guessed.
 _FINISHED_STATUSES = frozenset({"FINISHED"})
+_NOT_FINISHED_STATUSES = frozenset({"SCHEDULED", "TIMED", "IN_PLAY", "PAUSED"})
+
+
+def _match_finished(status: Any) -> bool | None:
+    if status in _FINISHED_STATUSES:
+        return True
+    if status in _NOT_FINISHED_STATUSES:
+        return False
+    return None
 
 
 def parse_competitions(
@@ -120,9 +139,11 @@ def _parse_match(
             semantic_version=SEMANTIC_VERSION,
         )
 
-    observations = [
-        observation("status", "finished" if status in _FINISHED_STATUSES else "not_finished"),
-    ]
+    observations: list[NormalizedObservation] = []
+    is_finished = _match_finished(status)
+    if is_finished is not None:
+        observations.append(observation("status", "finished" if is_finished else "not_finished"))
+
     score = item.get("score", {}).get("fullTime", {})
     home_score = score.get("home")
     away_score = score.get("away")

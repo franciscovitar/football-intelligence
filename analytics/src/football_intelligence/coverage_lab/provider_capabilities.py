@@ -81,10 +81,16 @@ _STATSBOMB_METRICS: Mapping[str, MetricReliability] = {
 
 # football-data.org Free tier: competitions/fixtures/results/standings only.
 # No deep player statistics are claimed (Free tier does not expose them).
+# "status" is "partial", not "full": the adapter only ever proxies a
+# cross-source finished/not-finished boolean (see
+# `data_mesh/adapters/football_data_org.py`), never the provider's full
+# status vocabulary (SCHEDULED/TIMED/IN_PLAY/PAUSED/FINISHED/SUSPENDED/
+# POSTPONED/CANCELLED/AWARDED) -- the same limitation TheSportsDB/OpenLigaDB
+# have, for the same reason.
 _FOOTBALL_DATA_ORG_METRICS: Mapping[str, MetricReliability] = {
     "home_score": "full",
     "away_score": "full",
-    "status": "full",
+    "status": "partial",
 }
 
 PROVIDER_CAPABILITIES: tuple[ProviderCapability, ...] = (

@@ -40,16 +40,17 @@ class CoverageRepository:
             self._connection.execute(
                 """
                 insert into ingestion.coverage_snapshots (
-                    provider_id, competition_code, metric_name, entity_type,
+                    provider_id, competition_code, metric_name, granularity, entity_type,
                     freshness_role, state, sample_size, observed_count,
                     source_reference, last_checked_at, notes
                 )
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 on conflict (
-                    provider_id, competition_code, metric_name, entity_type, freshness_role
+                    provider_id, competition_code, metric_name, granularity, freshness_role
                 )
                 do update set
                     state = excluded.state,
+                    entity_type = excluded.entity_type,
                     sample_size = excluded.sample_size,
                     observed_count = excluded.observed_count,
                     source_reference = excluded.source_reference,
@@ -60,6 +61,7 @@ class CoverageRepository:
                     provider_id,
                     entry.competition_code,
                     entry.metric_name,
+                    entry.granularity,
                     entry.entity_type,
                     entry.freshness_role,
                     entry.state,

@@ -4,7 +4,11 @@ import { connection } from "next/server";
 import { DataNotice } from "@/features/players/data-notice";
 import { formatDateTime } from "@/lib/player-display";
 import { getDataMeshHealth } from "@/lib/queries/data-mesh";
-import { dominantState, getCoverageMatrix, type CoverageState } from "@/lib/queries/coverage";
+import {
+  getCoverageMatrix,
+  summarizeCoverageStates,
+  type CoverageState,
+} from "@/lib/queries/coverage";
 
 export const metadata: Metadata = { title: "Fuentes de datos" };
 
@@ -176,9 +180,37 @@ export default async function SourcesPage() {
                   Última verificación:{" "}
                   {coverageResult.data.lastCheckedAt
                     ? formatDateTime(coverageResult.data.lastCheckedAt)
-                    : "—"}{" "}
-                  · {coverageResult.data.totalSnapshotRows} métricas evaluadas
+                    : "—"}
                 </p>
+                <div className="lab-card-grid">
+                  <article className="lab-stat">
+                    <span>Cobertura de producto · actual</span>
+                    <strong>
+                      {coverageResult.data.productCurrentCoverage.numerator}/
+                      {coverageResult.data.productCurrentCoverage.denominator}
+                    </strong>
+                    <small>
+                      Requisitos (competición × métrica) cubiertos por al menos una fuente actual,
+                      sin importar cuántos proveedores existan
+                    </small>
+                  </article>
+                  <article className="lab-stat">
+                    <span>Cobertura de producto · histórica profunda</span>
+                    <strong>
+                      {coverageResult.data.productHistoricalCoverage.numerator}/
+                      {coverageResult.data.productHistoricalCoverage.denominator}
+                    </strong>
+                    <small>Nunca satisfecha por una fuente actual, aunque soporte la métrica</small>
+                  </article>
+                  <article className="lab-stat">
+                    <span>Filas de proveedor evaluadas (diagnóstico)</span>
+                    <strong>{coverageResult.data.providerEntryCount}</strong>
+                    <small>
+                      Crece con el número de proveedores; no es el catálogo de métricas del
+                      producto
+                    </small>
+                  </article>
+                </div>
                 <div className="lab-table-wrap">
                   <table className="lab-table">
                     <thead>
@@ -214,21 +246,14 @@ export default async function SourcesPage() {
                                 </td>
                               );
                             }
-                            const state = dominantState(cell.stateCounts);
-                            return (
-                              <td key={provider.code}>
-                                <span className="dimension-chip">
-                                  {COVERAGE_STATE_LABELS[state]}
-                                </span>
-                                <br />
-                                <small>
-                                  {cell.stateCounts.current_available +
-                                    cell.stateCounts.historical_only +
-                                    cell.stateCounts.partial}
-                                  /{cell.totalMetrics} métricas
-                                </small>
-                              </td>
-                            );
+                            // Honest per-cell summary: every non-zero state,
+                            // never a single majority-derived verdict -- a
+                            // provider covering 2/48 metrics must never
+                            // collapse to a single "NO SOPORTADO" badge.
+                            const summaryText = summarizeCoverageStates(cell.stateCounts)
+                              .map(({ state, count }) => `${count} ${COVERAGE_STATE_LABELS[state]}`)
+                              .join(" · ");
+                            return <td key={provider.code}>{summaryText}</td>;
                           })}
                         </tr>
                       ))}

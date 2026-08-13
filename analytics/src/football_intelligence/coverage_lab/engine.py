@@ -190,6 +190,7 @@ def _entry(
         provider_code=provider.provider_code,
         competition_code=competition.code,
         metric_name=metric.metric_name,
+        granularity=metric.granularity,
         entity_type=_entity_type_for(metric.granularity),
         freshness_role=provider.freshness_role,
         state=state,

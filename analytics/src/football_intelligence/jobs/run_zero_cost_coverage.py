@@ -26,6 +26,10 @@ from typing import Any
 
 from football_intelligence.coverage_lab.engine import ProbeResult, compute_coverage
 from football_intelligence.coverage_lab.models import CoverageEntry, satisfies_current
+from football_intelligence.coverage_lab.product_coverage import (
+    ProductCoverageResult,
+    compute_product_coverage,
+)
 from football_intelligence.coverage_lab.provider_capabilities import PROVIDER_CAPABILITIES
 from football_intelligence.coverage_lab.target_competitions import build_target_competitions
 from football_intelligence.coverage_lab.target_metrics import (
@@ -34,6 +38,9 @@ from football_intelligence.coverage_lab.target_metrics import (
 )
 from football_intelligence.data_mesh.adapters.football_data_org import (
     parse_competitions as parse_football_data_org_competitions,
+)
+from football_intelligence.data_mesh.adapters.football_data_org import (
+    parse_matches as parse_football_data_org_matches,
 )
 from football_intelligence.data_mesh.adapters.openligadb import parse_league_matches
 from football_intelligence.data_mesh.adapters.statsbomb_open import (
@@ -73,9 +80,14 @@ STATSBOMB_EVENT_SAMPLE_MATCHES = 2
 BUNDESLIGA_FULL_SEASON_MATCH_COUNT = 306
 
 # thesportsdb(1) + openligadb(1) + statsbomb(competitions + matches + N events)
-# + football-data-org(1, only spent if a token is configured).
+# + football-data-org(competitions + one bounded matches probe, only spent
+# if a token is configured -- see `FOOTBALL_DATA_ORG_TOKEN_REQUESTS`).
 PLANNED_REQUESTS_BASE = 2 + 2 + STATSBOMB_EVENT_SAMPLE_MATCHES
-DEFAULT_REQUEST_BUDGET = PLANNED_REQUESTS_BASE + 1
+# A competitions-catalog request alone is discovery evidence, not match-stat
+# coverage, so a token-present run also spends one bounded matches request
+# for whichever mapped target competition the live catalog actually confirms.
+FOOTBALL_DATA_ORG_TOKEN_REQUESTS = 2
+DEFAULT_REQUEST_BUDGET = PLANNED_REQUESTS_BASE + FOOTBALL_DATA_ORG_TOKEN_REQUESTS
 MAX_REQUEST_BUDGET = 20
 
 # thesportsdb/openligadb report a boolean finished/not-finished signal, not
@@ -106,7 +118,7 @@ def main() -> None:
         raise SystemExit(f"--request-budget must be between 1 and {MAX_REQUEST_BUDGET}")
 
     token = os.environ.get(TOKEN_ENV_VAR, "").strip()
-    planned_requests = PLANNED_REQUESTS_BASE + (1 if token else 0)
+    planned_requests = PLANNED_REQUESTS_BASE + (FOOTBALL_DATA_ORG_TOKEN_REQUESTS if token else 0)
     if planned_requests > args.request_budget:
         raise SystemExit(
             f"coverage lab planned_requests={planned_requests} exceeds "
@@ -127,7 +139,7 @@ def main() -> None:
         competition_name=args.statsbomb_competition_name,
         season_name=args.statsbomb_season_name,
     )
-    fd_status, fd_requests, fd_observations = _probe_football_data_org(
+    fd_status, fd_requests, fd_observations, fd_meta = _probe_football_data_org(
         raw_store=raw_store, token=token
     )
 
@@ -143,6 +155,7 @@ def main() -> None:
         statsbomb_match_sample_size=statsbomb_meta.get("match_sample_size", 0),
         fd_status=fd_status,
         fd_observations=fd_observations,
+        fd_meta=fd_meta,
         token_present=bool(token),
     )
 
@@ -182,6 +195,7 @@ def main() -> None:
         statsbomb_meta=statsbomb_meta,
         fd_status=fd_status,
         fd_requests=fd_requests,
+        fd_meta=fd_meta,
         token_present=bool(token),
         persistence=persistence,
     )
@@ -337,21 +351,82 @@ def _probe_statsbomb(
 
 def _probe_football_data_org(
     *, raw_store: LocalRawStore, token: str
-) -> tuple[str, int, list[NormalizedObservation]]:
+) -> tuple[str, int, list[NormalizedObservation], dict[str, Any]]:
+    """Probe football-data.org: competitions catalog, then (bounded) matches.
+
+    A competitions-catalog request alone only proves a competition is
+    *listed* -- it is discovery evidence, never match-stat coverage. This
+    probe additionally confirms which of our explicit, reviewed
+    (`entity_resolution.COMPETITION_MAPPINGS`) football-data.org competition
+    codes are actually present in this run's live response, then spends one
+    bounded matches request for whichever of those is the job's canonical
+    probe competition (GER_BL1/BL1, matching the other current sources).
+    Mapped-but-not-live-confirmed and unmapped competitions are never
+    probed for matches this run and stay `not_probed`, never fabricated.
+    """
+
     if not token:
-        return "token_required", 0, []
+        return "token_required", 0, [], {}
 
     client = FootballDataOrgClient(token)
     try:
         response = client.get("competitions")
     except FootballDataOrgError as exc:
-        return f"error: {exc}", 0, []
+        return f"error: {exc}", 0, [], {}
 
     raw_store.put(
         endpoint=response.endpoint, parameters=dict(response.parameters), payload=response.payload
     )
     observations = parse_football_data_org_competitions(response.payload, ingestion_run_id=None)
-    return "ok", 1, observations
+    requests = 1
+
+    live_codes = {
+        item.get("code")
+        for item in response.payload.get("competitions", [])
+        if isinstance(item, dict) and isinstance(item.get("code"), str)
+    }
+    fd_mappings = [m for m in COMPETITION_MAPPINGS if m.source_code == "football-data-org"]
+    supported_target_competitions = sorted(
+        mapping.canonical_code for mapping in fd_mappings if mapping.external_id in live_codes
+    )
+    meta: dict[str, Any] = {
+        "supported_target_competitions": supported_target_competitions,
+        "matches_probed_competition": None,
+    }
+
+    probe_mapping = next(
+        (
+            mapping
+            for mapping in fd_mappings
+            if mapping.canonical_code == _CANONICAL_COMPETITION_CODE
+            and mapping.external_id in live_codes
+        ),
+        None,
+    )
+    if probe_mapping is None:
+        return "ok", requests, observations, meta
+
+    try:
+        matches_response = client.get(f"competitions/{probe_mapping.external_id}/matches")
+        requests += 1
+    except FootballDataOrgError as exc:
+        meta["matches_probe_error"] = str(exc)
+        return "ok", requests, observations, meta
+
+    raw_store.put(
+        endpoint=matches_response.endpoint,
+        parameters=dict(matches_response.parameters),
+        payload=matches_response.payload,
+    )
+    observations.extend(
+        parse_football_data_org_matches(
+            matches_response.payload,
+            competition_code=probe_mapping.canonical_code,
+            ingestion_run_id=None,
+        )
+    )
+    meta["matches_probed_competition"] = probe_mapping.canonical_code
+    return "ok", requests, observations, meta
 
 
 def _build_probe_results(
@@ -365,6 +440,7 @@ def _build_probe_results(
     statsbomb_match_sample_size: int,
     fd_status: str,
     fd_observations: list[NormalizedObservation],
+    fd_meta: dict[str, Any],
     token_present: bool,
 ) -> dict[tuple[str, str], ProbeResult]:
     results: dict[tuple[str, str], ProbeResult] = {}
@@ -427,13 +503,15 @@ def _build_probe_results(
                 source_reference=None,
             )
     elif fd_status == "ok":
-        counts = _count_observations(fd_observations)
-        results[("football-data-org", _CANONICAL_COMPETITION_CODE)] = ProbeResult(
-            status="ok",
-            sample_size=len({item.entity_source_id for item in fd_observations}) or 1,
-            metric_observed_counts=counts,
-            source_reference="v4/competitions",
-        )
+        # Only a competition whose matches were actually fetched this run
+        # gets a coverage probe result -- a competitions-catalog request
+        # alone is discovery evidence, not match-stat coverage, so every
+        # other target competition correctly stays `not_probed` (no entry).
+        probed_competition = fd_meta.get("matches_probed_competition")
+        if probed_competition:
+            results[("football-data-org", probed_competition)] = _current_probe_result(
+                status="ok", observations=fd_observations, metric_name_remap={}
+            )
     else:
         results[("football-data-org", _CANONICAL_COMPETITION_CODE)] = ProbeResult(
             status="error",
@@ -507,13 +585,6 @@ def _statsbomb_counts(
     return dict(match_counts), dict(deep_counts), deep_sample_sizes
 
 
-def _count_observations(observations: list[NormalizedObservation]) -> dict[str, int]:
-    counts: dict[str, int] = defaultdict(int)
-    for item in observations:
-        counts[item.metric_name] += 1
-    return dict(counts)
-
-
 def _build_report(
     *,
     args: argparse.Namespace,
@@ -531,6 +602,7 @@ def _build_report(
     statsbomb_meta: dict[str, Any],
     fd_status: str,
     fd_requests: int,
+    fd_meta: dict[str, Any],
     token_present: bool,
     persistence: dict[str, Any],
 ) -> dict[str, Any]:
@@ -539,11 +611,19 @@ def _build_report(
     by_domain: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     metric_domain_by_name = {metric.metric_name: metric.domain for metric in target_metrics}
 
-    current_numerator = 0
-    current_denominator = 0
-    historical_numerator = 0
-    historical_denominator = 0
-    missing_critical_current: set[str] = set()
+    # Provider-level diagnostics: one row per (provider, competition, metric)
+    # combination, so this denominator scales with provider count (e.g. 3
+    # current providers x 10 competitions x 48 metrics = 1440). Real
+    # evidence about what any one provider does, but the WRONG denominator
+    # for "can the product cover this metric at all" -- see
+    # `product_current_coverage`/`product_historical_deep_coverage` below,
+    # whose denominator is the fixed target catalog regardless of how many
+    # providers exist.
+    provider_current_numerator = 0
+    provider_current_denominator = 0
+    provider_historical_numerator = 0
+    provider_historical_denominator = 0
+    provider_missing_critical_current: set[str] = set()
 
     for entry in coverage:
         by_source[entry.provider_code][entry.state] += 1
@@ -552,21 +632,34 @@ def _build_report(
         by_domain[domain][entry.state] += 1
 
         if entry.freshness_role == "current":
-            current_denominator += 1
+            provider_current_denominator += 1
             if satisfies_current(entry.state):
-                current_numerator += 1
+                provider_current_numerator += 1
             elif entry.metric_name in CRITICAL_METRIC_NAMES and entry.state in (
                 "missing",
                 "not_probed",
                 "token_required",
             ):
-                missing_critical_current.add(
+                provider_missing_critical_current.add(
                     f"{entry.provider_code}:{entry.competition_code}:{entry.metric_name}"
                 )
         else:
-            historical_denominator += 1
+            provider_historical_denominator += 1
             if entry.state == "historical_only":
-                historical_numerator += 1
+                provider_historical_numerator += 1
+
+    product_current = compute_product_coverage(
+        target_metrics=target_metrics,
+        target_competitions=target_competitions,
+        coverage_entries=coverage,
+        freshness_role="current",
+    )
+    product_historical = compute_product_coverage(
+        target_metrics=target_metrics,
+        target_competitions=target_competitions,
+        coverage_entries=coverage,
+        freshness_role="historical",
+    )
 
     statsbomb_examples = [
         {
@@ -592,15 +685,29 @@ def _build_report(
         "coverage_by_source": {code: dict(states) for code, states in by_source.items()},
         "coverage_by_competition": {code: dict(states) for code, states in by_competition.items()},
         "coverage_by_domain": {code: dict(states) for code, states in by_domain.items()},
-        "current_coverage": {
-            "numerator": current_numerator,
-            "denominator": current_denominator,
+        # PRODUCT coverage: "can Football Intelligence cover this metric, for
+        # this competition, from ANY free current/historical source?" --
+        # denominator is target_metric_count x target_competition_count,
+        # independent of provider count. This is the number that answers the
+        # product question; the "provider_*" figures below are diagnostic.
+        "product_current_coverage": _coverage_fraction(product_current),
+        "product_historical_deep_coverage": _coverage_fraction(product_historical),
+        "missing_critical_current_metrics": list(
+            product_current.critical_gap_keys[:REPORT_EXAMPLE_LIMIT]
+        ),
+        "provider_diagnostics": {
+            "current_entries": {
+                "numerator": provider_current_numerator,
+                "denominator": provider_current_denominator,
+            },
+            "historical_entries": {
+                "numerator": provider_historical_numerator,
+                "denominator": provider_historical_denominator,
+            },
+            "missing_critical_current_metrics": sorted(provider_missing_critical_current)[
+                :REPORT_EXAMPLE_LIMIT
+            ],
         },
-        "historical_deep_coverage": {
-            "numerator": historical_numerator,
-            "denominator": historical_denominator,
-        },
-        "missing_critical_current_metrics": sorted(missing_critical_current)[:REPORT_EXAMPLE_LIMIT],
         "statsbomb_deep_examples": statsbomb_examples,
         "sources": {
             "thesportsdb": {"status": thesportsdb_status, "requests": thesportsdb_requests},
@@ -614,6 +721,7 @@ def _build_report(
                 "status": fd_status,
                 "requests": fd_requests,
                 "token_present": token_present,
+                **fd_meta,
             },
         },
         "persistence": persistence,
@@ -622,6 +730,10 @@ def _build_report(
             "canonical writes. StatsBomb Open Data is historical/deep, never current."
         ),
     }
+
+
+def _coverage_fraction(result: ProductCoverageResult) -> dict[str, int]:
+    return {"numerator": result.numerator, "denominator": result.denominator}
 
 
 if __name__ == "__main__":
