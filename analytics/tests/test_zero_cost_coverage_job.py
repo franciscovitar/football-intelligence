@@ -8,6 +8,7 @@ import pytest
 from football_intelligence.ingestion.raw_store import LocalRawStore
 from football_intelligence.jobs import run_zero_cost_coverage
 from football_intelligence.jobs.run_zero_cost_coverage import (
+    MAX_REQUEST_BUDGET,
     PLANNED_REQUESTS_BASE,
     _competition_external_id,
     _probe_football_data_org,
@@ -99,6 +100,11 @@ def test_competition_external_id_resolves_configured_providers() -> None:
     assert _competition_external_id("openligadb") == "bl1"
 
 
-def test_planned_requests_base_is_small_and_bounded() -> None:
-    # thesportsdb(1) + openligadb(1) + statsbomb(competitions + matches + N events)
-    assert 4 <= PLANNED_REQUESTS_BASE <= 10
+def test_planned_requests_base_respects_hard_cap() -> None:
+    # thesportsdb (10 competitions + event-stats + lineup samples) + openligadb
+    # + statsbomb + football-data-uk (2 attempts x 7 covered competitions) --
+    # a much larger bounded budget than Block 14's, but the task's explicit
+    # hard cap (<=35 HTTP requests) must never be exceeded, even before a
+    # football-data.org token is added on top.
+    assert PLANNED_REQUESTS_BASE <= MAX_REQUEST_BUDGET
+    assert MAX_REQUEST_BUDGET == 35

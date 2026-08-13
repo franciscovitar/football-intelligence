@@ -6,7 +6,8 @@ values
     ('thesportsdb', 'TheSportsDB'),
     ('openligadb', 'OpenLigaDB'),
     ('statsbomb-open', 'StatsBomb Open Data'),
-    ('football-data-org', 'football-data.org')
+    ('football-data-org', 'football-data.org'),
+    ('football-data-uk', 'Football-Data.co.uk')
 on conflict (code) do update
 set
     display_name = excluded.display_name,

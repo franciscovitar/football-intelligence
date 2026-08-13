@@ -100,8 +100,9 @@ class CompetitionMapping:
     external_name: str
 
 
-# Explicit configured mapping (Block 13 5.COMPETITION): PoC scope is the
-# Bundesliga overlap between the two free sources.
+# Explicit configured mapping (Block 13 5.COMPETITION, deepened Block 15):
+# every entry below was verified live against the provider's own API/file
+# during implementation -- none is guessed from documentation alone.
 #
 # football-data.org Free tier ("Tier One") competition codes: a small,
 # explicit, reviewable table -- never trusted blindly. The Zero-Cost
@@ -111,8 +112,33 @@ class CompetitionMapping:
 # entry stays `not_probed`, never fabricated coverage. ARG_LPF (Liga
 # Profesional Argentina) and USA_MLS are deliberately absent: football-data.org's
 # Free tier does not expose either.
+#
+# TheSportsDB v1 Free `idLeague` values (Block 15): verified live via
+# `lookupleague.php?id=<id>` during implementation -- each entry's returned
+# `strLeague`/`strCountry` was checked against the expected competition
+# before being added here. `all_leagues.php` and `search_all_leagues.php` on
+# the shared Free test key ("123") only ever return a small curated subset,
+# not a full searchable catalog, so Argentina/Portugal/Brazil/MLS could not
+# be discovered through listing endpoints alone -- their ids were verified
+# individually via `lookupleague.php` instead.
+#
+# Football-Data.co.uk (Block 15): `external_id` is the site's own division
+# code, used directly in its published CSV file paths
+# (`https://www.football-data.co.uk/mmz4281/<season>/<code>.csv`). Verified
+# live: the site publishes results CSVs for these 7 European target
+# competitions only -- it does not cover ARG_LPF, BRA_A, or USA_MLS at all,
+# so no mapping exists for those three (never fabricated).
 COMPETITION_MAPPINGS: tuple[CompetitionMapping, ...] = (
+    CompetitionMapping("thesportsdb", "4406", "ARG_LPF", "Argentinian Primera Division"),
+    CompetitionMapping("thesportsdb", "4328", "ENG_PL", "English Premier League"),
+    CompetitionMapping("thesportsdb", "4335", "ESP_LL", "Spanish La Liga"),
+    CompetitionMapping("thesportsdb", "4332", "ITA_SA", "Italian Serie A"),
     CompetitionMapping("thesportsdb", "4331", "GER_BL1", "German Bundesliga"),
+    CompetitionMapping("thesportsdb", "4334", "FRA_L1", "French Ligue 1"),
+    CompetitionMapping("thesportsdb", "4337", "NED_ED", "Dutch Eredivisie"),
+    CompetitionMapping("thesportsdb", "4344", "POR_PL", "Portuguese Primeira Liga"),
+    CompetitionMapping("thesportsdb", "4351", "BRA_A", "Brazilian Serie A"),
+    CompetitionMapping("thesportsdb", "4346", "USA_MLS", "American Major League Soccer"),
     CompetitionMapping("openligadb", "bl1", "GER_BL1", "1. Fussball-Bundesliga"),
     CompetitionMapping("football-data-org", "PL", "ENG_PL", "Premier League"),
     CompetitionMapping("football-data-org", "PD", "ESP_LL", "Primera Division"),
@@ -122,6 +148,13 @@ COMPETITION_MAPPINGS: tuple[CompetitionMapping, ...] = (
     CompetitionMapping("football-data-org", "DED", "NED_ED", "Eredivisie"),
     CompetitionMapping("football-data-org", "PPL", "POR_PL", "Primeira Liga"),
     CompetitionMapping("football-data-org", "BSA", "BRA_A", "Campeonato Brasileiro Série A"),
+    CompetitionMapping("football-data-uk", "E0", "ENG_PL", "Premier League"),
+    CompetitionMapping("football-data-uk", "SP1", "ESP_LL", "Primera Division"),
+    CompetitionMapping("football-data-uk", "I1", "ITA_SA", "Serie A"),
+    CompetitionMapping("football-data-uk", "D1", "GER_BL1", "Bundesliga"),
+    CompetitionMapping("football-data-uk", "F1", "FRA_L1", "Ligue 1"),
+    CompetitionMapping("football-data-uk", "N1", "NED_ED", "Eredivisie"),
+    CompetitionMapping("football-data-uk", "P1", "POR_PL", "Primeira Liga"),
 )
 
 

@@ -32,14 +32,18 @@ class ProbeResult:
     per-player event metrics are scoped to a small bounded match sample) --
     `metric_sample_sizes` lets individual metrics override the default
     rather than being forced to share one misleading number.
+
+    Both count mappings are keyed by `(metric_name, granularity)`, matching
+    the target catalog's true identity -- see `provider_capabilities` for why
+    bare `metric_name` is not a safe key.
     """
 
     status: ProbeStatus
     sample_size: int
-    metric_observed_counts: Mapping[str, int]
+    metric_observed_counts: Mapping[tuple[str, str], int]
     source_reference: str | None
     notes: str | None = None
-    metric_sample_sizes: Mapping[str, int] | None = None
+    metric_sample_sizes: Mapping[tuple[str, str], int] | None = None
 
 
 def compute_coverage(
@@ -79,7 +83,8 @@ def _resolve_entry(
     has_token: bool,
     calculated_at: datetime,
 ) -> CoverageEntry:
-    reliability = provider.supported_metrics.get(metric.metric_name)
+    metric_key = (metric.metric_name, metric.granularity)
+    reliability = provider.supported_metrics.get(metric_key)
 
     if reliability is None:
         return _entry(
@@ -147,9 +152,9 @@ def _resolve_entry(
         )
 
     sample_size = probe.sample_size
-    if probe.metric_sample_sizes is not None and metric.metric_name in probe.metric_sample_sizes:
-        sample_size = probe.metric_sample_sizes[metric.metric_name]
-    observed_count = probe.metric_observed_counts.get(metric.metric_name, 0)
+    if probe.metric_sample_sizes is not None and metric_key in probe.metric_sample_sizes:
+        sample_size = probe.metric_sample_sizes[metric_key]
+    observed_count = probe.metric_observed_counts.get(metric_key, 0)
 
     state: CoverageState
     if sample_size == 0 or observed_count == 0:

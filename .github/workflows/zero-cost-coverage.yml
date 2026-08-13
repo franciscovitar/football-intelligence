@@ -3,11 +3,6 @@ name: Zero-Cost Coverage Lab
 on:
   workflow_dispatch:
     inputs:
-      current_season:
-        description: "Current-season label for TheSportsDB/OpenLigaDB (split-year format)"
-        required: false
-        type: string
-        default: "2025-2026"
       statsbomb_competition_name:
         description: "StatsBomb Open Data competition_name to probe"
         required: false
@@ -56,12 +51,10 @@ jobs:
           # workflow_dispatch inputs are attacker-controllable free text;
           # routed through env instead of interpolated directly into the
           # shell command so they can never be parsed as shell syntax.
-          CURRENT_SEASON: ${{ inputs.current_season }}
           STATSBOMB_COMPETITION_NAME: ${{ inputs.statsbomb_competition_name }}
           STATSBOMB_SEASON_NAME: ${{ inputs.statsbomb_season_name }}
         run: >-
           uv run football-intelligence-zero-cost-coverage
-          --current-season "$CURRENT_SEASON"
           --statsbomb-competition-name "$STATSBOMB_COMPETITION_NAME"
           --statsbomb-season-name "$STATSBOMB_SEASON_NAME"
           --raw-dir "$RUNNER_TEMP/coverage-raw"

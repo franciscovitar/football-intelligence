@@ -9,10 +9,12 @@ declare
     thesportsdb_id bigint;
     statsbomb_id bigint;
     football_data_org_id bigint;
+    football_data_uk_id bigint;
 begin
     select id into thesportsdb_id from ingestion.providers where code = 'thesportsdb';
     select id into statsbomb_id from ingestion.providers where code = 'statsbomb-open';
     select id into football_data_org_id from ingestion.providers where code = 'football-data-org';
+    select id into football_data_uk_id from ingestion.providers where code = 'football-data-uk';
 
     insert into ingestion.coverage_snapshots (
         provider_id, competition_code, metric_name, granularity, entity_type,
@@ -24,6 +26,16 @@ begin
             thesportsdb_id, 'GER_BL1', 'home_score', 'match', 'match',
             'current', 'current_available', 15, 15,
             'eventsseason.php?id=4331', now()
+        ),
+        (
+            thesportsdb_id, 'GER_BL1', 'shots_total', 'team', 'team',
+            'current', 'current_available', 2, 2,
+            'lookupeventstats.php?id=2475153', now()
+        ),
+        (
+            thesportsdb_id, 'GER_BL1', 'listed_position', 'player_appearance', 'player',
+            'current', 'partial', 5, 5,
+            'lookuplineup.php?id=2475153', now()
         ),
         (
             thesportsdb_id, 'ENG_PL', 'home_score', 'match', 'match',
@@ -43,6 +55,16 @@ begin
         (
             football_data_org_id, 'ENG_PL', 'home_score', 'match', 'match',
             'current', 'token_required', 0, 0,
+            null, now()
+        ),
+        (
+            football_data_uk_id, 'GER_BL1', 'shots_total', 'team', 'team',
+            'current', 'current_available', 30, 30,
+            'mmz4281/2526/D1.csv', now()
+        ),
+        (
+            football_data_uk_id, 'ARG_LPF', 'home_score', 'match', 'match',
+            'current', 'unsupported', 0, 0,
             null, now()
         )
     on conflict (provider_id, competition_code, metric_name, granularity, freshness_role)

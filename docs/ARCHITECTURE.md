@@ -114,13 +114,18 @@ The Python package will grow by coherent responsibility only when each area beco
 - `providers`: external provider clients and provider schemas.
 - `ingestion`: batch orchestration and fetching.
 - `normalization`: mapping provider payloads to internal data.
-- `data_mesh`: multi-source observation model, entity resolution, and
-  reconciliation (Block 13+) -- provider-independent, feeds the canonical
-  domain only through a reviewed reconciliation step, never automatically.
-- `coverage_lab`: Zero-Cost Coverage Lab (Block 14) -- a provider-independent
-  target metric catalog, target competition list, and a pure state-machine
-  measuring which free source can supply which metric, current vs
-  historical, per competition. Never a production feed itself.
+- `data_mesh`: multi-source observation model, entity resolution,
+  reconciliation, and a shared resolve-then-reconcile `pipeline` (Block
+  13+, extracted Block 15 so multiple jobs reuse one implementation) --
+  provider-independent, feeds the canonical domain only through a reviewed
+  reconciliation step, never automatically.
+- `coverage_lab`: Zero-Cost Coverage Lab (Block 14, deepened Block 15) -- a
+  provider-independent target metric catalog, target competition list, and
+  a pure state-machine measuring which free source can supply which metric,
+  current vs historical, per competition. Capability manifests and probe
+  results are keyed by `(metric_name, granularity)`, not bare `metric_name`,
+  since the same name can mean different things at different granularities.
+  Never a production feed itself.
 - `data_quality`: coverage and integrity checks.
 - `features`: reusable derived metrics.
 - `scoring`: player, team, and meta scores.
