@@ -38,6 +38,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
               <Link href="/ratings">Rating</Link>
               <Link href="/tactics">Táctica</Link>
               <Link href="/radar">Radar</Link>
+              <Link href="/sources">Fuentes</Link>
               <Link href="/lab">Lab</Link>
             </nav>
           </header>

@@ -1,0 +1,56 @@
+name: Data Mesh PoC
+
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Bundesliga season label (TheSportsDB split-year format, e.g. 2025-2026)"
+        required: false
+        type: string
+        default: "2025-2026"
+      persist:
+        description: "Persist observations/decisions to DATABASE_URL if provided"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: data-mesh-poc
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  poc:
+    name: Multi-source reconciliation PoC
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - working-directory: analytics
+        run: uv sync --locked
+      - name: Run data mesh PoC (TheSportsDB + OpenLigaDB only)
+        working-directory: analytics
+        env:
+          DATABASE_URL: ${{ inputs.persist == true && secrets.DATABASE_URL || '' }}
+        run: >-
+          uv run football-intelligence-data-mesh-poc
+          --season "${{ inputs.season }}"
+          --raw-dir "$RUNNER_TEMP/data-mesh-raw"
+          --report "$RUNNER_TEMP/data-mesh-report.json"
+      - name: Upload data mesh PoC evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: data-mesh-poc-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/data-mesh-report.json
+            ${{ runner.temp }}/data-mesh-raw
+          if-no-files-found: warn
+          retention-days: 30
