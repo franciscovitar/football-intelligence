@@ -16,7 +16,8 @@ import argparse
 import json
 import os
 from collections import defaultdict
-from datetime import UTC, datetime
+from collections.abc import Mapping
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,7 @@ from football_intelligence.data_mesh.adapters.openligadb import parse_league_mat
 from football_intelligence.data_mesh.adapters.thesportsdb import parse_league_events
 from football_intelligence.data_mesh.entity_resolution import (
     COMPETITION_MAPPINGS,
+    cluster_match_dates,
     resolve_competition,
     resolve_match,
     resolve_player,
@@ -261,7 +263,17 @@ def _fetch_openligadb(
     return "ok", 1, observations
 
 
-def _resolve_logical_key(observation: NormalizedObservation) -> EntityResolution:
+# (competition_code, season_label, home_team_key, away_team_key) -> per-group
+# kickoff-date -> canonical clustered date.
+_MatchGroupKey = tuple[str, str, str, str]
+_MatchDateClusters = Mapping[_MatchGroupKey, Mapping[date, date]]
+
+
+def _resolve_logical_key(
+    observation: NormalizedObservation,
+    *,
+    match_date_clusters: _MatchDateClusters,
+) -> EntityResolution:
     hints = observation.entity_identity_hints
 
     if observation.entity_type == "competition":
@@ -296,12 +308,25 @@ def _resolve_logical_key(observation: NormalizedObservation) -> EntityResolution
             name=hints.get("away_team_name", ""), competition_code=competition_code
         )
         kickoff_date = parse_date(hints.get("kickoff_date"))
+        canonical_date = kickoff_date
+        if (
+            kickoff_date is not None
+            and home_resolution.logical_key is not None
+            and away_resolution.logical_key is not None
+        ):
+            group_key = (
+                competition_code,
+                season_label,
+                home_resolution.logical_key,
+                away_resolution.logical_key,
+            )
+            canonical_date = match_date_clusters.get(group_key, {}).get(kickoff_date, kickoff_date)
         return resolve_match(
             competition_code=competition_code,
             season_label=season_label,
             home_team_key=home_resolution.logical_key,
             away_team_key=away_resolution.logical_key,
-            kickoff_date=kickoff_date,
+            kickoff_date=canonical_date,
         )
 
     return resolve_player(
@@ -312,16 +337,69 @@ def _resolve_logical_key(observation: NormalizedObservation) -> EntityResolution
     )
 
 
+def _build_match_date_clusters(
+    observations: list[NormalizedObservation],
+) -> _MatchDateClusters:
+    """Precompute deterministic kickoff-date clusters per resolved match group.
+
+    `resolve_match()` stays a pure function of its exact inputs (easy to
+    test/audit), so tolerance is applied here instead: two providers
+    reporting the same real fixture on adjacent dates must still converge on
+    one logical match identity, and the canonical date chosen must not
+    depend on which provider's observation is processed first.
+    """
+
+    dates_by_group: dict[_MatchGroupKey, set[date]] = defaultdict(set)
+    for observation in observations:
+        if observation.entity_type != "match":
+            continue
+        hints = observation.entity_identity_hints
+        competition_resolution = resolve_competition(
+            source_code=observation.source_code,
+            external_id=hints.get("competition_external_id", ""),
+        )
+        if (
+            competition_resolution.status != "resolved"
+            or competition_resolution.logical_key is None
+        ):
+            continue
+        competition_code = competition_resolution.logical_key.removeprefix("competition:")
+        season_label = normalize_season_label(hints.get("season_label", ""))
+        home_resolution = resolve_team(
+            name=hints.get("home_team_name", ""), competition_code=competition_code
+        )
+        away_resolution = resolve_team(
+            name=hints.get("away_team_name", ""), competition_code=competition_code
+        )
+        kickoff_date = parse_date(hints.get("kickoff_date"))
+        if (
+            kickoff_date is None
+            or home_resolution.logical_key is None
+            or away_resolution.logical_key is None
+        ):
+            continue
+        group_key = (
+            competition_code,
+            season_label,
+            home_resolution.logical_key,
+            away_resolution.logical_key,
+        )
+        dates_by_group[group_key].add(kickoff_date)
+
+    return {group_key: cluster_match_dates(dates) for group_key, dates in dates_by_group.items()}
+
+
 def _resolve_and_reconcile(
     observations: list[NormalizedObservation],
 ) -> tuple[list[ReconciliationDecision], dict[str, Any]]:
+    match_date_clusters = _build_match_date_clusters(observations)
     grouped: dict[tuple[str, EntityType, str], list[NormalizedObservation]] = defaultdict(list)
     unresolved_examples: list[dict[str, str]] = []
     resolved_count = 0
     unresolved_count = 0
 
     for observation in observations:
-        resolution = _resolve_logical_key(observation)
+        resolution = _resolve_logical_key(observation, match_date_clusters=match_date_clusters)
         if resolution.status != "resolved" or resolution.logical_key is None:
             unresolved_count += 1
             if len(unresolved_examples) < REPORT_EXAMPLE_LIMIT:

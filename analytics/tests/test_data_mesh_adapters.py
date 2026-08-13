@@ -164,7 +164,82 @@ def test_openligadb_adapter_source_metric_availability_never_fabricated() -> Non
     metric_names = {obs.metric_name for obs in observations}
     assert "shots_total" not in metric_names
     assert "possession_pct" not in metric_names
-    assert metric_names <= {"name", "status", "home_score", "away_score"}
+    assert metric_names <= {"name", "is_finished", "home_score", "away_score"}
+
+
+def test_thesportsdb_adapter_maps_ft_to_is_finished_true() -> None:
+    observations = parse_league_events(
+        _THESPORTSDB_PAYLOAD, competition_external_id="4331", ingestion_run_id=None
+    )
+    value = next(
+        obs.value
+        for obs in observations
+        if obs.entity_source_id == "2276638" and obs.metric_name == "is_finished"
+    )
+    assert value is True
+
+
+def test_thesportsdb_adapter_maps_ns_to_is_finished_false() -> None:
+    observations = parse_league_events(
+        _THESPORTSDB_PAYLOAD, competition_external_id="4331", ingestion_run_id=None
+    )
+    value = next(
+        obs.value
+        for obs in observations
+        if obs.entity_source_id == "2276999" and obs.metric_name == "is_finished"
+    )
+    assert value is False
+
+
+def test_thesportsdb_adapter_unrecognized_status_produces_no_is_finished_observation() -> None:
+    # "PST" (postponed) is real provider vocabulary, but V0 does not know
+    # whether a postponed fixture is "finished" -- the safe result is a
+    # missing observation, never a guessed boolean.
+    payload = {
+        "events": [
+            {
+                "idEvent": "9999",
+                "idHomeTeam": "1",
+                "idAwayTeam": "2",
+                "strHomeTeam": "Team A",
+                "strAwayTeam": "Team B",
+                "strLeague": "German Bundesliga",
+                "strSeason": "2025-2026",
+                "dateEvent": "2025-08-22",
+                "strTimestamp": "2025-08-22T18:30:00",
+                "strStatus": "PST",
+            }
+        ]
+    }
+    observations = parse_league_events(
+        payload, competition_external_id="4331", ingestion_run_id=None
+    )
+    metric_names = {obs.metric_name for obs in observations if obs.entity_source_id == "9999"}
+    assert "is_finished" not in metric_names
+
+
+def test_openligadb_adapter_maps_matchisfinished_true_to_is_finished_true() -> None:
+    observations = parse_league_matches(
+        _OPENLIGADB_PAYLOAD, competition_external_id="bl1", ingestion_run_id=None
+    )
+    value = next(
+        obs.value
+        for obs in observations
+        if obs.entity_source_id == "77256" and obs.metric_name == "is_finished"
+    )
+    assert value is True
+
+
+def test_openligadb_adapter_maps_matchisfinished_false_to_is_finished_false() -> None:
+    observations = parse_league_matches(
+        _OPENLIGADB_PAYLOAD, competition_external_id="bl1", ingestion_run_id=None
+    )
+    value = next(
+        obs.value
+        for obs in observations
+        if obs.entity_source_id == "77300" and obs.metric_name == "is_finished"
+    )
+    assert value is False
 
 
 def test_both_adapters_agree_on_the_same_real_fixture_score() -> None:

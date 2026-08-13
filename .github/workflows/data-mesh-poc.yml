@@ -39,9 +39,10 @@ jobs:
         working-directory: analytics
         env:
           DATABASE_URL: ${{ inputs.persist == true && secrets.DATABASE_URL || '' }}
+          POC_SEASON: ${{ inputs.season }}
         run: >-
           uv run football-intelligence-data-mesh-poc
-          --season "${{ inputs.season }}"
+          --season "$POC_SEASON"
           --raw-dir "$RUNNER_TEMP/data-mesh-raw"
           --report "$RUNNER_TEMP/data-mesh-report.json"
       - name: Upload data mesh PoC evidence

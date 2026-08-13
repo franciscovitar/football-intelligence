@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 
@@ -57,6 +58,38 @@ def dates_within_tolerance(
     tolerance_days: int = MATCH_DATE_TOLERANCE_DAYS,
 ) -> bool:
     return abs((a - b).days) <= tolerance_days
+
+
+def cluster_match_dates(
+    dates: Iterable[date],
+    *,
+    tolerance_days: int = MATCH_DATE_TOLERANCE_DAYS,
+) -> dict[date, date]:
+    """Deterministically cluster kickoff dates that fall within tolerance.
+
+    Returns a mapping from every input date to a canonical representative
+    date (the earliest date in its cluster). Two dates land in the same
+    cluster exactly when a chain of `dates_within_tolerance` steps connects
+    them; because the input is sorted before clustering, the result depends
+    only on the *set* of dates observed, never on which source or provider
+    reported which date first. Dates whose nearest neighbor is outside
+    tolerance start (and stay in) their own cluster.
+    """
+
+    unique_sorted = sorted(set(dates))
+    canonical: dict[date, date] = {}
+    cluster_start: date | None = None
+    previous: date | None = None
+    for current in unique_sorted:
+        if (
+            cluster_start is None
+            or previous is None
+            or not dates_within_tolerance(previous, current, tolerance_days=tolerance_days)
+        ):
+            cluster_start = current
+        canonical[current] = cluster_start
+        previous = current
+    return canonical
 
 
 @dataclass(frozen=True, slots=True)

@@ -18,6 +18,23 @@ SEMANTIC_VERSION = "data-mesh-v0.1"
 
 JsonObject = dict[str, Any]
 
+# TheSportsDB's free `strStatus` vocabulary is undocumented and inconsistent
+# across sports, so only values with an unambiguous, verified meaning are
+# mapped to the cross-source `is_finished` metric. Anything else (postponed,
+# cancelled, suspended, blank, or any unrecognized code) produces no
+# observation at all -- missing, not a guessed value. The raw string is
+# still available in the stored raw payload for audit.
+_FINISHED_STATUSES = frozenset({"FT", "AET", "PEN"})
+_NOT_FINISHED_STATUSES = frozenset({"NS", "1H", "HT", "2H", "ET", "BT"})
+
+
+def _is_finished(status: str | None) -> bool | None:
+    if status in _FINISHED_STATUSES:
+        return True
+    if status in _NOT_FINISHED_STATUSES:
+        return False
+    return None
+
 
 def parse_league_events(
     payload: JsonObject,
@@ -151,14 +168,19 @@ def _parse_event(
             metric_name="name",
             value=away_team_name,
         ),
-        observation(
-            entity_type="match",
-            entity_source_id=event_id or "",
-            entity_identity_hints=identity_hints,
-            metric_name="status",
-            value=status or "unknown",
-        ),
     ]
+
+    is_finished = _is_finished(status)
+    if is_finished is not None:
+        observations.append(
+            observation(
+                entity_type="match",
+                entity_source_id=event_id or "",
+                entity_identity_hints=identity_hints,
+                metric_name="is_finished",
+                value=is_finished,
+            )
+        )
 
     home_score = _score(item.get("intHomeScore"))
     away_score = _score(item.get("intAwayScore"))

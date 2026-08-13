@@ -85,10 +85,18 @@ guessed link.
   different providers' team IDs for the same real club converge on one
   logical key without any registry or stateful lookup.
 - **Match**: resolved from canonical competition + resolved home/away team
-  identity + season + kickoff date. `dates_within_tolerance()` documents an
-  explicit day-level tolerance for cross-source clock/rounding differences;
-  `resolve_match` itself stays a pure function of exact inputs so its
-  behavior is easy to test and audit.
+  identity + season + kickoff date. `resolve_match` itself stays a pure
+  function of exact inputs so its behavior is easy to test and audit; the
+  day-level tolerance (`dates_within_tolerance`, `MATCH_DATE_TOLERANCE_DAYS`)
+  is applied one layer up, in `_build_match_date_clusters` /
+  `_resolve_and_reconcile` (`analytics/.../jobs/run_data_mesh_poc.py`). That
+  step deterministically clusters every kickoff date seen for the same
+  (competition, season, home team, away team) group -- using
+  `cluster_match_dates()` -- and substitutes each date for its cluster's
+  earliest date before calling `resolve_match`. Two providers reporting the
+  same real fixture on adjacent dates therefore converge on one logical
+  match identity regardless of which provider's observation is processed
+  first; dates outside tolerance stay distinct fixtures.
 - **Player**: interface/contract only in V0. `resolve_player()` is callable
   and typed today, but always returns `UNRESOLVED` -- no source in this PoC
   supplies corroborated player-level identity, and `UNRESOLVED` is always
@@ -163,11 +171,23 @@ at `15`) that is checked **before any network call**.
 Both feeds return match results (home/away score, finished status) and team
 names for the same real fixtures; neither exposes shots, possession, or
 other detailed box-score stats for free, so the PoC's overlapping metric set
-is deliberately small (`home_score`, `away_score`, match `status`, team
+is deliberately small (`home_score`, `away_score`, match `is_finished`, team
 `name`, competition `name`). The point is not to prove these two sources
 cover every statistic -- it is to prove ingestion, normalization, entity
 resolution, reconciliation, provenance, coverage measurement, and conflict
 handling all work end-to-end.
+
+Provider status vocabularies never cross the adapter boundary as the
+normalized objective value: TheSportsDB's `strStatus` (e.g. `"FT"`) and
+OpenLigaDB's `matchIsFinished` boolean are each mapped, per-source, onto a
+shared `is_finished` boolean metric (`true`/`false`) before reconciliation
+ever sees them. A status value with no verified, unambiguous mapping (e.g.
+an unrecognized or postponed/cancelled TheSportsDB code) produces no
+`is_finished` observation at all -- missing, never a guessed boolean. The
+raw provider string is still preserved in the raw payload snapshot
+(`--raw-dir`) for audit. This means two sources both reporting "finished"
+now correctly reconcile as `agreed` instead of a false `conflict` caused
+only by differing provider vocabularies.
 
 Run it: `football-intelligence-data-mesh-poc --season 2025-2026 --raw-dir
 <dir> --report <path> [--database-url <url>]`. See
@@ -179,10 +199,10 @@ Run it: `football-intelligence-data-mesh-poc --season 2025-2026 --raw-dir
   `CompetitionMapping` entries (see below).
 - Neither free source exposes detailed match stats (shots, possession,
   cards, ...), so V0's live overlap is limited to scores/status/names.
-- Match date tolerance is day-level, not a genuine multi-day search;
-  documented and tested (`dates_within_tolerance`), but not exercised with a
-  real multi-day gap in the live PoC because both sources happened to agree
-  exactly on date.
+- Match date tolerance is day-level, not a genuine multi-day search. It is
+  wired into the real pipeline and integration-tested (`cluster_match_dates`,
+  `dates_within_tolerance`), but the live PoC run itself has not yet observed
+  a real multi-day gap between the two sources for the same fixture.
 - Player-level resolution is an interface-only contract; no player
   observations are produced or reconciled in V0.
 - `ingestion.reconciliation_decisions` and `ingestion.source_observations`

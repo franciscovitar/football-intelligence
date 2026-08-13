@@ -152,14 +152,21 @@ def _parse_match(
             metric_name="name",
             value=away_team_name,
         ),
-        observation(
-            entity_type="match",
-            entity_source_id=str(match_id),
-            entity_identity_hints=identity_hints,
-            metric_name="status",
-            value="finished" if is_finished is True else "not_finished",
-        ),
     ]
+
+    # `matchIsFinished` is OpenLigaDB's own boolean, so it maps 1:1 onto the
+    # cross-source `is_finished` metric. If the field is ever absent, that is
+    # a missing observation, never a fabricated `False`.
+    if isinstance(is_finished, bool):
+        observations.append(
+            observation(
+                entity_type="match",
+                entity_source_id=str(match_id),
+                entity_identity_hints=identity_hints,
+                metric_name="is_finished",
+                value=is_finished,
+            )
+        )
 
     final_result = _final_result(item.get("matchResults"))
     if final_result is not None:

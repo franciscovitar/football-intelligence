@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from football_intelligence.data_mesh.entity_resolution import (
+    cluster_match_dates,
     dates_within_tolerance,
     normalize_team_name,
     resolve_competition,
@@ -106,6 +107,20 @@ def test_dates_within_tolerance() -> None:
     assert dates_within_tolerance(date(2025, 8, 22), date(2025, 8, 23))
     assert dates_within_tolerance(date(2025, 8, 22), date(2025, 8, 22))
     assert not dates_within_tolerance(date(2025, 8, 22), date(2025, 8, 25))
+
+
+def test_cluster_match_dates_merges_dates_within_tolerance() -> None:
+    clusters = cluster_match_dates([date(2025, 8, 23), date(2025, 8, 22)])
+    # Both dates collapse onto the same canonical (earliest) representative,
+    # regardless of the order they were passed in.
+    assert clusters[date(2025, 8, 22)] == date(2025, 8, 22)
+    assert clusters[date(2025, 8, 23)] == date(2025, 8, 22)
+
+
+def test_cluster_match_dates_keeps_dates_outside_tolerance_separate() -> None:
+    clusters = cluster_match_dates([date(2025, 8, 22), date(2025, 8, 25)])
+    assert clusters[date(2025, 8, 22)] == date(2025, 8, 22)
+    assert clusters[date(2025, 8, 25)] == date(2025, 8, 25)
 
 
 def test_resolve_player_is_always_unresolved_in_v0() -> None:
