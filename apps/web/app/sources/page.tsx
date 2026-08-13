@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { DataNotice } from "@/features/players/data-notice";
 import { formatDateTime } from "@/lib/player-display";
 import { getDataMeshHealth } from "@/lib/queries/data-mesh";
+import { dominantState, getCoverageMatrix, type CoverageState } from "@/lib/queries/coverage";
 
 export const metadata: Metadata = { title: "Fuentes de datos" };
 
@@ -15,9 +16,19 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
   qualitative_fan: "Cualitativa (hinchada)",
 };
 
+const COVERAGE_STATE_LABELS: Record<CoverageState, string> = {
+  current_available: "ACTUAL",
+  historical_only: "HISTÓRICO",
+  partial: "PARCIAL",
+  token_required: "TOKEN",
+  not_probed: "SIN PROBAR",
+  missing: "FALTANTE",
+  unsupported: "NO SOPORTADO",
+};
+
 export default async function SourcesPage() {
   await connection();
-  const result = await getDataMeshHealth();
+  const [result, coverageResult] = await Promise.all([getDataMeshHealth(), getCoverageMatrix()]);
 
   return (
     <main className="page-shell">
@@ -138,6 +149,94 @@ export default async function SourcesPage() {
                 <small>Mejor sin vincular que vinculado incorrectamente</small>
               </article>
             </div>
+          </section>
+
+          <section className="panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">COVERAGE LAB · V0</p>
+                <h2>Cobertura por competición y fuente</h2>
+              </div>
+              <p>
+                Una fuente histórica (StatsBomb Open Data) nunca satisface una necesidad de
+                datos actuales, aunque soporte la métrica. Sin token configurado, football-data.org
+                se muestra como &ldquo;TOKEN&rdquo;, nunca como error.
+              </p>
+            </div>
+            {coverageResult.status !== "ready" ? (
+              <DataNotice title="Cobertura no disponible" message={coverageResult.message} />
+            ) : coverageResult.data.cells.length === 0 ? (
+              <p className="ranking-summary">
+                Sin snapshot de cobertura todavía. Ejecutá el workflow manual Zero-Cost Coverage
+                Lab (workflow_dispatch) para generarlo.
+              </p>
+            ) : (
+              <>
+                <p className="ranking-summary">
+                  Última verificación:{" "}
+                  {coverageResult.data.lastCheckedAt
+                    ? formatDateTime(coverageResult.data.lastCheckedAt)
+                    : "—"}{" "}
+                  · {coverageResult.data.totalSnapshotRows} métricas evaluadas
+                </p>
+                <div className="lab-table-wrap">
+                  <table className="lab-table">
+                    <thead>
+                      <tr>
+                        <th>Competición</th>
+                        {coverageResult.data.providers.map((provider) => (
+                          <th key={provider.code}>
+                            {provider.displayName}
+                            <br />
+                            <small>
+                              {provider.freshnessRole === "current" ? "actual" : "histórico"}
+                            </small>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {coverageResult.data.competitionCodes.map((competitionCode) => (
+                        <tr key={competitionCode}>
+                          <td>{competitionCode}</td>
+                          {coverageResult.data.providers.map((provider) => {
+                            const cell = coverageResult.data.cells.find(
+                              (item) =>
+                                item.competitionCode === competitionCode &&
+                                item.providerCode === provider.code,
+                            );
+                            if (!cell) {
+                              return (
+                                <td key={provider.code}>
+                                  <span className="dimension-chip">
+                                    {COVERAGE_STATE_LABELS.not_probed}
+                                  </span>
+                                </td>
+                              );
+                            }
+                            const state = dominantState(cell.stateCounts);
+                            return (
+                              <td key={provider.code}>
+                                <span className="dimension-chip">
+                                  {COVERAGE_STATE_LABELS[state]}
+                                </span>
+                                <br />
+                                <small>
+                                  {cell.stateCounts.current_available +
+                                    cell.stateCounts.historical_only +
+                                    cell.stateCounts.partial}
+                                  /{cell.totalMetrics} métricas
+                                </small>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </section>
         </>
       )}

@@ -117,6 +117,10 @@ The Python package will grow by coherent responsibility only when each area beco
 - `data_mesh`: multi-source observation model, entity resolution, and
   reconciliation (Block 13+) -- provider-independent, feeds the canonical
   domain only through a reviewed reconciliation step, never automatically.
+- `coverage_lab`: Zero-Cost Coverage Lab (Block 14) -- a provider-independent
+  target metric catalog, target competition list, and a pure state-machine
+  measuring which free source can supply which metric, current vs
+  historical, per competition. Never a production feed itself.
 - `data_quality`: coverage and integrity checks.
 - `features`: reusable derived metrics.
 - `scoring`: player, team, and meta scores.

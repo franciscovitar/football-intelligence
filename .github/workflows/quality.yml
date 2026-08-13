@@ -150,6 +150,10 @@ jobs:
         run: >-
           psql -v ON_ERROR_STOP=1
           -f database/fixtures/005_data_mesh_smoke.sql
+      - name: Seed deterministic coverage lab smoke evidence
+        run: >-
+          psql -v ON_ERROR_STOP=1
+          -f database/fixtures/006_coverage_lab_smoke.sql
       - name: Verify Next.js PostgreSQL read path
         shell: bash
         run: |
@@ -263,3 +267,6 @@ jobs:
           grep -q "thesportsdb" "$RUNNER_TEMP/sources.html"
           grep -q "openligadb" "$RUNNER_TEMP/sources.html"
           grep -q "Coincidencias" "$RUNNER_TEMP/sources.html"
+          grep -q "GER_BL1" "$RUNNER_TEMP/sources.html"
+          grep -q "HISTÓRICO" "$RUNNER_TEMP/sources.html"
+          grep -q "TOKEN" "$RUNNER_TEMP/sources.html"

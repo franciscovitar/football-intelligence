@@ -1,0 +1,72 @@
+name: Zero-Cost Coverage Lab
+
+on:
+  workflow_dispatch:
+    inputs:
+      current_season:
+        description: "Current-season label for TheSportsDB/OpenLigaDB (split-year format)"
+        required: false
+        type: string
+        default: "2025-2026"
+      statsbomb_competition_name:
+        description: "StatsBomb Open Data competition_name to probe"
+        required: false
+        type: string
+        default: "1. Bundesliga"
+      statsbomb_season_name:
+        description: "StatsBomb Open Data season_name to probe"
+        required: false
+        type: string
+        default: "2023/2024"
+      persist:
+        description: "Persist the coverage snapshot to DATABASE_URL if provided"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: zero-cost-coverage
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    name: Zero-cost source coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - working-directory: analytics
+        run: uv sync --locked
+      - name: Run Zero-Cost Coverage Lab
+        working-directory: analytics
+        env:
+          # Optional-token source: this secret does not need to exist. When
+          # absent, football-data.org is reported as token_required, never
+          # as a failure, and no request is spent on it.
+          FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
+          DATABASE_URL: ${{ inputs.persist == true && secrets.DATABASE_URL || '' }}
+        run: >-
+          uv run football-intelligence-zero-cost-coverage
+          --current-season "${{ inputs.current_season }}"
+          --statsbomb-competition-name "${{ inputs.statsbomb_competition_name }}"
+          --statsbomb-season-name "${{ inputs.statsbomb_season_name }}"
+          --raw-dir "$RUNNER_TEMP/coverage-raw"
+          --report "$RUNNER_TEMP/coverage-report.json"
+      - name: Upload coverage evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: zero-cost-coverage-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/coverage-report.json
+            ${{ runner.temp }}/coverage-raw
+          if-no-files-found: warn
+          retention-days: 30
