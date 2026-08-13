@@ -1,7 +1,10 @@
 begin;
 
 insert into ingestion.providers (code, display_name)
-values ('api-football', 'API-Football')
+values
+    ('api-football', 'API-Football'),
+    ('thesportsdb', 'TheSportsDB'),
+    ('openligadb', 'OpenLigaDB')
 on conflict (code) do update
 set
     display_name = excluded.display_name,
