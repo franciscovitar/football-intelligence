@@ -14,7 +14,7 @@ Each block ends with focused verification and a checkpoint. A block is not compl
 - [x] **Block 8 — Expectation & Meta Intelligence** — PASS
 - [x] **Block 9 — Perception Intelligence** — PASS
 - [x] **Block 10 — Overrated / Underrated Intelligence** — PASS
-- [ ] **Block 11 — Tactical Intelligence**
+- [x] **Block 11 — Tactical Intelligence** — PASS
 - [ ] **Block 12 — World Radar + Calibration + V1 Hardening**
 
 ## Block 1 — Foundation
@@ -90,6 +90,11 @@ PR and merged-main PostgreSQL CI passed.
 ## Block 11 — Tactical Intelligence
 
 Add formation profiles and evidence-backed tactical summaries. Never claim spatial precision unsupported by available data.
+
+**PASS:** `tactical-v1.0` reuses existing fixture-detail ingestion for nominal
+formations, derives Control/Attacking-Volume/Defensive-Resistance proxies and
+formation stability from Team Intelligence, and exposes `/tactics` plus
+team-detail tactical context; PR and merged-main PostgreSQL CI passed.
 
 ## Block 12 — World Radar + Calibration + V1 Hardening
 

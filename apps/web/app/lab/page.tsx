@@ -13,6 +13,7 @@ import {
 } from "@/lib/player-display";
 import { getLabData } from "@/lib/queries/player-analytics";
 import { getTeamLabData } from "@/lib/queries/team-analytics";
+import { getLatestValidation } from "@/lib/queries/validation";
 import { TEAM_WINDOW_LABELS } from "@/lib/team-display";
 
 export const metadata: Metadata = {
@@ -26,7 +27,11 @@ export default async function LabPage() {
     notFound();
   }
 
-  const [result, teamResult] = await Promise.all([getLabData(), getTeamLabData()]);
+  const [result, teamResult, validationResult] = await Promise.all([
+    getLabData(),
+    getTeamLabData(),
+    getLatestValidation(),
+  ]);
 
   return (
     <main className="page-shell">
@@ -40,6 +45,59 @@ export default async function LabPage() {
         </div>
         <span className="internal-badge">internal</span>
       </section>
+
+      {validationResult.status === "ready" && validationResult.data ? (
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">V1 VALIDATION</p>
+              <h2>{validationResult.data.modelVersion}</h2>
+            </div>
+            <p>{formatDateTime(validationResult.data.calculatedAt)}</p>
+          </div>
+          <div className="lab-card-grid">
+            <article className="lab-stat">
+              <span>Hard gates</span>
+              <strong>{validationResult.data.hardStatus.toUpperCase()}</strong>
+              <small>Config, Rating contract y Tactical contract</small>
+            </article>
+            <article className="lab-stat">
+              <span>Elo calibration</span>
+              <strong>{validationResult.data.calibrationStatus}</strong>
+              <small>
+                Elo sample {validationResult.data.eloSampleSize ?? 0}
+                {validationResult.data.eloSkillVsBaseline !== null
+                  ? ` · skill vs baseline ${validationResult.data.eloSkillVsBaseline.toFixed(3)}`
+                  : ""}
+              </small>
+            </article>
+            <article className="lab-stat">
+              <span>Player stability</span>
+              <strong>{validationResult.data.playerStabilityMeasuredRoles.length} roles medidos</strong>
+              <small>Rank churn season vs last_10, no accuracy predictiva</small>
+            </article>
+            <article className="lab-stat">
+              <span>Rating contract</span>
+              <strong>
+                {Object.entries(validationResult.data.ratingPrevalence)
+                  .map(([signal, count]) => `${signal}:${count}`)
+                  .join(" · ") || "sin filas"}
+              </strong>
+              <small>Prevalencia por señal</small>
+            </article>
+            <article className="lab-stat">
+              <span>Tactical contract</span>
+              <strong>{validationResult.data.tacticalLowCoverageCount ?? 0} baja cobertura</strong>
+              <small>Equipos con formation coverage &lt; 50%</small>
+            </article>
+            <article className="lab-stat">
+              <span>Provider requests recientes</span>
+              <strong>{validationResult.data.ingestionJobs.join(", ") || "sin runs"}</strong>
+              <small>Últimos 30 días, ver ingestion.ingestion_runs</small>
+            </article>
+          </div>
+        </section>
+      ) : null}
 
       {result.status !== "ready" ? (
         <DataNotice
