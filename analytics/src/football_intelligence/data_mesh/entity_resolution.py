@@ -102,9 +102,26 @@ class CompetitionMapping:
 
 # Explicit configured mapping (Block 13 5.COMPETITION): PoC scope is the
 # Bundesliga overlap between the two free sources.
+#
+# football-data.org Free tier ("Tier One") competition codes: a small,
+# explicit, reviewable table -- never trusted blindly. The Zero-Cost
+# Coverage Lab job only ever treats one of these as actually confirmed for a
+# given run after finding its `code` present in that run's live
+# `/v4/competitions` response; a mapping present here with no matching live
+# entry stays `not_probed`, never fabricated coverage. ARG_LPF (Liga
+# Profesional Argentina) and USA_MLS are deliberately absent: football-data.org's
+# Free tier does not expose either.
 COMPETITION_MAPPINGS: tuple[CompetitionMapping, ...] = (
     CompetitionMapping("thesportsdb", "4331", "GER_BL1", "German Bundesliga"),
     CompetitionMapping("openligadb", "bl1", "GER_BL1", "1. Fussball-Bundesliga"),
+    CompetitionMapping("football-data-org", "PL", "ENG_PL", "Premier League"),
+    CompetitionMapping("football-data-org", "PD", "ESP_LL", "Primera Division"),
+    CompetitionMapping("football-data-org", "SA", "ITA_SA", "Serie A"),
+    CompetitionMapping("football-data-org", "BL1", "GER_BL1", "Bundesliga"),
+    CompetitionMapping("football-data-org", "FL1", "FRA_L1", "Ligue 1"),
+    CompetitionMapping("football-data-org", "DED", "NED_ED", "Eredivisie"),
+    CompetitionMapping("football-data-org", "PPL", "POR_PL", "Primeira Liga"),
+    CompetitionMapping("football-data-org", "BSA", "BRA_A", "Campeonato Brasileiro Série A"),
 )
 
 

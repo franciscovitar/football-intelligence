@@ -224,11 +224,24 @@ Run it: `football-intelligence-data-mesh-poc --season 2025-2026 --raw-dir
 5. Wire it into `run_data_mesh_poc.py` (or a dedicated job) with its own
    bounded request budget.
 
-`football-data.org` is a reasonable next candidate: the provider interface
-already makes this mechanical, but it is intentionally not implemented here
--- it needs an API token this block does not require or spend.
+Block 14 followed exactly this recipe to add `football-data.org` (optional
+token, current/live) and `statsbomb-open` (zero-auth, historical/deep) --
+see [`ZERO_COST_COVERAGE.md`](ZERO_COST_COVERAGE.md) for both.
 
-## Future qualitative lane (not implemented in this block)
+## Zero-Cost Coverage Lab (Block 14)
+
+Block 13 proves reconciliation works. Block 14 answers a different, equally
+important question: for every metric Football Intelligence wants, which
+free source can supply it, for which competition, at what freshness, how
+complete, and when was that last verified? It adds a provider-independent
+target metric catalog (derived from the existing statistical DTOs, never a
+shrinking duplicate list), a 7-state coverage model (separating
+`current_available` from `historical_only` so a deep historical source like
+StatsBomb Open Data can never be mistaken for current coverage), and a
+bounded coverage-measurement job. Full detail:
+[`ZERO_COST_COVERAGE.md`](ZERO_COST_COVERAGE.md).
+
+## Future qualitative lane
 
 A separate, future lane converges qualitative research into Perception
 Intelligence without ever touching objective statistics:
@@ -244,5 +257,7 @@ ChatGPT/web research
 
 This lane must converge only at the insight/product layer. It must never be
 allowed to replace or influence an objective statistical observation or a
-reconciliation decision. Block 13 documents this intent; it does not
-implement ChatGPT Scheduled Tasks or a Google Sheets integration.
+reconciliation decision. Block 13 documented this intent; Block 14 adds the
+real Sheet contract and pure validation DTOs (see
+[`PERCEPTION_INBOX.md`](PERCEPTION_INBOX.md)) without building any Google
+infrastructure. Actual Sheet -> Supabase ingestion remains future work.

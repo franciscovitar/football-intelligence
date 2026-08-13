@@ -4,7 +4,9 @@ insert into ingestion.providers (code, display_name)
 values
     ('api-football', 'API-Football'),
     ('thesportsdb', 'TheSportsDB'),
-    ('openligadb', 'OpenLigaDB')
+    ('openligadb', 'OpenLigaDB'),
+    ('statsbomb-open', 'StatsBomb Open Data'),
+    ('football-data-org', 'football-data.org')
 on conflict (code) do update
 set
     display_name = excluded.display_name,

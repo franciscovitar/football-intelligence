@@ -23,6 +23,7 @@ football-intelligence-tactical-analytics = "football_intelligence.jobs.calculate
 football-intelligence-world-radar = "football_intelligence.jobs.sync_world_radar:main"
 football-intelligence-validate-v1 = "football_intelligence.jobs.validate_v1:main"
 football-intelligence-data-mesh-poc = "football_intelligence.jobs.run_data_mesh_poc:main"
+football-intelligence-zero-cost-coverage = "football_intelligence.jobs.run_zero_cost_coverage:main"
 
 [dependency-groups]
 dev = [
