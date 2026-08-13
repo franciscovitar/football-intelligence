@@ -99,7 +99,7 @@ export default async function PerceptionPage({
           <input
             defaultValue={filters.search}
             name="q"
-            placeholder="Ej. Web Smoke Forward"
+            placeholder="Ej. jugador, medio o frase"
             type="search"
           />
         </label>

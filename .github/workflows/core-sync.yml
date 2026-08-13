@@ -2,6 +2,15 @@ name: Core League Sync
 
 on:
   workflow_dispatch:
+    inputs:
+      from_date:
+        description: "Historical backfill start date (YYYY-MM-DD). Must be supplied together with to_date. Leave both blank for the normal incremental run."
+        required: false
+        type: string
+      to_date:
+        description: "Historical backfill end date (YYYY-MM-DD). Must be supplied together with from_date. Leave both blank for the normal incremental run."
+        required: false
+        type: string
   schedule:
     - cron: "17 6 * * *"
 
@@ -38,14 +47,28 @@ jobs:
         run: uv sync --locked
       - name: Synchronize core leagues
         working-directory: analytics
-        run: >-
-          uv run football-intelligence-sync
-          --season "$CORE_SYNC_SEASON"
-          --lookback-days 3
-          --max-fixtures-per-league 8
-          --request-budget 60
-          --raw-dir "$RUNNER_TEMP/core-sync-raw"
-          --report "$RUNNER_TEMP/core-sync-report.json"
+        env:
+          MANUAL_FROM_DATE: ${{ github.event.inputs.from_date }}
+          MANUAL_TO_DATE: ${{ github.event.inputs.to_date }}
+        run: |
+          set -euo pipefail
+          args=(--season "$CORE_SYNC_SEASON")
+          if [[ -n "${MANUAL_FROM_DATE:-}" || -n "${MANUAL_TO_DATE:-}" ]]; then
+            if [[ -z "${MANUAL_FROM_DATE:-}" || -z "${MANUAL_TO_DATE:-}" ]]; then
+              echo "Both from_date and to_date must be supplied together for a manual historical run" >&2
+              exit 1
+            fi
+            args+=(--from-date "$MANUAL_FROM_DATE" --to-date "$MANUAL_TO_DATE")
+          else
+            args+=(--lookback-days 3)
+          fi
+          args+=(
+            --max-fixtures-per-league 8
+            --request-budget 60
+            --raw-dir "$RUNNER_TEMP/core-sync-raw"
+            --report "$RUNNER_TEMP/core-sync-report.json"
+          )
+          uv run football-intelligence-sync "${args[@]}"
       - name: Calculate player analytics
         working-directory: analytics
         run: >-
