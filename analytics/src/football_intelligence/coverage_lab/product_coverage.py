@@ -89,3 +89,47 @@ def compute_product_coverage(
         gap_keys=tuple(sorted(gap_keys)),
         critical_gap_keys=tuple(sorted(critical_gap_keys)),
     )
+
+
+def compute_recent_season_coverage(
+    *,
+    target_metrics: Sequence[TargetMetric],
+    target_competitions: Sequence[TargetCompetition],
+    coverage_entries: Sequence[CoverageEntry],
+) -> ProductCoverageResult:
+    """Union coverage from `previous_season` evidence only.
+
+    Real, useful signal that a `current`-role provider's probe verified the
+    latest *completed* season -- but this must never be confused with, or
+    silently folded into, `compute_product_coverage(freshness_role="current")`'s
+    numerator. Reported as its own separate fraction so a competition whose
+    only current-role evidence is a year-old season stays visibly distinct
+    from one with genuinely current-period evidence.
+    """
+
+    entries_by_requirement: dict[tuple[str, str, str], list[CoverageEntry]] = defaultdict(list)
+    for entry in coverage_entries:
+        if entry.freshness_role != "current":
+            continue
+        key = (entry.competition_code, entry.granularity, entry.metric_name)
+        entries_by_requirement[key].append(entry)
+
+    numerator = 0
+    gap_keys: list[str] = []
+
+    for competition in target_competitions:
+        for metric in target_metrics:
+            key = (competition.code, metric.granularity, metric.metric_name)
+            entries = entries_by_requirement.get(key, ())
+            satisfied = any(entry.state == "previous_season" for entry in entries)
+            if satisfied:
+                numerator += 1
+            else:
+                gap_keys.append(_requirement_gap_key(competition.code, metric))
+
+    return ProductCoverageResult(
+        numerator=numerator,
+        denominator=len(target_metrics) * len(target_competitions),
+        gap_keys=tuple(sorted(gap_keys)),
+        critical_gap_keys=(),
+    )

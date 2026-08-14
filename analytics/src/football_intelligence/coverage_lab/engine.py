@@ -36,6 +36,18 @@ class ProbeResult:
     Both count mappings are keyed by `(metric_name, granularity)`, matching
     the target catalog's true identity -- see `provider_capabilities` for why
     bare `metric_name` is not a safe key.
+
+    `is_current_period` answers a question separate from `provider.
+    freshness_role`: not "can this provider ever report current data" but
+    "did THIS probe actually verify data from the true current season/period
+    (computed from the run date), as opposed to the latest completed one".
+    A `current`-role provider whose probe only reached the previous season
+    (e.g. a season file that has not been published yet, so the job fell
+    back to the prior one) must never be reported as `current_available` --
+    see `_resolve_entry`'s `previous_season` branch. Defaults to `True`
+    because most probes (StatsBomb, whose historical role makes this
+    irrelevant; football-data.org's live matches endpoint; any single-season
+    probe with no fallback) are unambiguous.
     """
 
     status: ProbeStatus
@@ -44,6 +56,7 @@ class ProbeResult:
     source_reference: str | None
     notes: str | None = None
     metric_sample_sizes: Mapping[tuple[str, str], int] | None = None
+    is_current_period: bool = True
 
 
 def compute_coverage(
@@ -159,6 +172,11 @@ def _resolve_entry(
     state: CoverageState
     if sample_size == 0 or observed_count == 0:
         state = "missing"
+    elif provider.freshness_role == "current" and not probe.is_current_period:
+        # Real evidence, but verified only for the latest *completed*
+        # season/period, not the true current one -- never current_available,
+        # regardless of how complete that prior-period sample is.
+        state = "previous_season"
     elif observed_count < sample_size:
         state = "partial"
     elif provider.freshness_role == "historical":

@@ -103,6 +103,19 @@ begin
     exception
         when check_violation then null;
     end;
+
+    -- `previous_season` (Block 15 corrective pass): a `current`-role
+    -- provider's probe that verified only the latest completed season, not
+    -- the true current one -- must be an accepted state, distinct from
+    -- `current_available`.
+    insert into ingestion.coverage_snapshots (
+        provider_id, competition_code, metric_name, granularity, entity_type,
+        freshness_role, state, sample_size, observed_count, last_checked_at
+    )
+    values (
+        statsbomb_id, 'GER_BL1', 'contract-previous-season', 'match', 'match',
+        'current', 'previous_season', 15, 15, now()
+    );
 end;
 $$;
 

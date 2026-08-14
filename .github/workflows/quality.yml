@@ -270,4 +270,5 @@ jobs:
           grep -q "Coincidencias" "$RUNNER_TEMP/sources.html"
           grep -q "GER_BL1" "$RUNNER_TEMP/sources.html"
           grep -q "HISTÓRICO" "$RUNNER_TEMP/sources.html"
+          grep -q "TEMPORADA ANTERIOR" "$RUNNER_TEMP/sources.html"
           grep -q "TOKEN" "$RUNNER_TEMP/sources.html"

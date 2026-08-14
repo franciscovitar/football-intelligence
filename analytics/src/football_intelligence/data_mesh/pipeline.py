@@ -9,6 +9,7 @@ not a parallel one, regardless of which sources are being combined.
 
 from __future__ import annotations
 
+import dataclasses
 from collections import defaultdict
 from collections.abc import Mapping
 from datetime import date
@@ -29,6 +30,7 @@ from football_intelligence.data_mesh.models import (
 )
 from football_intelligence.data_mesh.reconciliation import reconcile_metric
 from football_intelligence.data_mesh.timeparse import normalize_season_label, parse_date
+from football_intelligence.normalization.models import TeamLineupRecord, TeamMatchStatsRecord
 
 REPORT_EXAMPLE_LIMIT = 10
 
@@ -37,11 +39,47 @@ REPORT_EXAMPLE_LIMIT = 10
 MatchGroupKey = tuple[str, str, str, str]
 MatchDateClusters = Mapping[MatchGroupKey, Mapping[date, date]]
 
+# Source-local (source_code, provider-scoped id) -> resolved canonical
+# logical key, built once per reconciliation run from the observations that
+# actually carry full identity (team `name` rows, match rows) so a
+# team-match-scoped stat observation -- which only ever carries a
+# provider-scoped team/match id, never a team name or full match identity --
+# can resolve deterministically without inventing a second resolution path.
+SourceLocalIndex = Mapping[tuple[str, str], str]
+
+# `team.name` is a TEAM-IDENTITY property (one fact per team, ever). Every
+# other metric TheSportsDB's event-stats endpoint or Football-Data.co.uk's
+# CSV reports for an `entity_type == "team"` observation -- shots, cards,
+# fouls, formation, etc. (`TeamMatchStatsRecord`/`TeamLineupRecord` fields)
+# -- is a TEAM-MATCH-SCOPED fact: Bayern's `shots_total` against Leipzig and
+# Bayern's `shots_total` against Dortmund are two different real facts, not
+# two observations of the same one. Grouping both under the bare team
+# identity would silently merge them into a false "conflict". Derived from
+# the DTOs themselves (never a hand-maintained duplicate list) so it can
+# never drift.
+_TEAM_ENTITY_LINK_FIELDS = frozenset({"match_external_id", "team_external_id"})
+
+
+def _team_match_scoped_metric_names() -> frozenset[str]:
+    names: set[str] = set()
+    for dataclass_type in (TeamMatchStatsRecord, TeamLineupRecord):
+        names.update(
+            field.name
+            for field in dataclasses.fields(dataclass_type)
+            if field.name not in _TEAM_ENTITY_LINK_FIELDS
+        )
+    return frozenset(names)
+
+
+TEAM_MATCH_SCOPED_METRIC_NAMES: frozenset[str] = _team_match_scoped_metric_names()
+
 
 def resolve_logical_key(
     observation: NormalizedObservation,
     *,
     match_date_clusters: MatchDateClusters,
+    team_index: SourceLocalIndex | None = None,
+    match_index: SourceLocalIndex | None = None,
 ) -> EntityResolution:
     hints = observation.entity_identity_hints
 
@@ -66,6 +104,10 @@ def resolve_logical_key(
     competition_code = competition_resolution.logical_key.removeprefix("competition:")
 
     if observation.entity_type == "team":
+        if observation.metric_name in TEAM_MATCH_SCOPED_METRIC_NAMES:
+            return _resolve_team_match_scoped(
+                observation, team_index=team_index or {}, match_index=match_index or {}
+            )
         return resolve_team(name=hints.get("name", ""), competition_code=competition_code)
 
     if observation.entity_type == "match":
@@ -104,6 +146,72 @@ def resolve_logical_key(
         nationality_code=None,
         team_context_key=None,
     )
+
+
+def _resolve_team_match_scoped(
+    observation: NormalizedObservation,
+    *,
+    team_index: SourceLocalIndex,
+    match_index: SourceLocalIndex,
+) -> EntityResolution:
+    match_source_id = observation.entity_identity_hints.get("match_external_id", "")
+    team_key = team_index.get((observation.source_code, observation.entity_source_id))
+    match_key = (
+        match_index.get((observation.source_code, match_source_id)) if match_source_id else None
+    )
+
+    if team_key is None or match_key is None:
+        return EntityResolution(
+            status="unresolved",
+            logical_key=None,
+            entity_type="team",
+            confidence=0.0,
+            reason=(
+                "team-match identity requires both a resolved team and a resolved match "
+                "via the source-local (source_code, id) bridging index"
+            ),
+        )
+    return EntityResolution(
+        status="resolved",
+        logical_key=f"team-match:{match_key}:{team_key}",
+        entity_type="team",
+        confidence=0.85,
+        reason="team+match identity via source-local bridging index",
+    )
+
+
+def build_source_local_indexes(
+    observations: list[NormalizedObservation],
+    *,
+    match_date_clusters: MatchDateClusters,
+) -> tuple[SourceLocalIndex, SourceLocalIndex]:
+    """Bridge provider-scoped ids to canonical logical keys.
+
+    Built from the observations that already carry full identity -- team
+    `name` rows (`entity_source_id` = the provider's own team id) and match
+    rows (`entity_source_id` = the provider's own match id, with full
+    home/away/date identity hints) -- so a team-match-scoped stat
+    observation from the SAME provider, which only ever carries those same
+    provider-scoped ids, can resolve without any provider-specific
+    resolution logic of its own or any fuzzy/invented matching.
+    """
+
+    team_index: dict[tuple[str, str], str] = {}
+    match_index: dict[tuple[str, str], str] = {}
+    for observation in observations:
+        if observation.entity_type == "team" and observation.metric_name == "name":
+            resolution = resolve_logical_key(observation, match_date_clusters=match_date_clusters)
+            if resolution.status == "resolved" and resolution.logical_key is not None:
+                team_index[(observation.source_code, observation.entity_source_id)] = (
+                    resolution.logical_key
+                )
+        elif observation.entity_type == "match":
+            resolution = resolve_logical_key(observation, match_date_clusters=match_date_clusters)
+            if resolution.status == "resolved" and resolution.logical_key is not None:
+                match_index[(observation.source_code, observation.entity_source_id)] = (
+                    resolution.logical_key
+                )
+    return team_index, match_index
 
 
 def build_match_date_clusters(
@@ -162,13 +270,21 @@ def resolve_and_reconcile(
     observations: list[NormalizedObservation],
 ) -> tuple[list[ReconciliationDecision], dict[str, Any]]:
     match_date_clusters = build_match_date_clusters(observations)
+    team_index, match_index = build_source_local_indexes(
+        observations, match_date_clusters=match_date_clusters
+    )
     grouped: dict[tuple[str, EntityType, str], list[NormalizedObservation]] = defaultdict(list)
     unresolved_examples: list[dict[str, str]] = []
     resolved_count = 0
     unresolved_count = 0
 
     for observation in observations:
-        resolution = resolve_logical_key(observation, match_date_clusters=match_date_clusters)
+        resolution = resolve_logical_key(
+            observation,
+            match_date_clusters=match_date_clusters,
+            team_index=team_index,
+            match_index=match_index,
+        )
         if resolution.status != "resolved" or resolution.logical_key is None:
             unresolved_count += 1
             if len(unresolved_examples) < REPORT_EXAMPLE_LIMIT:

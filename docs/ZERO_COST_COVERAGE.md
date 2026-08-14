@@ -37,12 +37,13 @@ result (`not_probed` or `missing`), never silently dropped from the report.
 
 ## Coverage state model
 
-Seven states (`analytics/.../coverage_lab/models.py`), because a simple
+Eight states (`analytics/.../coverage_lab/models.py`), because a simple
 yes/no would hide real distinctions that matter:
 
 | State | Meaning |
 | --- | --- |
-| `current_available` | Probed this run; the metric is present for essentially the whole sample, for a *current* source |
+| `current_available` | Probed this run; the metric is present for essentially the whole sample, for a *current* source, and the probe verified the TRUE current season/period |
+| `previous_season` | Probed this run, from a `current`-role provider -- but the probe only verified the latest *completed* season/period, not the true current one (Block 15) |
 | `historical_only` | Probed; present, but the source is historical/deep -- it can never satisfy a *current*-data need, no matter how complete |
 | `partial` | Probed; present for only part of the sample |
 | `token_required` | The provider needs a token that isn't configured; deliberately not probed |
@@ -52,12 +53,19 @@ yes/no would hide real distinctions that matter:
 
 Only `current_available` satisfies a *current*-data need
 (`satisfies_current()`). `historical_only` never does, even though the
-underlying metric is genuinely supported -- that is the entire point of
-separating the two.
+underlying metric is genuinely supported; neither does `previous_season`,
+even though the evidence can be completely real and complete -- verifying
+the wrong season is not the same as verifying no season. `provider.
+freshness_role` ("can this provider ever report current data") and
+`ProbeResult.is_current_period` ("did THIS probe verify the true current
+season, not just the latest completed one") are deliberately separate
+signals in `engine.py`'s `_resolve_entry` -- conflating them was a real bug
+in the initial Block 15 implementation (see "TheSportsDB season labels"
+below).
 
-Percentages are never blended: current and historical/deep coverage are
-always reported as separate numerator/denominator pairs, never combined
-into one misleading ratio.
+Percentages are never blended: current, previous-season, and historical/deep
+coverage are always reported as separate numerator/denominator pairs, never
+combined into one misleading ratio.
 
 ### Product coverage vs provider diagnostics
 
@@ -81,11 +89,16 @@ independent of how many providers exist. Adding a provider that supports
 nothing leaves this number exactly unchanged; adding a provider that covers
 something new can only ever raise it.
 
-The job report exposes both concepts explicitly and never conflates them:
-`product_current_coverage` / `product_historical_deep_coverage` (the
-480-denominator product answer) and `provider_diagnostics.current_entries` /
-`provider_diagnostics.historical_entries` (the provider-row-count
-evidence). `missing_critical_current_metrics` at the top level is
+The job report exposes three product-level fractions, all sharing the fixed
+480 denominator and never blended into each other: `product_current_coverage`
+(true current-period evidence only), `product_recent_season_coverage`
+(`previous_season` evidence -- a `current`-role provider verified the latest
+*completed* season, real but never current), and
+`product_historical_deep_coverage` (StatsBomb-style historical/deep). The
+provider-row-count evidence lives separately under
+`provider_diagnostics.current_entries` /
+`provider_diagnostics.historical_entries`. `missing_critical_current_metrics`
+at the top level is
 product-level (a gap key like `GER_BL1:match:home_score` means no current
 provider covers it); the provider-qualified equivalent
 (`football-data-org:GER_BL1:home_score`) lives under
@@ -372,12 +385,29 @@ competitions whose newer season file is not yet published).
 `eventsseason.php` needs an explicit season string per competition, and the
 format differs by competition: European leagues use a cross-year
 `"YYYY-YYYY"` label, Argentina/Brazil/MLS use a single calendar year.
-`run_zero_cost_coverage.THESPORTSDB_SEASON_BY_COMPETITION` is a small,
-explicit table of the label verified live (via `eventsseason.php` itself,
-checking for real finished matches) to work for each competition at
-implementation time -- the same maintenance-needed-over-time pattern
-Block 14's `DEFAULT_CURRENT_SEASON_LABEL` already had, extended per
-competition rather than one global default.
+
+**Corrected in the Block 15 review pass.** The first implementation used
+`THESPORTSDB_SEASON_BY_COMPETITION`, a hardcoded table picking whichever
+season label happened to already have finished matches at implementation
+time (e.g. `"2025-2026"` for 5 European leagues whose true `"2026-2027"`
+season had not started yet) -- and reported that data as `current_available`.
+That conflated "a season this provider can structurally report" with "the
+season we actually verified is the current one": real evidence, wrongly
+labeled. `run_zero_cost_coverage.expected_current_season(competition_code,
+as_of_date)` replaces the hardcoded table with a computed, deterministic
+derivation (calendar-year competitions: `str(as_of_date.year)`; cross-year
+competitions: the Aug-May window containing `as_of_date`) -- verified live to
+match TheSportsDB's own `strCurrentSeason` field for every target
+competition. The job queries only this season; if it has produced no
+finished match yet, the honest result is `missing`, not a silently-borrowed
+prior season passed off as current.
+
+Football-Data.co.uk's existing newer-then-older-season fallback already
+carried the right signal without needing extra requests: `_probe_football_data_uk`
+tags which season code actually succeeded, and `_build_probe_results` sets
+`ProbeResult.is_current_period = (used_season == newer_code)` accordingly --
+the engine reports `previous_season`, never `current_available`, whenever
+the fallback (older) season is what was actually found.
 
 ## Reconciliation (TheSportsDB x Football-Data.co.uk)
 
@@ -395,6 +425,31 @@ as an explicit `conflict`, never averaged. Where only one source reports a
 metric (e.g. team-level shots, which OpenLigaDB/football-data.org never
 report), the decision is correctly `single_source`. None of this writes to
 `football.*` or auto-promotes anything.
+
+**Team-match-scoped identity (corrected in the Block 15 review pass).**
+`team.name` is a team-identity property -- one fact per team, ever. Every
+other metric an `entity_type == "team"` observation can report (shots,
+cards, fouls, formation -- every `TeamMatchStatsRecord`/`TeamLineupRecord`
+field, derived from those DTOs via `dataclasses.fields()` so the set can
+never drift, see `pipeline.TEAM_MATCH_SCOPED_METRIC_NAMES`) is a
+**team-match-scoped** fact instead: Bayern's `shots_total` against Leipzig
+and Bayern's `shots_total` against Dortmund are two different real facts,
+not two observations of one fact. The first implementation resolved every
+team-entity observation to the same bare `team:GER_BL1:bayern...` logical
+key regardless of metric, which silently merged different matches' stats
+into one (false) reconciliation group.
+
+`resolve_logical_key` now routes team-match-scoped metrics through
+`_resolve_team_match_scoped`, which produces a composite
+`team-match:<canonical-match-key>:<canonical-team-key>` logical key instead.
+TheSportsDB's event-stat observations only ever carry a provider-scoped team
+id and match id (never a team name or full match identity) -- resolving them
+still requires no provider-specific logic or fuzzy matching:
+`build_source_local_indexes` builds a `(source_code, provider-scoped id) ->
+canonical logical key` bridge once per reconciliation run from the
+observations that DO carry full identity (the season-event `name`/match
+rows already fetched for the same competition), and every team-match-scoped
+observation from the same source resolves through that index.
 
 ## Persistence
 
@@ -428,9 +483,10 @@ Block 14 measures and documents this contract; it does not enable it.
 
 ## Web
 
-`/sources` shows product-level coverage stats (current and historical/deep,
-`numerator/denominator` against the fixed 480-requirement target catalog,
-clearly separate from the raw provider-row count) alongside a competition x
+`/sources` shows product-level coverage stats (current, previous-season, and
+historical/deep, each its own `numerator/denominator` against the fixed
+480-requirement target catalog, clearly separate from the raw provider-row
+count) alongside a competition x
 provider coverage matrix. Each matrix cell shows every non-zero state it
 actually has (e.g. `2 ACTUAL · 1 PARCIAL · 45 NO SOPORTADO`), never a single
 majority-derived verdict -- a provider that covers 2 of 48 metrics and

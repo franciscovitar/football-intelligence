@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 
 import pytest
 
+from football_intelligence.data_mesh.adapters.football_data_uk import parse_results_csv
 from football_intelligence.ingestion.raw_store import LocalRawStore
 from football_intelligence.jobs import run_zero_cost_coverage
 from football_intelligence.jobs.run_zero_cost_coverage import (
     MAX_REQUEST_BUDGET,
     PLANNED_REQUESTS_BASE,
+    _build_probe_results,
     _competition_external_id,
     _probe_football_data_org,
+    expected_current_season,
 )
 from football_intelligence.providers.football_data_org import FootballDataOrgClient
 
@@ -108,3 +112,62 @@ def test_planned_requests_base_respects_hard_cap() -> None:
     # football-data.org token is added on top.
     assert PLANNED_REQUESTS_BASE <= MAX_REQUEST_BUDGET
     assert MAX_REQUEST_BUDGET == 35
+
+
+def test_expected_current_season_cross_year_competitions_roll_over_in_august() -> None:
+    mid_season = date(2026, 3, 1)
+    season_start = date(2026, 8, 13)
+    assert expected_current_season("ENG_PL", mid_season) == "2025-2026"
+    assert expected_current_season("GER_BL1", mid_season) == "2025-2026"
+    assert expected_current_season("ENG_PL", season_start) == "2026-2027"
+    assert expected_current_season("GER_BL1", season_start) == "2026-2027"
+
+
+def test_expected_current_season_calendar_year_competitions_use_the_run_year() -> None:
+    assert expected_current_season("ARG_LPF", date(2026, 3, 1)) == "2026"
+    assert expected_current_season("ARG_LPF", date(2026, 8, 13)) == "2026"
+    assert expected_current_season("USA_MLS", date(2026, 8, 13)) == "2026"
+    assert expected_current_season("BRA_A", date(2026, 8, 13)) == "2026"
+
+
+def _fd_uk_probe_results(*, season_by_competition: dict[str, str], newer_season_code: str):
+    observations = parse_results_csv(
+        "Div,Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,FTR,HS,AS,HST,AST,HF,AF,HC,AC,HY,AY,HR,AR\n"
+        "D1,22/08/2025,18:30,Bayern Munich,RB Leipzig,6,0,H,20,5,12,2,8,10,7,3,1,2,0,0\n",
+        division_code="D1",
+        season_code=season_by_competition["GER_BL1"],
+        ingestion_run_id=None,
+    )
+    return _build_probe_results(
+        thesportsdb_statuses={},
+        thesportsdb_observations_by_competition={},
+        openligadb_status="error: n/a",
+        openligadb_observations=[],
+        statsbomb_status="error: n/a",
+        statsbomb_observations=[],
+        statsbomb_match_sample_size=0,
+        fd_uk_statuses={"GER_BL1": "ok"},
+        fd_uk_observations=observations,
+        fd_uk_meta={
+            "season_by_competition": season_by_competition,
+            "newer_season_code": newer_season_code,
+            "older_season_code": "2526",
+        },
+        fd_org_status="token_required",
+        fd_org_observations=[],
+        fd_org_meta={},
+    )
+
+
+def test_football_data_uk_fallback_season_is_tagged_not_current_period() -> None:
+    probe_results = _fd_uk_probe_results(
+        season_by_competition={"GER_BL1": "2526"}, newer_season_code="2627"
+    )
+    assert probe_results[("football-data-uk", "GER_BL1")].is_current_period is False
+
+
+def test_football_data_uk_true_current_season_is_tagged_current_period() -> None:
+    probe_results = _fd_uk_probe_results(
+        season_by_competition={"GER_BL1": "2627"}, newer_season_code="2627"
+    )
+    assert probe_results[("football-data-uk", "GER_BL1")].is_current_period is True

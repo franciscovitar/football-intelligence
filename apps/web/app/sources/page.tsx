@@ -23,6 +23,7 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
 const COVERAGE_STATE_LABELS: Record<CoverageState, string> = {
   current_available: "ACTUAL",
   historical_only: "HISTÓRICO",
+  previous_season: "TEMPORADA ANTERIOR",
   partial: "PARCIAL",
   token_required: "TOKEN",
   not_probed: "SIN PROBAR",
@@ -224,8 +225,11 @@ export default async function SourcesPage() {
               </div>
               <p>
                 Una fuente histórica (StatsBomb Open Data) nunca satisface una necesidad de
-                datos actuales, aunque soporte la métrica. Sin token configurado, football-data.org
-                se muestra como &ldquo;TOKEN&rdquo;, nunca como error.
+                datos actuales, aunque soporte la métrica. Una fuente actual cuya sonda solo
+                verificó la última temporada completa (no la vigente) se muestra como
+                &ldquo;TEMPORADA ANTERIOR&rdquo;, nunca como &ldquo;ACTUAL&rdquo;. Sin token
+                configurado, football-data.org se muestra como &ldquo;TOKEN&rdquo;, nunca como
+                error.
               </p>
             </div>
             {coverageResult.status !== "ready" ? (
@@ -253,6 +257,17 @@ export default async function SourcesPage() {
                     <small>
                       Requisitos (competición × métrica) cubiertos por al menos una fuente actual,
                       sin importar cuántos proveedores existan
+                    </small>
+                  </article>
+                  <article className="lab-stat">
+                    <span>Cobertura de producto · temporada anterior</span>
+                    <strong>
+                      {coverageResult.data.productRecentSeasonCoverage.numerator}/
+                      {coverageResult.data.productRecentSeasonCoverage.denominator}
+                    </strong>
+                    <small>
+                      Una fuente actual verificó la última temporada completa, no la vigente —
+                      evidencia real, pero nunca cuenta como cobertura actual
                     </small>
                   </article>
                   <article className="lab-stat">

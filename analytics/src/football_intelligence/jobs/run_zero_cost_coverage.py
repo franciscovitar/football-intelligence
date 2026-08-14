@@ -31,9 +31,13 @@ from football_intelligence.coverage_lab.models import CoverageEntry, satisfies_c
 from football_intelligence.coverage_lab.product_coverage import (
     ProductCoverageResult,
     compute_product_coverage,
+    compute_recent_season_coverage,
 )
 from football_intelligence.coverage_lab.provider_capabilities import PROVIDER_CAPABILITIES
-from football_intelligence.coverage_lab.target_competitions import build_target_competitions
+from football_intelligence.coverage_lab.target_competitions import (
+    TARGET_COMPETITION_COUNT,
+    build_target_competitions,
+)
 from football_intelligence.coverage_lab.target_metrics import (
     CRITICAL_METRIC_NAMES,
     build_metric_granularity_index,
@@ -93,25 +97,31 @@ STATSBOMB_EVENT_SAMPLE_MATCHES = 2
 # of quietly implying full-season historical coverage.
 BUNDESLIGA_FULL_SEASON_MATCH_COUNT = 306
 
-# TheSportsDB `eventsseason.php` season string per target competition.
-# Verified live during Block 15 implementation (see docs/ZERO_COST_COVERAGE.md):
-# European leagues use a cross-year "YYYY-YYYY" season label; Argentina,
-# Brazil, and MLS use a single calendar year. Each value below is the label
-# that was confirmed live to return real finished matches at implementation
-# time -- like `DEFAULT_CURRENT_SEASON_LABEL` before it, this needs periodic
-# maintenance as seasons roll over, not a one-time guess.
-THESPORTSDB_SEASON_BY_COMPETITION: dict[str, str] = {
-    "ARG_LPF": "2026",
-    "ENG_PL": "2025-2026",
-    "ESP_LL": "2025-2026",
-    "ITA_SA": "2025-2026",
-    "GER_BL1": "2025-2026",
-    "FRA_L1": "2025-2026",
-    "NED_ED": "2026-2027",
-    "POR_PL": "2026-2027",
-    "BRA_A": "2026",
-    "USA_MLS": "2026",
-}
+# Competitions whose season is a single calendar year rather than a
+# cross-year Aug-May cycle. Every other target competition is cross-year.
+CALENDAR_YEAR_COMPETITIONS: frozenset[str] = frozenset({"ARG_LPF", "BRA_A", "USA_MLS"})
+
+
+def expected_current_season(competition_code: str, as_of_date: date) -> str:
+    """The TRUE current season label for `competition_code` as of `as_of_date`.
+
+    A computed, deterministic derivation -- never a hardcoded label chosen
+    because it happens to have finished matches. Verified live during Block
+    15 implementation that this matches TheSportsDB's own
+    `strCurrentSeason` convention for both calendar-year competitions
+    (Argentina, Brazil, MLS: a single `"YYYY"` label) and cross-year ones
+    (the 7 European leagues: `"YYYY-YYYY"`, rolling over every August 1st).
+    A competition whose true current season has produced no finished match
+    yet must report that honestly (see `previous_season` in
+    `coverage_lab.models`), never silently borrow an older season's data as
+    if it were current.
+    """
+
+    if competition_code in CALENDAR_YEAR_COMPETITIONS:
+        return str(as_of_date.year)
+    start_year = as_of_date.year if as_of_date.month >= 8 else as_of_date.year - 1
+    return f"{start_year}-{start_year + 1}"
+
 
 # Match discovery (`eventsseason.php`) runs for all 10 competitions -- one
 # request each. Event-stats/lineup sampling adds real depth beyond match
@@ -139,7 +149,7 @@ FOOTBALL_DATA_UK_UNCOVERED_COMPETITIONS: tuple[str, ...] = ("ARG_LPF", "BRA_A", 
 FOOTBALL_DATA_UK_MAX_ATTEMPTS_PER_COMPETITION = 2
 
 THESPORTSDB_PLANNED_REQUESTS = (
-    len(THESPORTSDB_SEASON_BY_COMPETITION)
+    TARGET_COMPETITION_COUNT
     + len(THESPORTSDB_EVENT_STATS_SAMPLE_COMPETITIONS)
     + len(THESPORTSDB_LINEUP_SAMPLE_COMPETITIONS)
 )
@@ -182,7 +192,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--as-of-date",
         default=None,
-        help="ISO date used to compute Football-Data.co.uk season codes (default: today, UTC).",
+        help=(
+            "ISO date used to compute the true current season for TheSportsDB/OpenLigaDB "
+            "and the newer/older Football-Data.co.uk season codes (default: today, UTC)."
+        ),
     )
     parser.add_argument("--request-budget", type=int, default=DEFAULT_REQUEST_BUDGET)
     parser.add_argument("--raw-dir", type=Path, required=True)
@@ -217,9 +230,9 @@ def main() -> None:
         thesportsdb_requests,
         thesportsdb_observations_by_competition,
         thesportsdb_meta,
-    ) = _probe_thesportsdb(raw_store=raw_store)
+    ) = _probe_thesportsdb(raw_store=raw_store, as_of_date=as_of_date)
     openligadb_status, openligadb_requests, openligadb_observations = _probe_openligadb(
-        raw_store=raw_store
+        raw_store=raw_store, as_of_date=as_of_date
     )
     statsbomb_status, statsbomb_requests, statsbomb_observations, statsbomb_meta = _probe_statsbomb(
         raw_store=raw_store,
@@ -251,6 +264,7 @@ def main() -> None:
         statsbomb_match_sample_size=statsbomb_meta.get("match_sample_size", 0),
         fd_uk_statuses=fd_uk_statuses,
         fd_uk_observations=fd_uk_observations,
+        fd_uk_meta=fd_uk_meta,
         fd_org_status=fd_org_status,
         fd_org_observations=fd_org_observations,
         fd_org_meta=fd_org_meta,
@@ -357,7 +371,7 @@ def _first_finished_event(payload: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _probe_thesportsdb(
-    *, raw_store: LocalRawStore
+    *, raw_store: LocalRawStore, as_of_date: date
 ) -> tuple[dict[str, str], int, dict[str, list[NormalizedObservation]], dict[str, Any]]:
     client = TheSportsDbClient()
     league_ids = _thesportsdb_mappings()
@@ -366,9 +380,11 @@ def _probe_thesportsdb(
     observations_by_competition: dict[str, list[NormalizedObservation]] = {}
     event_stats_sample_matches: dict[str, str] = {}
     lineup_sample_matches: dict[str, str] = {}
+    season_by_competition: dict[str, str] = {}
 
-    for competition_code, season_label in THESPORTSDB_SEASON_BY_COMPETITION.items():
-        league_id = league_ids[competition_code]
+    for competition_code, league_id in league_ids.items():
+        season_label = expected_current_season(competition_code, as_of_date)
+        season_by_competition[competition_code] = season_label
         try:
             response = client.get("eventsseason.php", {"id": league_id, "s": season_label})
             requests += 1
@@ -444,17 +460,19 @@ def _probe_thesportsdb(
                 pass
 
     meta = {
-        "season_by_competition": dict(THESPORTSDB_SEASON_BY_COMPETITION),
+        "season_by_competition": season_by_competition,
         "event_stats_sample_matches": event_stats_sample_matches,
         "lineup_sample_matches": lineup_sample_matches,
     }
     return statuses, requests, observations_by_competition, meta
 
 
-def _probe_openligadb(*, raw_store: LocalRawStore) -> tuple[str, int, list[NormalizedObservation]]:
+def _probe_openligadb(
+    *, raw_store: LocalRawStore, as_of_date: date
+) -> tuple[str, int, list[NormalizedObservation]]:
     client = OpenLigaDbClient()
     competition_external_id = _competition_external_id("openligadb")
-    season = THESPORTSDB_SEASON_BY_COMPETITION[_CANONICAL_COMPETITION_CODE].split("-")[0]
+    season = expected_current_season(_CANONICAL_COMPETITION_CODE, as_of_date).split("-")[0]
     try:
         response = client.get(f"getmatchdata/{competition_external_id}/{season}")
     except OpenLigaDbError as exc:
@@ -725,6 +743,7 @@ def _build_current_probe_result(
     *,
     metric_name_remap: dict[str, str] | None = None,
     notes: str | None = None,
+    is_current_period: bool = True,
 ) -> ProbeResult:
     """Build one ProbeResult from a batch of a *current* source's observations.
 
@@ -735,6 +754,12 @@ def _build_current_probe_result(
     actually observed -- never the match count, which double-counts (each
     match has two team slots) or, worse, silently borrows an unrelated
     denominator the way a single shared `sample_size` would.
+
+    `is_current_period` must be set to `False` by the caller when this batch
+    is known to come from a previous/completed season rather than the true
+    current one (e.g. Football-Data.co.uk's newer-season file was not yet
+    published and the job fell back to the prior one) -- see `engine.
+    ProbeResult` for how this gates `current_available` vs `previous_season`.
     """
 
     remap = metric_name_remap or {}
@@ -766,6 +791,7 @@ def _build_current_probe_result(
         metric_sample_sizes=metric_sample_sizes or None,
         source_reference=source_reference,
         notes=notes,
+        is_current_period=is_current_period,
     )
 
 
@@ -815,6 +841,7 @@ def _build_probe_results(
     statsbomb_match_sample_size: int,
     fd_uk_statuses: dict[str, str],
     fd_uk_observations: list[NormalizedObservation],
+    fd_uk_meta: dict[str, Any],
     fd_org_status: str,
     fd_org_observations: list[NormalizedObservation],
     fd_org_meta: dict[str, Any],
@@ -883,6 +910,8 @@ def _build_probe_results(
             notes=statsbomb_status,
         )
 
+    fd_uk_newer_code = fd_uk_meta.get("newer_season_code")
+    fd_uk_season_by_competition: dict[str, str | None] = fd_uk_meta.get("season_by_competition", {})
     for competition_code, status in fd_uk_statuses.items():
         if status != "ok":
             continue
@@ -892,8 +921,14 @@ def _build_probe_results(
             for item in fd_uk_observations
             if item.entity_identity_hints.get("competition_external_id") == division_code
         ]
+        # The newer (true current) season was tried first; a competition
+        # only ever falls back to the older one when the newer file has not
+        # been published yet -- that fallback is real evidence, but never
+        # the true current period.
+        used_season = fd_uk_season_by_competition.get(competition_code)
+        is_current_period = used_season is not None and used_season == fd_uk_newer_code
         results[("football-data-uk", competition_code)] = _build_current_probe_result(
-            competition_observations
+            competition_observations, is_current_period=is_current_period
         )
 
     if fd_org_status == "token_required":
@@ -1024,6 +1059,11 @@ def _build_report(
         coverage_entries=coverage,
         freshness_role="historical",
     )
+    product_recent_season = compute_recent_season_coverage(
+        target_metrics=target_metrics,
+        target_competitions=target_competitions,
+        coverage_entries=coverage,
+    )
 
     coverage_added_by_source = {
         provider.provider_code: _requirements_satisfied_by_provider(
@@ -1045,8 +1085,8 @@ def _build_report(
         if entry.provider_code == "statsbomb-open" and entry.state != "unsupported"
     ][:REPORT_EXAMPLE_LIMIT]
 
-    reconciliation_examples = [
-        {
+    def _decision_example(decision: ReconciliationDecision) -> dict[str, Any]:
+        return {
             "logical_entity_key": decision.logical_entity_key,
             "entity_type": decision.entity_type,
             "metric_name": decision.metric_name,
@@ -1055,7 +1095,21 @@ def _build_report(
             "confidence": decision.confidence,
             "participating_sources": list(decision.participating_sources),
         }
-        for decision in decisions
+
+    reconciliation_examples = [
+        _decision_example(decision) for decision in decisions if decision.source_count >= 2
+    ][:REPORT_EXAMPLE_LIMIT]
+
+    # Match-scoped team stats specifically (logical_entity_key prefixed
+    # "team-match:") -- separated out so the report can never conflate
+    # "some team fact agreed/conflicted somewhere" with "the SAME team's
+    # SAME match-level stat agreed/conflicted across sources".
+    team_match_decisions = [
+        decision for decision in decisions if decision.logical_entity_key.startswith("team-match:")
+    ]
+    team_match_examples = [
+        _decision_example(decision)
+        for decision in team_match_decisions
         if decision.source_count >= 2
     ][:REPORT_EXAMPLE_LIMIT]
 
@@ -1077,6 +1131,7 @@ def _build_report(
         # that answers the product question; the "provider_diagnostics"
         # figures below are diagnostic, not the headline result.
         "product_current_coverage": _coverage_fraction(product_current),
+        "product_recent_season_coverage": _coverage_fraction(product_recent_season),
         "product_historical_deep_coverage": _coverage_fraction(product_historical),
         "missing_critical_current_metrics": list(
             product_current.critical_gap_keys[:REPORT_EXAMPLE_LIMIT]
@@ -1108,6 +1163,15 @@ def _build_report(
             "unresolved_identity_count": resolution_meta["unresolved_observation_count"],
             "unresolved_identity_examples": resolution_meta["unresolved_identity_examples"],
             "examples": reconciliation_examples,
+            "team_match_scoped": {
+                "overlap_count": sum(1 for d in team_match_decisions if d.source_count >= 2),
+                "agreement_count": sum(1 for d in team_match_decisions if d.status == "agreed"),
+                "conflict_count": sum(1 for d in team_match_decisions if d.status == "conflict"),
+                "single_source_count": sum(
+                    1 for d in team_match_decisions if d.status == "single_source"
+                ),
+                "examples": team_match_examples,
+            },
         },
         "sources": {
             "thesportsdb": {
@@ -1136,7 +1200,11 @@ def _build_report(
         "persistence": persistence,
         "scope": (
             "Coverage Lab only: measures what free sources can supply. No football.* "
-            "canonical writes. StatsBomb Open Data is historical/deep, never current."
+            "canonical writes. StatsBomb Open Data is historical/deep, never current. "
+            "product_current_coverage only counts probes that verified the TRUE current "
+            "season/period (computed from the run date); a current-role provider's "
+            "verified-but-previous-season evidence is real and reported separately in "
+            "product_recent_season_coverage, never folded into the current numerator."
         ),
     }
 

@@ -167,6 +167,72 @@ def test_per_metric_sample_size_overrides_probe_level_default() -> None:
     assert entry.sample_size == 2
 
 
+def test_current_provider_with_current_period_evidence_satisfies_current() -> None:
+    # A `current`-role provider whose probe verified the TRUE current
+    # season/period (is_current_period=True, the default) can reach
+    # current_available -- the ordinary, unremarkable case.
+    probe = ProbeResult(
+        status="ok",
+        sample_size=5,
+        metric_observed_counts={_METRIC_KEY: 5},
+        source_reference="ref",
+        is_current_period=True,
+    )
+    entry = _compute(_current_provider(), probe)
+    assert entry.state == "current_available"
+    assert satisfies_current(entry.state)
+
+
+def test_current_provider_with_previous_season_evidence_never_satisfies_current() -> None:
+    # Real, complete evidence -- but verified only for the latest completed
+    # season (e.g. a season file that had not been published yet, so the
+    # job fell back to the prior one), not the true current period. Must
+    # report `previous_season`, never `current_available`, no matter how
+    # complete the sample is.
+    probe = ProbeResult(
+        status="ok",
+        sample_size=5,
+        metric_observed_counts={_METRIC_KEY: 5},
+        source_reference="ref",
+        is_current_period=False,
+    )
+    entry = _compute(_current_provider(), probe)
+    assert entry.state == "previous_season"
+    assert not satisfies_current(entry.state)
+
+
+def test_previous_season_state_reported_even_when_probe_is_only_partial() -> None:
+    # Temporal freshness (current vs previous period) and completeness
+    # (full vs partial sample) are orthogonal -- previous-season evidence
+    # stays `previous_season` regardless of how much of that prior sample
+    # was actually observed, never silently promoted to plain `partial`.
+    probe = ProbeResult(
+        status="ok",
+        sample_size=10,
+        metric_observed_counts={_METRIC_KEY: 4},
+        source_reference="ref",
+        is_current_period=False,
+    )
+    entry = _compute(_current_provider(), probe)
+    assert entry.state == "previous_season"
+
+
+def test_historical_provider_is_never_affected_by_is_current_period() -> None:
+    # `is_current_period` only matters for `current`-role providers.
+    # StatsBomb's historical role must still map to historical_only exactly
+    # as before, whatever `is_current_period` happens to be set to.
+    probe = ProbeResult(
+        status="ok",
+        sample_size=5,
+        metric_observed_counts={_METRIC_KEY: 5},
+        source_reference="ref",
+        is_current_period=False,
+    )
+    entry = _compute(_historical_provider(), probe)
+    assert entry.state == "historical_only"
+    assert not satisfies_current(entry.state)
+
+
 def test_metric_name_at_two_granularities_does_not_collide() -> None:
     # "shots_total" legitimately exists at both "team" and "player_match"
     # granularity. A provider that only supports the team-level one must

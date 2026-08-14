@@ -58,8 +58,16 @@ begin
             null, now()
         ),
         (
-            football_data_uk_id, 'GER_BL1', 'shots_total', 'team', 'team',
+            football_data_uk_id, 'ENG_PL', 'shots_total', 'team', 'team',
             'current', 'current_available', 30, 30,
+            'mmz4281/2627/E0.csv', now()
+        ),
+        (
+            -- The newer (true current) season file was not yet published, so
+            -- the job fell back to the prior one -- real evidence, but never
+            -- `current_available` (see docs/ZERO_COST_COVERAGE.md).
+            football_data_uk_id, 'GER_BL1', 'shots_total', 'team', 'team',
+            'current', 'previous_season', 30, 30,
             'mmz4281/2526/D1.csv', now()
         ),
         (
