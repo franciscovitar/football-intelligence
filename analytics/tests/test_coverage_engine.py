@@ -17,6 +17,7 @@ _METRIC = TargetMetric(
     semantic_version="test-v1",
     importance="critical",
 )
+_METRIC_KEY = (_METRIC.metric_name, _METRIC.granularity)
 _COMPETITION = TargetCompetition(code="GER_BL1", name="Bundesliga", role="core")
 
 
@@ -28,7 +29,7 @@ def _current_provider(
         freshness_role="current",
         requires_token=requires_token,
         token_env_var=token_env_var,
-        supported_metrics={"home_score": "full"},
+        supported_metrics={_METRIC_KEY: "full"},
     )
 
 
@@ -38,7 +39,7 @@ def _historical_provider() -> ProviderCapability:
         freshness_role="historical",
         requires_token=False,
         token_env_var=None,
-        supported_metrics={"home_score": "full"},
+        supported_metrics={_METRIC_KEY: "full"},
     )
 
 
@@ -67,7 +68,10 @@ def test_zero_observed_is_missing_not_current_available() -> None:
 
 def test_full_current_coverage_is_current_available() -> None:
     probe = ProbeResult(
-        status="ok", sample_size=5, metric_observed_counts={"home_score": 5}, source_reference="ref"
+        status="ok",
+        sample_size=5,
+        metric_observed_counts={_METRIC_KEY: 5},
+        source_reference="ref",
     )
     entry = _compute(_current_provider(), probe)
     assert entry.state == "current_available"
@@ -78,7 +82,7 @@ def test_historical_only_source_never_satisfies_current_query() -> None:
     probe = ProbeResult(
         status="ok",
         sample_size=34,
-        metric_observed_counts={"home_score": 34},
+        metric_observed_counts={_METRIC_KEY: 34},
         source_reference="ref",
     )
     entry = _compute(_historical_provider(), probe)
@@ -90,7 +94,7 @@ def test_partial_coverage_stays_partial_not_rounded_up() -> None:
     probe = ProbeResult(
         status="ok",
         sample_size=10,
-        metric_observed_counts={"home_score": 4},
+        metric_observed_counts={_METRIC_KEY: 4},
         source_reference="ref",
     )
     entry = _compute(_current_provider(), probe)
@@ -154,13 +158,144 @@ def test_per_metric_sample_size_overrides_probe_level_default() -> None:
     probe = ProbeResult(
         status="ok",
         sample_size=306,
-        metric_observed_counts={"home_score": 2},
-        metric_sample_sizes={"home_score": 2},
+        metric_observed_counts={_METRIC_KEY: 2},
+        metric_sample_sizes={_METRIC_KEY: 2},
         source_reference="ref",
     )
     entry = _compute(_historical_provider(), probe)
     assert entry.state == "historical_only"
     assert entry.sample_size == 2
+
+
+def test_current_provider_with_current_period_evidence_satisfies_current() -> None:
+    # A `current`-role provider whose probe verified the TRUE current
+    # season/period (is_current_period=True, the default) can reach
+    # current_available -- the ordinary, unremarkable case.
+    probe = ProbeResult(
+        status="ok",
+        sample_size=5,
+        metric_observed_counts={_METRIC_KEY: 5},
+        source_reference="ref",
+        is_current_period=True,
+    )
+    entry = _compute(_current_provider(), probe)
+    assert entry.state == "current_available"
+    assert satisfies_current(entry.state)
+
+
+def test_current_provider_with_previous_season_evidence_never_satisfies_current() -> None:
+    # Real, complete evidence -- but verified only for the latest completed
+    # season (e.g. a season file that had not been published yet, so the
+    # job fell back to the prior one), not the true current period. Must
+    # report `previous_season`, never `current_available`, no matter how
+    # complete the sample is.
+    probe = ProbeResult(
+        status="ok",
+        sample_size=5,
+        metric_observed_counts={_METRIC_KEY: 5},
+        source_reference="ref",
+        is_current_period=False,
+    )
+    entry = _compute(_current_provider(), probe)
+    assert entry.state == "previous_season"
+    assert not satisfies_current(entry.state)
+
+
+def test_previous_season_state_reported_even_when_probe_is_only_partial() -> None:
+    # Temporal freshness (current vs previous period) and completeness
+    # (full vs partial sample) are orthogonal -- previous-season evidence
+    # stays `previous_season` regardless of how much of that prior sample
+    # was actually observed, never silently promoted to plain `partial`.
+    probe = ProbeResult(
+        status="ok",
+        sample_size=10,
+        metric_observed_counts={_METRIC_KEY: 4},
+        source_reference="ref",
+        is_current_period=False,
+    )
+    entry = _compute(_current_provider(), probe)
+    assert entry.state == "previous_season"
+
+
+def test_historical_provider_is_never_affected_by_is_current_period() -> None:
+    # `is_current_period` only matters for `current`-role providers.
+    # StatsBomb's historical role must still map to historical_only exactly
+    # as before, whatever `is_current_period` happens to be set to.
+    probe = ProbeResult(
+        status="ok",
+        sample_size=5,
+        metric_observed_counts={_METRIC_KEY: 5},
+        source_reference="ref",
+        is_current_period=False,
+    )
+    entry = _compute(_historical_provider(), probe)
+    assert entry.state == "historical_only"
+    assert not satisfies_current(entry.state)
+
+
+def test_metric_name_at_two_granularities_does_not_collide() -> None:
+    # "shots_total" legitimately exists at both "team" and "player_match"
+    # granularity. A provider that only supports the team-level one must
+    # never be credited with the player-level one, and vice versa.
+    team_metric = TargetMetric("shots_total", "team", "team_stats", "test-v1")
+    player_metric = TargetMetric("shots_total", "player_match", "player_stats", "test-v1")
+    provider = ProviderCapability(
+        provider_code="thesportsdb",
+        freshness_role="current",
+        requires_token=False,
+        token_env_var=None,
+        supported_metrics={("shots_total", "team"): "full"},
+    )
+    probe = ProbeResult(
+        status="ok",
+        sample_size=2,
+        metric_observed_counts={("shots_total", "team"): 2, ("shots_total", "player_match"): 2},
+        source_reference="ref",
+    )
+    entries = compute_coverage(
+        target_metrics=[team_metric, player_metric],
+        target_competitions=[_COMPETITION],
+        providers=[provider],
+        probe_results={(provider.provider_code, _COMPETITION.code): probe},
+        token_present_by_provider={},
+        calculated_at=_NOW,
+    )
+    by_granularity = {entry.granularity: entry.state for entry in entries}
+    assert by_granularity["team"] == "current_available"
+    assert by_granularity["player_match"] == "unsupported"
+
+
+def test_lineup_capped_reliability_stays_partial_even_when_fully_observed() -> None:
+    # TheSportsDB's Free lineup endpoint is permanently capped at 5 rows, so
+    # `provider_capabilities` marks it "partial" reliability regardless of
+    # any single probe's ratio -- even a probe where observed_count equals
+    # sample_size (this bounded sample was fully captured) must never be
+    # reported as `current_available`, because a 5-row sample can never
+    # prove a complete lineup.
+    metric = TargetMetric("listed_position", "player_appearance", "appearance", "test-v1")
+    provider = ProviderCapability(
+        provider_code="thesportsdb",
+        freshness_role="current",
+        requires_token=False,
+        token_env_var=None,
+        supported_metrics={("listed_position", "player_appearance"): "partial"},
+    )
+    probe = ProbeResult(
+        status="ok",
+        sample_size=5,
+        metric_observed_counts={("listed_position", "player_appearance"): 5},
+        source_reference="ref",
+    )
+    entries = compute_coverage(
+        target_metrics=[metric],
+        target_competitions=[_COMPETITION],
+        providers=[provider],
+        probe_results={(provider.provider_code, _COMPETITION.code): probe},
+        token_present_by_provider={},
+        calculated_at=_NOW,
+    )
+    assert entries[0].state == "partial"
+    assert not satisfies_current(entries[0].state)
 
 
 def test_compute_coverage_covers_every_provider_competition_metric_combination() -> None:

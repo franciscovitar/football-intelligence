@@ -4,6 +4,7 @@ import type { DataResult } from "@/lib/queries/player-analytics";
 export type CoverageState =
   | "current_available"
   | "historical_only"
+  | "previous_season"
   | "partial"
   | "token_required"
   | "not_probed"
@@ -44,6 +45,10 @@ export interface CoverageData {
    * fixed target catalog (metrics x competitions), independent of how many
    * providers exist. */
   productCurrentCoverage: ProductCoverageSummary;
+  /** A `current`-role provider whose probe verified only the latest
+   * *completed* season/period (not the TRUE current one, computed from the
+   * run date) -- real evidence, but never folded into productCurrentCoverage. */
+  productRecentSeasonCoverage: ProductCoverageSummary;
   productHistoricalCoverage: ProductCoverageSummary;
 }
 
@@ -53,6 +58,7 @@ export interface CoverageData {
 const STATE_KEYS: CoverageState[] = [
   "current_available",
   "historical_only",
+  "previous_season",
   "partial",
   "token_required",
   "not_probed",
@@ -67,6 +73,7 @@ interface DbCoverageRow {
   freshness_role: "current" | "historical";
   current_available_count: string | number;
   historical_only_count: string | number;
+  previous_season_count: string | number;
   partial_count: string | number;
   token_required_count: string | number;
   not_probed_count: string | number;
@@ -121,6 +128,32 @@ async function getProductCoverage(
   };
 }
 
+// Same union shape as `getProductCoverage`, but for `previous_season`
+// evidence specifically -- always reported separately, never combined with
+// or subtracted from the current-role numerator above.
+async function getRecentSeasonCoverage(
+  sql: ReturnType<typeof getDatabase>,
+): Promise<ProductCoverageSummary> {
+  if (!sql) return { numerator: 0, denominator: 0 };
+
+  const rows = await sql<DbProductCoverageRow[]>`
+    select
+      count(*) filter (where satisfied) as numerator,
+      count(*) as denominator
+    from (
+      select bool_or(state = 'previous_season') as satisfied
+      from ingestion.coverage_snapshots
+      where freshness_role = 'current'
+      group by competition_code, metric_name, granularity
+    ) as requirements
+  `;
+  const row = rows[0];
+  return {
+    numerator: row ? numberValue(row.numerator) : 0,
+    denominator: row ? numberValue(row.denominator) : 0,
+  };
+}
+
 function unconfigured<T>(): DataResult<T> {
   return {
     status: "unconfigured",
@@ -145,6 +178,7 @@ export async function getCoverageMatrix(): Promise<DataResult<CoverageData>> {
         cs.freshness_role,
         count(*) filter (where cs.state = 'current_available') as current_available_count,
         count(*) filter (where cs.state = 'historical_only') as historical_only_count,
+        count(*) filter (where cs.state = 'previous_season') as previous_season_count,
         count(*) filter (where cs.state = 'partial') as partial_count,
         count(*) filter (where cs.state = 'token_required') as token_required_count,
         count(*) filter (where cs.state = 'not_probed') as not_probed_count,
@@ -166,6 +200,7 @@ export async function getCoverageMatrix(): Promise<DataResult<CoverageData>> {
       stateCounts: {
         current_available: numberValue(row.current_available_count),
         historical_only: numberValue(row.historical_only_count),
+        previous_season: numberValue(row.previous_season_count),
         partial: numberValue(row.partial_count),
         token_required: numberValue(row.token_required_count),
         not_probed: numberValue(row.not_probed_count),
@@ -193,10 +228,12 @@ export async function getCoverageMatrix(): Promise<DataResult<CoverageData>> {
       return !latest || cell.lastCheckedAt > latest ? cell.lastCheckedAt : latest;
     }, null);
 
-    const [productCurrentCoverage, productHistoricalCoverage] = await Promise.all([
-      getProductCoverage(sql, "current"),
-      getProductCoverage(sql, "historical"),
-    ]);
+    const [productCurrentCoverage, productHistoricalCoverage, productRecentSeasonCoverage] =
+      await Promise.all([
+        getProductCoverage(sql, "current"),
+        getProductCoverage(sql, "historical"),
+        getRecentSeasonCoverage(sql),
+      ]);
 
     return {
       status: "ready",
@@ -207,6 +244,7 @@ export async function getCoverageMatrix(): Promise<DataResult<CoverageData>> {
         lastCheckedAt,
         providerEntryCount: cells.reduce((sum, cell) => sum + cell.totalMetrics, 0),
         productCurrentCoverage,
+        productRecentSeasonCoverage,
         productHistoricalCoverage,
       },
     };

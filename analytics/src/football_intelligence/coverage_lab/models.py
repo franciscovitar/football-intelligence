@@ -18,6 +18,7 @@ FreshnessRole = Literal["current", "historical"]
 CoverageState = Literal[
     "current_available",
     "historical_only",
+    "previous_season",
     "partial",
     "token_required",
     "not_probed",
@@ -26,7 +27,11 @@ CoverageState = Literal[
 ]
 
 # States that would satisfy a *current*-data need. Nothing else may be
-# treated as "the product can rely on this today".
+# treated as "the product can rely on this today". `previous_season` is
+# deliberately excluded: a `current`-role provider whose probe verified only
+# the latest *completed* season (not the true current period, computed from
+# the run date and the competition's calendar type) is real evidence -- but
+# it is not current, no matter how complete that prior season's sample is.
 CURRENT_SATISFYING_STATES: frozenset[CoverageState] = frozenset({"current_available"})
 
 COVERAGE_MODEL_VERSION = "coverage-lab-v0.1"

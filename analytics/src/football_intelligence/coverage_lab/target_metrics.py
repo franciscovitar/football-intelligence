@@ -119,3 +119,27 @@ def build_target_metric_catalog() -> tuple[TargetMetric, ...]:
     )
     catalog.extend(ADVANCED_METRICS)
     return tuple(catalog)
+
+
+# entity_type -> granularity is ambiguous for "player" alone (it could mean
+# player_appearance or player_match), and the same bare metric_name can exist
+# at two different granularities with different semantics (e.g. "shots_total"
+# at both "team" and "player_match"). This index -- (entity_type, metric_name)
+# -> granularity -- is derived directly from the catalog so it can never drift,
+# and lets provider probes correctly attribute an observation to its real
+# target-catalog identity instead of guessing from entity_type alone.
+def build_metric_granularity_index() -> dict[tuple[str, str], MetricGranularity]:
+    index: dict[tuple[str, str], MetricGranularity] = {}
+    for metric in build_target_metric_catalog():
+        entity_type = _ENTITY_TYPE_BY_GRANULARITY[metric.granularity]
+        index[(entity_type, metric.metric_name)] = metric.granularity
+    return index
+
+
+_ENTITY_TYPE_BY_GRANULARITY: dict[MetricGranularity, str] = {
+    "competition": "competition",
+    "team": "team",
+    "match": "match",
+    "player_appearance": "player",
+    "player_match": "player",
+}

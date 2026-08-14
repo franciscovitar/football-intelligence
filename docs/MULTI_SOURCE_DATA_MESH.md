@@ -225,10 +225,21 @@ Run it: `football-intelligence-data-mesh-poc --season 2025-2026 --raw-dir
    bounded request budget.
 
 Block 14 followed exactly this recipe to add `football-data.org` (optional
-token, current/live) and `statsbomb-open` (zero-auth, historical/deep) --
-see [`ZERO_COST_COVERAGE.md`](ZERO_COST_COVERAGE.md) for both.
+token, current/live) and `statsbomb-open` (zero-auth, historical/deep).
+Block 15 followed it again to deepen `thesportsdb` (new event-stats/lineup
+adapter functions, same client) and add `football-data-uk` (structured CSV
+file ingestion, not scraping) -- see
+[`ZERO_COST_COVERAGE.md`](ZERO_COST_COVERAGE.md) for all four.
 
-## Zero-Cost Coverage Lab (Block 14)
+The resolve-then-reconcile orchestration itself (`_resolve_logical_key` /
+`_build_match_date_clusters` / `_resolve_and_reconcile` from the original
+PoC) was extracted into `data_mesh/pipeline.py` in Block 15 so a second job
+(the Coverage Lab) could reconcile a different pair of sources
+(TheSportsDB x Football-Data.co.uk) without duplicating the same
+entity-resolution logic -- one implementation, reused, never a parallel
+pipeline per source pair.
+
+## Zero-Cost Coverage Lab (Block 14, deepened Block 15)
 
 Block 13 proves reconciliation works. Block 14 answers a different, equally
 important question: for every metric Football Intelligence wants, which
@@ -238,7 +249,14 @@ target metric catalog (derived from the existing statistical DTOs, never a
 shrinking duplicate list), a 7-state coverage model (separating
 `current_available` from `historical_only` so a deep historical source like
 StatsBomb Open Data can never be mistaken for current coverage), and a
-bounded coverage-measurement job. Full detail:
+bounded coverage-measurement job. Block 15 deepens the two zero-auth current
+sources (TheSportsDB event-stats/lineup across all 10 competitions;
+Football-Data.co.uk CSV results for the 7 European competitions it covers)
+to move verified current product coverage materially above the Block 14
+baseline, and corrects the provider capability manifest to key on
+`(metric_name, granularity)` instead of bare `metric_name` -- needed once
+more than one provider derives the same metric name at two different
+granularities (team vs player). Full detail:
 [`ZERO_COST_COVERAGE.md`](ZERO_COST_COVERAGE.md).
 
 ## Future qualitative lane

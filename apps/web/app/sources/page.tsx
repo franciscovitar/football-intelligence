@@ -23,11 +23,62 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
 const COVERAGE_STATE_LABELS: Record<CoverageState, string> = {
   current_available: "ACTUAL",
   historical_only: "HISTÓRICO",
+  previous_season: "TEMPORADA ANTERIOR",
   partial: "PARCIAL",
   token_required: "TOKEN",
   not_probed: "SIN PROBAR",
   missing: "FALTANTE",
   unsupported: "NO SOPORTADO",
+};
+
+// Static, documented facts about each source's cost, freshness role, known
+// response/file limits, and provenance -- not derived from any live probe,
+// so a source with zero coverage rows this run still discloses honestly
+// what kind of source it is and what it structurally caps at.
+interface ProviderInfo {
+  cost: string;
+  role: string;
+  limits: string;
+  provenance: string;
+}
+
+const PROVIDER_INFO: Record<string, ProviderInfo> = {
+  thesportsdb: {
+    cost: "Gratis (clave de prueba pública)",
+    role: "Actual",
+    limits: "lookupeventstats.php: máx. 5 filas · lookuplineup.php: máx. 5 jugadores por partido",
+    provenance: "API JSON documentada (thesportsdb.com/documentation)",
+  },
+  openligadb: {
+    cost: "Gratis, sin clave",
+    role: "Actual",
+    limits: "Sin límite documentado conocido",
+    provenance: "API JSON pública (openligadb.de)",
+  },
+  "statsbomb-open": {
+    cost: "Gratis (dataset abierto)",
+    role: "Histórico/profundo — nunca satisface una necesidad actual",
+    limits: "Subconjunto real de partidos publicados, no la temporada completa",
+    provenance: "StatsBomb Open Data (github.com/statsbomb/open-data)",
+  },
+  "football-data-org": {
+    cost: "Gratis con token opcional (tier Free)",
+    role: "Actual",
+    limits: "10 solicitudes/min · sin estadísticas de jugador en el tier Free",
+    provenance: "API JSON documentada (api.football-data.org)",
+  },
+  "football-data-uk": {
+    cost: "Gratis, sin clave",
+    role: "Actual",
+    limits: "Archivo CSV de resultados por temporada, sin datos de jugador",
+    provenance: "Archivos CSV publicados, no scraping (football-data.co.uk)",
+  },
+  "api-football": {
+    cost: "Pago (no usado por el Coverage Lab)",
+    role: "—",
+    limits: "—",
+    provenance: "API JSON documentada (api-football.com)",
+  },
 };
 
 export default async function SourcesPage() {
@@ -89,31 +140,42 @@ export default async function SourcesPage() {
                     <tr>
                       <th>Fuente</th>
                       <th>Estado</th>
+                      <th>Costo</th>
+                      <th>Rol</th>
+                      <th>Límites conocidos</th>
+                      <th>Procedencia</th>
                       <th>Tipo(s)</th>
                       <th>Observaciones</th>
                       <th>Última observación</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {result.data.sources.map((source) => (
-                      <tr key={source.code}>
-                        <td>
-                          {source.displayName} ({source.code})
-                        </td>
-                        <td>{source.isActive ? "Activa" : "Inactiva"}</td>
-                        <td>
-                          {source.sourceTypes.length === 0
-                            ? "—"
-                            : source.sourceTypes
-                                .map((type) => SOURCE_TYPE_LABELS[type] ?? type)
-                                .join(", ")}
-                        </td>
-                        <td>{source.observationCount}</td>
-                        <td>
-                          {source.lastObservedAt ? formatDateTime(source.lastObservedAt) : "—"}
-                        </td>
-                      </tr>
-                    ))}
+                    {result.data.sources.map((source) => {
+                      const info = PROVIDER_INFO[source.code];
+                      return (
+                        <tr key={source.code}>
+                          <td>
+                            {source.displayName} ({source.code})
+                          </td>
+                          <td>{source.isActive ? "Activa" : "Inactiva"}</td>
+                          <td>{info?.cost ?? "—"}</td>
+                          <td>{info?.role ?? "—"}</td>
+                          <td>{info?.limits ?? "—"}</td>
+                          <td>{info?.provenance ?? "—"}</td>
+                          <td>
+                            {source.sourceTypes.length === 0
+                              ? "—"
+                              : source.sourceTypes
+                                  .map((type) => SOURCE_TYPE_LABELS[type] ?? type)
+                                  .join(", ")}
+                          </td>
+                          <td>{source.observationCount}</td>
+                          <td>
+                            {source.lastObservedAt ? formatDateTime(source.lastObservedAt) : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -163,8 +225,11 @@ export default async function SourcesPage() {
               </div>
               <p>
                 Una fuente histórica (StatsBomb Open Data) nunca satisface una necesidad de
-                datos actuales, aunque soporte la métrica. Sin token configurado, football-data.org
-                se muestra como &ldquo;TOKEN&rdquo;, nunca como error.
+                datos actuales, aunque soporte la métrica. Una fuente actual cuya sonda solo
+                verificó la última temporada completa (no la vigente) se muestra como
+                &ldquo;TEMPORADA ANTERIOR&rdquo;, nunca como &ldquo;ACTUAL&rdquo;. Sin token
+                configurado, football-data.org se muestra como &ldquo;TOKEN&rdquo;, nunca como
+                error.
               </p>
             </div>
             {coverageResult.status !== "ready" ? (
@@ -192,6 +257,17 @@ export default async function SourcesPage() {
                     <small>
                       Requisitos (competición × métrica) cubiertos por al menos una fuente actual,
                       sin importar cuántos proveedores existan
+                    </small>
+                  </article>
+                  <article className="lab-stat">
+                    <span>Cobertura de producto · temporada anterior</span>
+                    <strong>
+                      {coverageResult.data.productRecentSeasonCoverage.numerator}/
+                      {coverageResult.data.productRecentSeasonCoverage.denominator}
+                    </strong>
+                    <small>
+                      Una fuente actual verificó la última temporada completa, no la vigente —
+                      evidencia real, pero nunca cuenta como cobertura actual
                     </small>
                   </article>
                   <article className="lab-stat">

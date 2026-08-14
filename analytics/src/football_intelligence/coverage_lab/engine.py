@@ -32,14 +32,31 @@ class ProbeResult:
     per-player event metrics are scoped to a small bounded match sample) --
     `metric_sample_sizes` lets individual metrics override the default
     rather than being forced to share one misleading number.
+
+    Both count mappings are keyed by `(metric_name, granularity)`, matching
+    the target catalog's true identity -- see `provider_capabilities` for why
+    bare `metric_name` is not a safe key.
+
+    `is_current_period` answers a question separate from `provider.
+    freshness_role`: not "can this provider ever report current data" but
+    "did THIS probe actually verify data from the true current season/period
+    (computed from the run date), as opposed to the latest completed one".
+    A `current`-role provider whose probe only reached the previous season
+    (e.g. a season file that has not been published yet, so the job fell
+    back to the prior one) must never be reported as `current_available` --
+    see `_resolve_entry`'s `previous_season` branch. Defaults to `True`
+    because most probes (StatsBomb, whose historical role makes this
+    irrelevant; football-data.org's live matches endpoint; any single-season
+    probe with no fallback) are unambiguous.
     """
 
     status: ProbeStatus
     sample_size: int
-    metric_observed_counts: Mapping[str, int]
+    metric_observed_counts: Mapping[tuple[str, str], int]
     source_reference: str | None
     notes: str | None = None
-    metric_sample_sizes: Mapping[str, int] | None = None
+    metric_sample_sizes: Mapping[tuple[str, str], int] | None = None
+    is_current_period: bool = True
 
 
 def compute_coverage(
@@ -79,7 +96,8 @@ def _resolve_entry(
     has_token: bool,
     calculated_at: datetime,
 ) -> CoverageEntry:
-    reliability = provider.supported_metrics.get(metric.metric_name)
+    metric_key = (metric.metric_name, metric.granularity)
+    reliability = provider.supported_metrics.get(metric_key)
 
     if reliability is None:
         return _entry(
@@ -147,13 +165,18 @@ def _resolve_entry(
         )
 
     sample_size = probe.sample_size
-    if probe.metric_sample_sizes is not None and metric.metric_name in probe.metric_sample_sizes:
-        sample_size = probe.metric_sample_sizes[metric.metric_name]
-    observed_count = probe.metric_observed_counts.get(metric.metric_name, 0)
+    if probe.metric_sample_sizes is not None and metric_key in probe.metric_sample_sizes:
+        sample_size = probe.metric_sample_sizes[metric_key]
+    observed_count = probe.metric_observed_counts.get(metric_key, 0)
 
     state: CoverageState
     if sample_size == 0 or observed_count == 0:
         state = "missing"
+    elif provider.freshness_role == "current" and not probe.is_current_period:
+        # Real evidence, but verified only for the latest *completed*
+        # season/period, not the true current one -- never current_available,
+        # regardless of how complete that prior-period sample is.
+        state = "previous_season"
     elif observed_count < sample_size:
         state = "partial"
     elif provider.freshness_role == "historical":
