@@ -23,15 +23,40 @@ _SPACE_RE = re.compile(r"\s+")
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9\s]")
 
 # Generic corporate-entity-type tokens that differ between providers for the
-# same real club (e.g. "FC Bayern München" vs "Bayern Munich"). Stripping
-# them is a deterministic transformation, not a similarity heuristic: it is
-# applied identically regardless of which two names are being compared.
-_TEAM_STOPWORDS = frozenset({"fc", "sc", "sv", "tsg", "vfb", "vfl", "bsc", "spvgg", "ev"})
+# same real club (e.g. "FC Bayern München" vs "Bayern Munich", "AFC
+# Bournemouth" vs "Bournemouth"). Stripping them is a deterministic
+# transformation, not a similarity heuristic: it is applied identically
+# regardless of which two names are being compared.
+_TEAM_STOPWORDS = frozenset({"fc", "afc", "sc", "sv", "tsg", "vfb", "vfl", "bsc", "spvgg", "ev"})
 
 # Known cross-language spelling variants for the same city/club. This is an
 # explicit, reviewable alias table -- not a fuzzy/edit-distance guess.
 _TEAM_TOKEN_ALIASES: dict[str, str] = {
     "munich": "munchen",
+}
+
+# Football-Data.co.uk publishes short-form English club names (e.g.
+# "Man City", "Nott'm Forest") that share no tokens with other sources'
+# official long-form names (e.g. OpenFootball's "Manchester City FC",
+# "Nottingham Forest FC") -- a documented, stable site convention, not a
+# guessed abbreviation. Verified during Block 18 implementation against
+# every one of the 20 real ENG_PL 2025/26 club names committed in
+# `data/real/2025-26/eng_pl_matches.json`: this table lists only the clubs
+# whose short form does not already converge with the long form once
+# generic stopwords are stripped (e.g. "Arsenal" already matches "Arsenal
+# FC" with no alias needed). Keys are matched against the casefolded,
+# accent-folded raw name, exactly like `_TEAM_TOKEN_ALIASES` above -- never
+# fuzzy/edit-distance matching.
+_ENGLISH_SHORT_NAME_ALIASES: dict[str, str] = {
+    "brighton": "brighton hove albion",
+    "leeds": "leeds united",
+    "man city": "manchester city",
+    "man united": "manchester united",
+    "newcastle": "newcastle united",
+    "nott'm forest": "nottingham forest",
+    "tottenham": "tottenham hotspur",
+    "west ham": "west ham united",
+    "wolves": "wolverhampton wanderers",
 }
 
 MATCH_DATE_TOLERANCE_DAYS = 1
@@ -40,7 +65,8 @@ MATCH_DATE_TOLERANCE_DAYS = 1
 def normalize_team_name(raw: str) -> str:
     decomposed = unicodedata.normalize("NFKD", raw)
     without_marks = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
-    lowered = without_marks.casefold()
+    lowered = without_marks.casefold().strip()
+    lowered = _ENGLISH_SHORT_NAME_ALIASES.get(lowered, lowered)
     cleaned = _NON_ALNUM_RE.sub(" ", lowered)
     tokens = [token for token in _SPACE_RE.split(cleaned) if token]
     significant = [
@@ -155,6 +181,14 @@ COMPETITION_MAPPINGS: tuple[CompetitionMapping, ...] = (
     CompetitionMapping("football-data-uk", "F1", "FRA_L1", "Ligue 1"),
     CompetitionMapping("football-data-uk", "N1", "NED_ED", "Eredivisie"),
     CompetitionMapping("football-data-uk", "P1", "POR_PL", "Primeira Liga"),
+    # OpenFootball (Block 18): `external_id` is the repository's own
+    # competition file name within a season directory, used directly in its
+    # published raw-JSON file paths
+    # (`https://raw.githubusercontent.com/openfootball/football.json/master/<season>/<file>`).
+    # Verified live: `en.1.json` is the English Premier League (tier 1) file.
+    # Only ENG_PL was verified/used in Block 18; other competitions are not
+    # mapped here to avoid claiming coverage that was never actually probed.
+    CompetitionMapping("openfootball", "en.1.json", "ENG_PL", "English Premier League"),
 )
 
 

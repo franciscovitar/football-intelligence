@@ -23,6 +23,17 @@ The file declares:
 Unknown permission is never presented as certified. The collector may refresh
 the local snapshot, but publication/redistribution must be reviewed separately.
 
+`eng_pl_matches_openfootball.json` (Block 18) contains 1,900 normalized
+observations for the same 380 matches and 20 clubs -- team identity and
+full-time match results only, no team-match statistics -- retrieved from
+OpenFootball's public-domain (CC0) `football.json` repository
+(`2025-26/en.1.json`). Its `provenance.redistribution_permission` is
+`public_domain_cc0`, `certification_state` is `certified`. It is used
+exclusively to reconcile match results against `eng_pl_matches.json` through
+the existing Data Mesh pipeline (see `docs/REAL_DATA_SNAPSHOT_V2.md`) -- it
+is never the canonical `football.*` load source, which stays
+Football-Data.co.uk only.
+
 ## Explicitly excluded
 
 The former Fantasy Premier League collector, client and derived player files
@@ -37,9 +48,20 @@ source is connected.
 
 ## Loading
 
-`uv run football-intelligence-load-real-snapshot` loads only the match/team
-file into `football.seasons`, `football.teams`, `football.matches` and
-`football.team_match_stats`. It does not create player rows or player scores.
+`uv run football-intelligence-load-real-snapshot` loads only the
+Football-Data.co.uk match/team file into `football.seasons`,
+`football.teams`, `football.matches` and `football.team_match_stats`. It
+does not create player rows or player scores.
+
+`uv run football-intelligence-build-real-snapshot-v2` (Block 18) refreshes
+`eng_pl_matches_openfootball.json`, fetches a fresh Football-Data.co.uk copy
+**in memory only** (never rewriting `eng_pl_matches.json` -- that file's
+redistribution permission is unknown, so this job never extends an
+unreviewed redistribution claim by silently rewriting it), reconciles both,
+and writes `data/manifests/real/ENG_PL/2025-26.json`. It never writes to
+`football.*` itself, and it never connects to any database unless an
+explicit, validated-local `--database-url` is passed -- see
+`docs/REAL_DATA_SNAPSHOT_V2.md`.
 
 ## Separate validation evidence
 

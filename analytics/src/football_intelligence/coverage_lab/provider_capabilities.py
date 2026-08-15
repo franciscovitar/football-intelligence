@@ -175,7 +175,27 @@ _FOOTBALL_DATA_UK_METRICS: Mapping[MetricKey, MetricReliability] = {
     ("red_cards", "team_match"): "full",
 }
 
+# OpenFootball (`openfootball/football.json`, Block 18): a public-domain
+# (CC0) GitHub repository of raw season JSON files. Verified live during
+# Block 18 implementation against `2025-26/en.1.json`: 380 English Premier
+# League 2025/26 matches with full-time score and team identity. The
+# repository publishes no team-match statistics (shots, cards, corners,
+# etc.) and no player-level data at all, so only match-result metrics are
+# listed here -- never guessed from the file's other fields.
+_OPENFOOTBALL_METRICS: Mapping[MetricKey, MetricReliability] = {
+    ("home_score", "match"): "full",
+    ("away_score", "match"): "full",
+    ("status", "match"): "full",
+}
+
 PROVIDER_CAPABILITIES: tuple[ProviderCapability, ...] = (
+    ProviderCapability(
+        provider_code="openfootball",
+        freshness_role="current",
+        requires_token=False,
+        token_env_var=None,
+        supported_metrics=_OPENFOOTBALL_METRICS,
+    ),
     ProviderCapability(
         provider_code="thesportsdb",
         freshness_role="current",

@@ -1,5 +1,11 @@
 # Sources
 
+Block 18 adds a full, per-source audit in
+[`REAL_DATA_SOURCE_AUDIT_V2.md`](REAL_DATA_SOURCE_AUDIT_V2.md) and a
+reconciled real ENG_PL 2025/26 snapshot report in
+[`REAL_DATA_SNAPSHOT_V2.md`](REAL_DATA_SNAPSHOT_V2.md). This register is not
+duplicated there; both documents should be read together.
+
 ## Source-compliance register
 
 Unknown permission is not certification. This table records the basis used by
@@ -8,6 +14,7 @@ the repository; it is not a legal opinion.
 | Source | Permission/licence basis | Automated collection | Redistribution | Method | Scope / completeness | State |
 | --- | --- | --- | --- | --- | --- | --- |
 | Football-Data.co.uk | Publisher provides direct season CSV downloads and a column key; no explicit redistribution licence was located | Yes | Unknown | Direct `mmz4281/<season>/<division>.csv` download | ENG_PL 2025/26: 380/380 matches, 20 teams; selected match/team fields, no player metrics | Not certified for redistribution |
+| OpenFootball (`football.json`) | Repository dedicates schema/data/scripts to the public domain (CC0) | Yes | Yes (CC0) | Direct raw-JSON download (`raw.githubusercontent.com/openfootball/football.json`) | ENG_PL 2025/26: 380/380 matches, 20 teams; match results only, no team-match stats, no player metrics | Certified (public domain); used only to reconcile Football-Data.co.uk, not as the canonical load source |
 | StatsBomb Open Data | Official repository publishes JSON for research/analysis and requires attribution under its user agreement | Yes | Unknown in this repository (no standalone redistribution licence relied on) | Official GitHub raw JSON | FIFA World Cup 2022 validation sample only; never ENG_PL | Validation-only, not domestic production data |
 | Fantasy Premier League | FPL terms prohibit automated systems used to access the game and extract information | No | No permission established | None; collector/client and derived files removed | No domestic player coverage | Prohibited for this implementation |
 | API-Football | Existing V1 provider integration; plan/credential terms apply | No calls in Block 16 corrective pass | Unknown | Existing authenticated API integration only | Historical V1 paths; not used to fill the Block 16 gap | Not a Block 16 real-snapshot source |
@@ -15,6 +22,8 @@ the repository; it is not a legal opinion.
 Snapshot retrieval details:
 
 - Football-Data.co.uk: `2026-08-15T00:27:07.021474+00:00`, direct E0 2025/26 CSV.
+- OpenFootball: see `data/real/2025-26/eng_pl_matches_openfootball.json`'s
+  `provenance.retrieved_at` (Block 18).
 - StatsBomb WC2022: see `data/validation/wc2022/wc2022_validation_sample.json` provenance.
 - FPL: no retained dataset and no automated retrieval path.
 
