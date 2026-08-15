@@ -1,0 +1,153 @@
+{
+  "active_scopes": {
+    "player": null,
+    "team": {
+      "model_version": "team-v2.0",
+      "scope_key": "competition:ENG_PL:2025/26"
+    }
+  },
+  "canonical_real_input": {
+    "matches": 380,
+    "player_observation_rows": 0,
+    "team_stat_rows": 760
+  },
+  "competition": "ENG_PL",
+  "db_safety": {
+    "implicit_database_url_used": false,
+    "remote_db_accepted": false
+  },
+  "executed_at": "2026-08-15T19:35:02.893451+00:00",
+  "historical_deep_validation": {
+    "capability_proven": "Real StatsBomb Open Data event JSON parses into provider-independent NormalizedObservations (match + event-derived families: shots, passes, dribbles, duels, fouls, goalkeeper actions) via the existing Data Mesh adapter. Never loaded into football.* and never executes team_analytics or player_analytics V2 engines -- that would require a new ingestion path (competition/team/player entity resolution + a football.* loader) that does not exist yet; see docs/REAL_INTELLIGENCE_EXECUTION_V2.md.",
+    "dataset": "statsbomb-open:wc2022",
+    "engine_execution_performed": false,
+    "product_contamination": false,
+    "reproduction_command": "football-intelligence-collect-validation-snapshot",
+    "role": "historical_deep"
+  },
+  "model_versions": {
+    "diagnostic_engine": "diagnostic-v1.0",
+    "team_v2": "team-v2.0"
+  },
+  "period_role": "latest_completed",
+  "player_v2_execution": {
+    "feature_rows": 0,
+    "player_observation_rows": 0,
+    "ranking_rows": 0,
+    "reason": "No permitted rich domestic player-match source is present; team/match evidence cannot be converted into player rankings.",
+    "score_rows": 0,
+    "state": "insufficient_data"
+  },
+  "product_view_counts": {
+    "product_player_detail_v2": 0,
+    "product_player_diagnostic_findings_v2": 0,
+    "product_player_ranking_candidates_v2": 0,
+    "product_team_detail_v2": 80,
+    "product_team_diagnostic_findings_v2": 1,
+    "product_team_ranking_candidates_v2": 0
+  },
+  "real_diagnostics": {
+    "diagnostic_codes": [
+      "few_but_high_quality_chances_allowed"
+    ],
+    "player_findings_count": 0,
+    "team_findings_count": 1
+  },
+  "scope_key": "competition:ENG_PL:2025/26",
+  "scoring_correctness": {
+    "incomplete_evidence_renormalized_into_full_score": false,
+    "missing_values_converted_to_zero": false,
+    "v1_fallback_used": false
+  },
+  "season": "2025/26",
+  "team_v2_execution": {
+    "dimension_readiness": {
+      "attack": {
+        "insufficient_data": 80,
+        "partial": 0,
+        "ready": 0
+      },
+      "build_up": {
+        "insufficient_data": 80,
+        "partial": 0,
+        "ready": 0
+      },
+      "chance_quality": {
+        "insufficient_data": 80,
+        "partial": 0,
+        "ready": 0
+      },
+      "control": {
+        "insufficient_data": 80,
+        "partial": 0,
+        "ready": 0
+      },
+      "creation": {
+        "insufficient_data": 80,
+        "partial": 0,
+        "ready": 0
+      },
+      "defence": {
+        "insufficient_data": 80,
+        "partial": 0,
+        "ready": 0
+      },
+      "defensive_transition": {
+        "insufficient_data": 80,
+        "partial": 0,
+        "ready": 0
+      },
+      "finishing": {
+        "insufficient_data": 0,
+        "partial": 80,
+        "ready": 0
+      },
+      "offensive_transition": {
+        "insufficient_data": 80,
+        "partial": 0,
+        "ready": 0
+      },
+      "penetration": {
+        "insufficient_data": 80,
+        "partial": 0,
+        "ready": 0
+      },
+      "pressing": {
+        "insufficient_data": 80,
+        "partial": 0,
+        "ready": 0
+      },
+      "progression": {
+        "insufficient_data": 80,
+        "partial": 0,
+        "ready": 0
+      },
+      "set_pieces": {
+        "insufficient_data": 80,
+        "partial": 0,
+        "ready": 0
+      },
+      "shot_generation": {
+        "insufficient_data": 0,
+        "partial": 80,
+        "ready": 0
+      }
+    },
+    "dimensions_with_ready_rankings": [],
+    "evidence_state_counts": {
+      "insufficient_data": 80,
+      "partial": 0,
+      "ready": 0
+    },
+    "feature_rows": 560,
+    "overall_ranking_available": false,
+    "overall_score_available": false,
+    "score_rows": 80,
+    "windows": [
+      "last_10",
+      "last_3",
+      "last_5",
+      "season"
+    ]
+  }
+}

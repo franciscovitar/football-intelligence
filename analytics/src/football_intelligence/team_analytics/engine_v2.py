@@ -158,12 +158,6 @@ def calculate_team_analytics_v2(
             if evidence.score is not None
         }
         supported_weight = sum(TEAM_OVERALL_WEIGHTS[name] for name in ready)
-        overall = (
-            sum(TEAM_OVERALL_WEIGHTS[name] * value for name, value in ready.items())
-            / supported_weight
-            if supported_weight
-            else None
-        )
         coverage = sum(
             TEAM_OVERALL_WEIGHTS[name] * dimensions[name].evidence_coverage_pct / 100.0
             for name in TEAM_OVERALL_WEIGHTS
@@ -172,6 +166,17 @@ def calculate_team_analytics_v2(
             "ready"
             if len(ready) == len(TEAM_OVERALL_WEIGHTS)
             else ("partial" if supported_weight else "insufficient_data")
+        )
+        # Overall is never a renormalized recombination of whichever
+        # dimensions happen to be ready (that would silently rescale a
+        # partial subset up to look like a complete 0-100 score). It is only
+        # ever populated once every one of the fourteen intended dimensions
+        # individually reached "ready" -- mirrors
+        # `player_analytics.engine_v2._compose_overall`'s `all_ready` gate.
+        overall = (
+            sum(TEAM_OVERALL_WEIGHTS[name] * value for name, value in ready.items())
+            if state == "ready"
+            else None
         )
         reference = max((item.reference_sample_size for item in feature_map.values()), default=1)
         first = selected[0]
