@@ -274,6 +274,7 @@ class TeamAnalyticsRepository:
         *,
         scope_key: str,
         season_id: int,
+        data_context: str = "real",
     ) -> None:
         """Persist Team V2 without altering the established V1/Elo contract."""
         model_version = "team-v2.0"
@@ -294,10 +295,11 @@ class TeamAnalyticsRepository:
                     team_id, season_id, scope_key, window_key, metric_name,
                     matches, observed_matches, raw_value, adjusted_value,
                     percentile, reference_sample_size, model_version, calculated_at,
-                    value_basis, metric_kind, metric_unit, formula_version, comparison_group
+                    value_basis, metric_kind, metric_unit, formula_version, comparison_group,
+                    data_context
                 ) values (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s
                 )
                 """,
                 (
@@ -319,6 +321,7 @@ class TeamAnalyticsRepository:
                     feature.metric_unit,
                     feature.formula_version,
                     feature.comparison_group,
+                    data_context,
                 ),
             )
         for score in result.scores:
@@ -333,11 +336,11 @@ class TeamAnalyticsRepository:
                     results_process_delta, results_process_signal, diagnostics,
                     reference_sample_size, current_elo, elo_change_last_5,
                     model_version, calculated_at, evidence_coverage_pct,
-                    evidence_state, dimension_evidence, profile_version
+                    evidence_state, dimension_evidence, profile_version, data_context
                 ) values (
                     %s, %s, %s, %s, %s, %s, %s, %s::jsonb,
                     null, null, %s::jsonb, %s, null, null,
-                    %s, %s, %s, %s, %s::jsonb, %s
+                    %s, %s, %s, %s, %s::jsonb, %s, %s
                 )
                 """,
                 (
@@ -357,6 +360,7 @@ class TeamAnalyticsRepository:
                     score.evidence_state,
                     json.dumps(evidence, sort_keys=True),
                     score.profile_version,
+                    data_context,
                 ),
             )
 

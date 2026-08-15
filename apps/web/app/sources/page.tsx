@@ -89,13 +89,13 @@ export default async function SourcesPage() {
     <main className="page-shell">
       <section className="page-heading">
         <div>
-          <p className="eyebrow">DATA TRANSPARENCY · V0</p>
-          <h1>Fuentes de datos</h1>
+          <p className="eyebrow">SOURCES / DATA COVERAGE</p>
+          <h1>Fuentes y cobertura</h1>
           <p>
             Estado real de la malla multi-fuente (Block 13 PoC): qué fuentes están activas,
             qué observan, dónde coinciden y dónde entran en conflicto. Estos datos de
-            reconciliación todavía NO alimentan las tablas canónicas de fútbol ni las páginas
-            de Player/Team/Rating.
+            reconciliación todavía NO alimentan las tablas canónicas de fútbol ni los scores V2.
+            El estado de producto se mantiene separado del estado técnico de la malla.
           </p>
         </div>
       </section>

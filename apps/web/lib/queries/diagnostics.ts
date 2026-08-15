@@ -89,6 +89,12 @@ function failed<T>(): DataResult<T> {
  * state -- no rule cleared its threshold for this entity in this window. It
  * is never an error and must never be rendered as a fake "sin problemas"
  * verdict.
+ *
+ * Reads only from the product-safe views (`data_context = 'real'`, matching
+ * `source_model_version`, active scope -- see
+ * `20260815130000_isolate_diagnostic_findings_v2_context.sql`), never the
+ * raw `analytics.diagnostic_findings` table: entity existence alone is not
+ * proof that a given finding is itself real V2 evidence.
  */
 export async function getEntityDiagnostics(
   entityType: DiagnosticEntityType,
@@ -100,7 +106,11 @@ export async function getEntityDiagnostics(
   try {
     const rows = await sql<DbDiagnosticRow[]>`
       select *
-      from analytics.diagnostic_findings
+      from (
+        select * from analytics.product_player_diagnostic_findings_v2
+        union all
+        select * from analytics.product_team_diagnostic_findings_v2
+      ) as finding
       where entity_type = ${entityType}
         and entity_id = ${entityId}
       order by
@@ -130,9 +140,8 @@ export async function getTopPlayerDiagnosticsByCode(
   try {
     const rows = await sql<DbDiagnosticRow[]>`
       select *
-      from analytics.diagnostic_findings
-      where entity_type = 'player'
-        and diagnostic_code = ${code}
+      from analytics.product_player_diagnostic_findings_v2
+      where diagnostic_code = ${code}
       order by
         case severity when 'high' then 3 when 'notable' then 2 else 1 end desc,
         confidence desc

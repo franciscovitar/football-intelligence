@@ -248,7 +248,8 @@ def test_player_analytics_pipeline_ranks_and_replaces_snapshots() -> None:
                     where window_key = 'season'
                       and percentile_state = 'insufficient_sample'
                       and percentile is null
-                )
+                ),
+                count(*) filter (where data_context = 'real')
             from analytics.player_feature_snapshots
             where scope_key = %s and model_version = %s
             """,
@@ -257,5 +258,14 @@ def test_player_analytics_pipeline_ranks_and_replaces_snapshots() -> None:
         assert persisted_v2 is not None
         assert persisted_v2[:3] == (len(v2_result.features), len(v2_result.features), 0)
         assert int(persisted_v2[3]) > 0
+        assert int(persisted_v2[4]) == len(v2_result.features)
+        detail_count = connection.execute(
+            """
+            select count(*) from analytics.product_player_detail_v2
+            where scope_key = %s
+            """,
+            (scope_key,),
+        ).fetchone()
+        assert detail_count == (len(v2_result.scores),)
 
         connection.rollback()

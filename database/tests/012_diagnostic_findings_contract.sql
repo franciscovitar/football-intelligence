@@ -164,6 +164,71 @@ begin
     exception
         when check_violation then null;
     end;
+
+    -- A row inserted without explicit provenance columns must default to
+    -- "not product-safe" (`data_context = 'test_smoke'`), never to `real`.
+    insert into analytics.diagnostic_findings (
+        diagnostic_code, entity_type, entity_id, severity, confidence,
+        supporting_metrics, comparison_group, window_key, model_version, computed_at
+    )
+    values (
+        'contract-default-context', 'player', 1, 'notable', 0.5,
+        '{}'::jsonb, 'role:forward', 'season', 'diagnostic-v1.0', now()
+    );
+    if not exists (
+        select 1 from analytics.diagnostic_findings
+        where diagnostic_code = 'contract-default-context'
+          and data_context = 'test_smoke'
+          and source_model_version = 'unknown'
+          and scope_key = 'unknown'
+    ) then
+        raise exception 'expected default provenance to be conservative (test_smoke/unknown)';
+    end if;
+
+    begin
+        insert into analytics.diagnostic_findings (
+            diagnostic_code, entity_type, entity_id, severity, confidence,
+            supporting_metrics, comparison_group, window_key, model_version, computed_at,
+            data_context
+        )
+        values (
+            'contract-bad-data-context', 'player', 1, 'notable', 0.5,
+            '{}'::jsonb, 'role:forward', 'season', 'diagnostic-v1.0', now(), 'fabricated'
+        );
+        raise exception 'expected invalid data_context to be rejected';
+    exception
+        when check_violation then null;
+    end;
+
+    begin
+        insert into analytics.diagnostic_findings (
+            diagnostic_code, entity_type, entity_id, severity, confidence,
+            supporting_metrics, comparison_group, window_key, model_version, computed_at,
+            source_model_version
+        )
+        values (
+            'contract-bad-source-model-version', 'player', 1, 'notable', 0.5,
+            '{}'::jsonb, 'role:forward', 'season', 'diagnostic-v1.0', now(), ''
+        );
+        raise exception 'expected blank source_model_version to be rejected';
+    exception
+        when check_violation then null;
+    end;
+
+    begin
+        insert into analytics.diagnostic_findings (
+            diagnostic_code, entity_type, entity_id, severity, confidence,
+            supporting_metrics, comparison_group, window_key, model_version, computed_at,
+            scope_key
+        )
+        values (
+            'contract-bad-scope-key', 'player', 1, 'notable', 0.5,
+            '{}'::jsonb, 'role:forward', 'season', 'diagnostic-v1.0', now(), ''
+        );
+        raise exception 'expected blank scope_key to be rejected';
+    exception
+        when check_violation then null;
+    end;
 end;
 $$;
 

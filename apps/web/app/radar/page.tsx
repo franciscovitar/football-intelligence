@@ -77,6 +77,12 @@ export default async function RadarPage({
         ) : null}
       </section>
 
+      <section className="context-strip" aria-label="Profundidad estadística del radar">
+        <div><span>Señal disponible</span><strong>Radar V1</strong></div>
+        <div><span>Inteligencia estadística</span><strong>V2 no disponible</strong></div>
+        <div><span>Lectura correcta</span><strong>Candidato, no conclusión</strong></div>
+      </section>
+
       {context ? (
         <form className="filters" method="get">
           <label>
@@ -142,7 +148,7 @@ export default async function RadarPage({
               <p className="eyebrow">CANDIDATOS</p>
               <h2>Producción ofensiva/creativa observada</h2>
             </div>
-            <p>Percentiles calculados dentro de cada competición, no entre competiciones.</p>
+            <p>Incluye muestra y confianza V1. No implica profundidad V2 ni equivalencia entre ligas.</p>
           </div>
           <div className="ranking-list">
             {players.map((player, index) => (

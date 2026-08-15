@@ -1,196 +1,45 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 
-import { DataNotice } from "@/features/players/data-notice";
-import { PlayerRankingCard } from "@/features/players/player-ranking-card";
-import {
-  formatDateTime,
-  ROLE_LABELS,
-  WINDOW_LABELS,
-} from "@/lib/player-display";
+import { EmptyState, PlayerProductCard } from "@/features/product/product-ui";
+import { PLAYER_DIMENSION_LABELS, WINDOW_LABELS } from "@/lib/product-display";
 import { POSITION_FAMILIES, POSITION_FAMILY_LABELS, type PositionFamily } from "@/lib/position-family";
-import {
-  getRankings,
-  type AnalyticsWindow,
-  type PlayerRole,
-  type RankingsFilters,
-} from "@/lib/queries/player-analytics";
+import { PLAYER_RANKING_DIMENSIONS, getProductPlayerRankings, type PlayerRankingDimension } from "@/lib/queries/product-intelligence";
+import type { AnalyticsWindow } from "@/lib/queries/player-analytics";
 
-export const metadata: Metadata = {
-  title: "Rankings",
-};
+export const metadata: Metadata = { title: "Rankings de jugadores V2" };
+const WINDOWS: AnalyticsWindow[] = ["season", "last_10", "last_5", "last_3"];
+const value = (input: string | string[] | undefined) => Array.isArray(input) ? (input[0] ?? "") : (input ?? "");
+const bounded = (input: string, fallback: number, max = 1) => { const parsed = Number(input); return Number.isFinite(parsed) ? Math.min(max, Math.max(0, parsed)) : fallback; };
 
-const WINDOWS: AnalyticsWindow[] = ["season", "last_5", "last_3", "last_10"];
-const ROLES: PlayerRole[] = ["goalkeeper", "defender", "midfielder", "forward"];
-
-function firstValue(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
-}
-
-function parseWindow(value: string): AnalyticsWindow {
-  return WINDOWS.includes(value as AnalyticsWindow) ? (value as AnalyticsWindow) : "season";
-}
-
-function parseRole(value: string): PlayerRole | "all" {
-  return value === "all" || ROLES.includes(value as PlayerRole)
-    ? (value as PlayerRole | "all")
-    : "all";
-}
-
-function parsePositionFamily(value: string): PositionFamily | "all" {
-  return value === "all" || POSITION_FAMILIES.includes(value as PositionFamily)
-    ? (value as PositionFamily | "all")
-    : "all";
-}
-
-function parseConfidence(value: string): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return 0.25;
-  }
-  return Math.min(1, Math.max(0, parsed));
-}
-
-export default async function RankingsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
+export default async function RankingsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await connection();
   const params = await searchParams;
+  const window = WINDOWS.includes(value(params.window) as AnalyticsWindow) ? value(params.window) as AnalyticsWindow : "season";
+  const dimension = PLAYER_RANKING_DIMENSIONS.includes(value(params.dimension) as PlayerRankingDimension) ? value(params.dimension) as PlayerRankingDimension : "overall";
+  const position: PositionFamily | "all" = POSITION_FAMILIES.includes(value(params.position) as PositionFamily) ? value(params.position) as PositionFamily : "all";
+  const minMinutes = Math.round(bounded(value(params.minutes), window === "season" ? 450 : window === "last_10" ? 270 : window === "last_5" ? 180 : 90, 10000));
+  const minConfidence = bounded(value(params.confidence), 0.4);
+  const filters = { competitionCode: value(params.competition).trim().slice(0, 30), seasonLabel: value(params.season).trim().slice(0, 30), window, positionFamily: position, minMinutes, minConfidence, search: value(params.q).trim().slice(0, 80), dimension, limit: 100 };
+  const result = await getProductPlayerRankings(filters);
+  const players = result.status === "ready" ? result.data.players : [];
 
-  const filters: RankingsFilters = {
-    window: parseWindow(firstValue(params.window)),
-    role: parseRole(firstValue(params.role) || "all"),
-    minConfidence: parseConfidence(firstValue(params.confidence) || "0.25"),
-    search: firstValue(params.q).trim().slice(0, 80),
-    limit: 100,
-    positionFamily: parsePositionFamily(firstValue(params.position) || "all"),
-  };
-
-  const result = await getRankings(filters);
-
-  return (
-    <main className="page-shell">
-      <section className="page-heading">
-        <div>
-          <p className="eyebrow">PLAYER RANKINGS</p>
-          <h1>{WINDOW_LABELS[filters.window]}</h1>
-          <p>
-            Comparación por rol con percentiles, contexto y shrinkage. Filtrá la confianza para
-            separar señales interesantes de rankings ya consolidados.
-          </p>
-        </div>
-        {result.status === "ready" && result.data.context ? (
-          <div className="context-card">
-            <span>{result.data.context.scopeKey}</span>
-            <strong>{result.data.context.modelVersion}</strong>
-            <small>{formatDateTime(result.data.context.calculatedAt)}</small>
-          </div>
-        ) : null}
-      </section>
-
-      <form className="filters" method="get">
-        <label>
-          <span>Vista</span>
-          <select defaultValue={filters.window} name="window">
-            {WINDOWS.map((window) => (
-              <option key={window} value={window}>
-                {WINDOW_LABELS[window]}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          <span>Rol</span>
-          <select defaultValue={filters.role} name="role">
-            <option value="all">Todos</option>
-            {ROLES.map((role) => (
-              <option key={role} value={role}>
-                {ROLE_LABELS[role]}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          <span>Confianza mínima</span>
-          <select defaultValue={String(filters.minConfidence)} name="confidence">
-            <option value="0">Sin filtro</option>
-            <option value="0.25">25%</option>
-            <option value="0.5">50%</option>
-            <option value="0.75">75%</option>
-          </select>
-        </label>
-
-        <label>
-          <span>Familia posicional (beta)</span>
-          <select defaultValue={filters.positionFamily} name="position">
-            <option value="all">Todas</option>
-            {POSITION_FAMILIES.map((family) => (
-              <option key={family} value={family}>
-                {POSITION_FAMILY_LABELS[family]}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="search-field">
-          <span>Jugador</span>
-          <input defaultValue={filters.search} name="q" placeholder="Buscar por nombre" type="search" />
-        </label>
-
-        <button className="button button-primary filter-button" type="submit">
-          Aplicar
-        </button>
-      </form>
-
-      {result.status !== "ready" ? (
-        <DataNotice
-          title={result.status === "unconfigured" ? "Base de datos pendiente" : "No pudimos cargar el ranking"}
-          message={result.message}
-        />
-      ) : result.data.context === null ? (
-        <DataNotice
-          title="Datos reales insuficientes"
-          message="No hay scores reales con evidencia suficiente para un ranking. Los snapshots smoke/test están excluidos."
-        />
-      ) : result.data.players.length === 0 ? (
-        <DataNotice
-          title="No hay resultados"
-          message="Probá bajar la confianza mínima, cambiar de rol o limpiar la búsqueda."
-        />
-      ) : (
-        <section className="panel rankings-panel">
-          <div className="ranking-summary">
-            <span>{result.data.players.length} jugadores visibles</span>
-            <span>
-              {filters.role === "all" ? "Todos los roles" : ROLE_LABELS[filters.role]} · confianza ≥{" "}
-              {Math.round(filters.minConfidence * 100)}%
-              {filters.positionFamily !== "all"
-                ? ` · ${POSITION_FAMILY_LABELS[filters.positionFamily]} (beta)`
-                : ""}
-            </span>
-          </div>
-          {filters.positionFamily !== "all" ? (
-            <p className="ranking-meta">
-              Familia posicional en beta: se clasifica desde la última posición observada en
-              cancha, puede no coincidir con el rol táctico habitual del jugador.
-            </p>
-          ) : null}
-          <div className="ranking-list">
-            {result.data.players.map((player, index) => (
-              <PlayerRankingCard
-                key={player.playerId}
-                player={player}
-                positionFamily={player.positionFamily}
-                rank={index + 1}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-    </main>
-  );
+  return <main className="page-shell">
+    <section className="page-heading"><div><p className="eyebrow">PLAYER EXPLORER · V2</p><h1>{PLAYER_DIMENSION_LABELS[dimension]}</h1><p>Solo aparecen jugadores reales con evidencia lista para esta dimensión. Muestra y confianza se filtran antes de ordenar.</p></div></section>
+    <form className="filters product-filters" method="get">
+      <label><span>Dimensión</span><select defaultValue={dimension} name="dimension">{PLAYER_RANKING_DIMENSIONS.map((item) => <option key={item} value={item}>{PLAYER_DIMENSION_LABELS[item]}</option>)}</select></label>
+      <label><span>Ventana</span><select defaultValue={window} name="window">{WINDOWS.map((item) => <option key={item} value={item}>{WINDOW_LABELS[item]}</option>)}</select></label>
+      <label><span>Posición</span><select defaultValue={position} name="position"><option value="all">Todas</option>{POSITION_FAMILIES.map((item) => <option key={item} value={item}>{POSITION_FAMILY_LABELS[item]}</option>)}</select></label>
+      <label><span>Minutos mínimos</span><input defaultValue={minMinutes} min="0" name="minutes" type="number" /></label>
+      <label><span>Confianza mínima</span><select defaultValue={String(minConfidence)} name="confidence"><option value="0.4">40%</option><option value="0.5">50%</option><option value="0.75">75%</option></select></label>
+      <label><span>Competición</span><input defaultValue={filters.competitionCode} name="competition" placeholder="ENG_PL" /></label>
+      <label><span>Temporada</span><input defaultValue={filters.seasonLabel} name="season" placeholder="2025/26" /></label>
+      <label className="search-field"><span>Jugador</span><input defaultValue={filters.search} name="q" placeholder="Buscar por nombre" type="search" /></label>
+      <button className="button button-primary filter-button" type="submit">Aplicar</button>
+    </form>
+    {result.status !== "ready" ? <EmptyState title="No pudimos leer el ranking" missing={result.message} unlock="Revisá la conexión del snapshot real V2." /> : players.length === 0 ? <EmptyState title="Insufficient real data for this ranking" missing="Ningún jugador cumple simultáneamente la dimensión, muestra y confianza seleccionadas." unlock="Probá otra dimensión o ventana; los datos test/smoke nunca se usan como reemplazo." /> : <>
+      <section className="top-four-grid">{players.slice(0, 4).map((player, index) => <PlayerProductCard key={player.playerId} player={player} rank={index + 1} prominent />)}</section>
+      {players.length > 4 ? <section className="panel"><div className="ranking-summary"><span>{players.length} jugadores elegibles</span><span>{WINDOW_LABELS[window]} · ≥ {minMinutes} min · ≥ {Math.round(Math.max(0.4, minConfidence) * 100)}% conf.</span></div>{players.slice(4).map((player, index) => <PlayerProductCard key={player.playerId} player={player} rank={index + 5} />)}</section> : null}
+    </>}
+  </main>;
 }
