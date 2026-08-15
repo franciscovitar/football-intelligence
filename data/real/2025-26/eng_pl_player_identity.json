@@ -1,0 +1,4708 @@
+{
+  "note": "Team/position reflect the CURRENT (2026/27) FPL squad list, not necessarily the player's 2025/26 club -- a small number of summer-transferred players will show their new club here while their season_stats totals remain correctly scoped to 2025/26. Position is FPL's own 4-way element_type (Goalkeeper/Defender/Midfielder/Forward), not a fine-grained position family.",
+  "provenance": {
+    "record_count": 587,
+    "retrieved_at": "2026-08-15T00:20:23.693531+00:00",
+    "semantic_version": "fpl-official-api-v1",
+    "source": "fpl-official-api",
+    "source_url": "https://fantasy.premierleague.com/api/bootstrap-static/"
+  },
+  "records": [
+    {
+      "display_name": "David Raya Mart\u00edn",
+      "first_name": "David",
+      "last_name": "Raya Mart\u00edn",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "1",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Kepa Arrizabalaga Revuelta",
+      "first_name": "Kepa",
+      "last_name": "Arrizabalaga Revuelta",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "2",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Illan Meslier",
+      "first_name": "Illan",
+      "last_name": "Meslier",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "3",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Gabriel dos Santos Magalh\u00e3es",
+      "first_name": "Gabriel",
+      "last_name": "dos Santos Magalh\u00e3es",
+      "listed_position": "Defender",
+      "player_external_id": "4",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Jurri\u00ebn Timber",
+      "first_name": "Jurri\u00ebn",
+      "last_name": "Timber",
+      "listed_position": "Defender",
+      "player_external_id": "5",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "William Saliba",
+      "first_name": "William",
+      "last_name": "Saliba",
+      "listed_position": "Defender",
+      "player_external_id": "6",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Myles Lewis-Skelly",
+      "first_name": "Myles",
+      "last_name": "Lewis-Skelly",
+      "listed_position": "Midfielder",
+      "player_external_id": "7",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Riccardo Calafiori",
+      "first_name": "Riccardo",
+      "last_name": "Calafiori",
+      "listed_position": "Defender",
+      "player_external_id": "8",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Piero Hincapi\u00e9",
+      "first_name": "Piero",
+      "last_name": "Hincapi\u00e9",
+      "listed_position": "Defender",
+      "player_external_id": "9",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Benjamin White",
+      "first_name": "Benjamin",
+      "last_name": "White",
+      "listed_position": "Defender",
+      "player_external_id": "10",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Cristhian Mosquera",
+      "first_name": "Cristhian",
+      "last_name": "Mosquera",
+      "listed_position": "Defender",
+      "player_external_id": "11",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Bukayo Saka",
+      "first_name": "Bukayo",
+      "last_name": "Saka",
+      "listed_position": "Midfielder",
+      "player_external_id": "12",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Declan Rice",
+      "first_name": "Declan",
+      "last_name": "Rice",
+      "listed_position": "Midfielder",
+      "player_external_id": "13",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Eberechi Eze",
+      "first_name": "Eberechi",
+      "last_name": "Eze",
+      "listed_position": "Midfielder",
+      "player_external_id": "14",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Martin \u00d8degaard",
+      "first_name": "Martin",
+      "last_name": "\u00d8degaard",
+      "listed_position": "Midfielder",
+      "player_external_id": "15",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Noni Madueke",
+      "first_name": "Noni",
+      "last_name": "Madueke",
+      "listed_position": "Midfielder",
+      "player_external_id": "16",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Mikel Merino Zaz\u00f3n",
+      "first_name": "Mikel",
+      "last_name": "Merino Zaz\u00f3n",
+      "listed_position": "Midfielder",
+      "player_external_id": "17",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Gabriel Martinelli Silva",
+      "first_name": "Gabriel",
+      "last_name": "Martinelli Silva",
+      "listed_position": "Midfielder",
+      "player_external_id": "18",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Mart\u00edn Zubimendi Ib\u00e1\u00f1ez",
+      "first_name": "Mart\u00edn",
+      "last_name": "Zubimendi Ib\u00e1\u00f1ez",
+      "listed_position": "Midfielder",
+      "player_external_id": "19",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Max Dowman",
+      "first_name": "Max",
+      "last_name": "Dowman",
+      "listed_position": "Midfielder",
+      "player_external_id": "20",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Ethan Nwaneri",
+      "first_name": "Ethan",
+      "last_name": "Nwaneri",
+      "listed_position": "Midfielder",
+      "player_external_id": "22",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "F\u00e1bio Ferreira Vieira",
+      "first_name": "F\u00e1bio",
+      "last_name": "Ferreira Vieira",
+      "listed_position": "Midfielder",
+      "player_external_id": "23",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Reiss Nelson",
+      "first_name": "Reiss",
+      "last_name": "Nelson",
+      "listed_position": "Midfielder",
+      "player_external_id": "24",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Viktor Gy\u00f6keres",
+      "first_name": "Viktor",
+      "last_name": "Gy\u00f6keres",
+      "listed_position": "Forward",
+      "player_external_id": "25",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Kai Havertz",
+      "first_name": "Kai",
+      "last_name": "Havertz",
+      "listed_position": "Forward",
+      "player_external_id": "26",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Gabriel Fernando de Jesus",
+      "first_name": "Gabriel",
+      "last_name": "Fernando de Jesus",
+      "listed_position": "Forward",
+      "player_external_id": "27",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Bruno Guimar\u00e3es Rodriguez Moura",
+      "first_name": "Bruno",
+      "last_name": "Guimar\u00e3es Rodriguez Moura",
+      "listed_position": "Midfielder",
+      "player_external_id": "452",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Christos Tzolis",
+      "first_name": "Christos",
+      "last_name": "Tzolis",
+      "listed_position": "Midfielder",
+      "player_external_id": "557",
+      "team_name": "Arsenal"
+    },
+    {
+      "display_name": "Emiliano Mart\u00ednez Romero",
+      "first_name": "Emiliano",
+      "last_name": "Mart\u00ednez Romero",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "28",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Marco Bizot",
+      "first_name": "Marco",
+      "last_name": "Bizot",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "29",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Lucas Digne",
+      "first_name": "Lucas",
+      "last_name": "Digne",
+      "listed_position": "Defender",
+      "player_external_id": "30",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Ezri Konsa Ngoyo",
+      "first_name": "Ezri",
+      "last_name": "Konsa Ngoyo",
+      "listed_position": "Defender",
+      "player_external_id": "31",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Matty Cash",
+      "first_name": "Matty",
+      "last_name": "Cash",
+      "listed_position": "Defender",
+      "player_external_id": "32",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Tyrone Mings",
+      "first_name": "Tyrone",
+      "last_name": "Mings",
+      "listed_position": "Defender",
+      "player_external_id": "33",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Pau Torres",
+      "first_name": "Pau",
+      "last_name": "Torres",
+      "listed_position": "Defender",
+      "player_external_id": "34",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Lamare Bogarde",
+      "first_name": "Lamare",
+      "last_name": "Bogarde",
+      "listed_position": "Midfielder",
+      "player_external_id": "35",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Ian Maatsen",
+      "first_name": "Ian",
+      "last_name": "Maatsen",
+      "listed_position": "Defender",
+      "player_external_id": "36",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Victor Lindel\u00f6f",
+      "first_name": "Victor",
+      "last_name": "Lindel\u00f6f",
+      "listed_position": "Defender",
+      "player_external_id": "37",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Andr\u00e9s Garc\u00eda",
+      "first_name": "Andr\u00e9s",
+      "last_name": "Garc\u00eda",
+      "listed_position": "Defender",
+      "player_external_id": "38",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Kosta Nedeljkovic",
+      "first_name": "Kosta",
+      "last_name": "Nedeljkovic",
+      "listed_position": "Defender",
+      "player_external_id": "39",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Emiliano Buend\u00eda Stati",
+      "first_name": "Emiliano",
+      "last_name": "Buend\u00eda Stati",
+      "listed_position": "Midfielder",
+      "player_external_id": "41",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Leon Bailey",
+      "first_name": "Leon",
+      "last_name": "Bailey",
+      "listed_position": "Midfielder",
+      "player_external_id": "44",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "John McGinn",
+      "first_name": "John",
+      "last_name": "McGinn",
+      "listed_position": "Midfielder",
+      "player_external_id": "45",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Ross Barkley",
+      "first_name": "Ross",
+      "last_name": "Barkley",
+      "listed_position": "Midfielder",
+      "player_external_id": "46",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Boubacar Kamara",
+      "first_name": "Boubacar",
+      "last_name": "Kamara",
+      "listed_position": "Midfielder",
+      "player_external_id": "47",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Amadou Onana",
+      "first_name": "Amadou",
+      "last_name": "Onana",
+      "listed_position": "Midfielder",
+      "player_external_id": "48",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Samuel Iling-Junior",
+      "first_name": "Samuel",
+      "last_name": "Iling-Junior",
+      "listed_position": "Midfielder",
+      "player_external_id": "49",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Bradley Burrowes",
+      "first_name": "Bradley",
+      "last_name": "Burrowes",
+      "listed_position": "Midfielder",
+      "player_external_id": "50",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "George Hemmings",
+      "first_name": "George",
+      "last_name": "Hemmings",
+      "listed_position": "Midfielder",
+      "player_external_id": "51",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Alysson Edward Franco da Rocha dos Santos",
+      "first_name": "Alysson Edward Franco",
+      "last_name": "da Rocha dos Santos",
+      "listed_position": "Midfielder",
+      "player_external_id": "52",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Johan Manzambi",
+      "first_name": "Johan",
+      "last_name": "Manzambi",
+      "listed_position": "Midfielder",
+      "player_external_id": "53",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Joao Gomes",
+      "first_name": "Joao",
+      "last_name": "Gomes",
+      "listed_position": "Midfielder",
+      "player_external_id": "54",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Ollie Watkins",
+      "first_name": "Ollie",
+      "last_name": "Watkins",
+      "listed_position": "Forward",
+      "player_external_id": "55",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Tammy Abraham",
+      "first_name": "Tammy",
+      "last_name": "Abraham",
+      "listed_position": "Forward",
+      "player_external_id": "56",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Alejandro Garnacho Ferreyra",
+      "first_name": "Alejandro",
+      "last_name": "Garnacho Ferreyra",
+      "listed_position": "Midfielder",
+      "player_external_id": "160",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "Brian Madjo",
+      "first_name": "Brian",
+      "last_name": "Madjo",
+      "listed_position": "Forward",
+      "player_external_id": "582",
+      "team_name": "Aston Villa"
+    },
+    {
+      "display_name": "\u0110or\u0111e Petrovi\u0107",
+      "first_name": "\u0110or\u0111e",
+      "last_name": "Petrovi\u0107",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "57",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Fraser Forster",
+      "first_name": "Fraser",
+      "last_name": "Forster",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "58",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Will Dennis",
+      "first_name": "Will",
+      "last_name": "Dennis",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "59",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "James Hill",
+      "first_name": "James",
+      "last_name": "Hill",
+      "listed_position": "Defender",
+      "player_external_id": "60",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Adrien Truffert",
+      "first_name": "Adrien",
+      "last_name": "Truffert",
+      "listed_position": "Defender",
+      "player_external_id": "61",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Bafod\u00e9 Diakit\u00e9",
+      "first_name": "Bafod\u00e9",
+      "last_name": "Diakit\u00e9",
+      "listed_position": "Defender",
+      "player_external_id": "62",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Veljko Milosavljevic",
+      "first_name": "Veljko",
+      "last_name": "Milosavljevic",
+      "listed_position": "Defender",
+      "player_external_id": "63",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Adam Smith",
+      "first_name": "Adam",
+      "last_name": "Smith",
+      "listed_position": "Defender",
+      "player_external_id": "64",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Juli\u00e1n Araujo Z\u00fa\u00f1iga",
+      "first_name": "Juli\u00e1n",
+      "last_name": "Araujo Z\u00fa\u00f1iga",
+      "listed_position": "Defender",
+      "player_external_id": "65",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Julio Soler Barreto",
+      "first_name": "Julio",
+      "last_name": "Soler Barreto",
+      "listed_position": "Defender",
+      "player_external_id": "66",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Rayan Vitor Simpl\u00edcio Rocha",
+      "first_name": "Rayan Vitor",
+      "last_name": "Simpl\u00edcio Rocha",
+      "listed_position": "Midfielder",
+      "player_external_id": "67",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Marcus Tavernier",
+      "first_name": "Marcus",
+      "last_name": "Tavernier",
+      "listed_position": "Midfielder",
+      "player_external_id": "68",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Alex Scott",
+      "first_name": "Alex",
+      "last_name": "Scott",
+      "listed_position": "Midfielder",
+      "player_external_id": "69",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Justin Kluivert",
+      "first_name": "Justin",
+      "last_name": "Kluivert",
+      "listed_position": "Midfielder",
+      "player_external_id": "70",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Lewis Cook",
+      "first_name": "Lewis",
+      "last_name": "Cook",
+      "listed_position": "Midfielder",
+      "player_external_id": "71",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Ben Gannon-Doak",
+      "first_name": "Ben",
+      "last_name": "Gannon-Doak",
+      "listed_position": "Midfielder",
+      "player_external_id": "72",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Tyler Adams",
+      "first_name": "Tyler",
+      "last_name": "Adams",
+      "listed_position": "Midfielder",
+      "player_external_id": "73",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "David Brooks",
+      "first_name": "David",
+      "last_name": "Brooks",
+      "listed_position": "Midfielder",
+      "player_external_id": "74",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Ryan Christie",
+      "first_name": "Ryan",
+      "last_name": "Christie",
+      "listed_position": "Midfielder",
+      "player_external_id": "75",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Alex T\u00f3th",
+      "first_name": "Alex",
+      "last_name": "T\u00f3th",
+      "listed_position": "Midfielder",
+      "player_external_id": "76",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Amine Adli",
+      "first_name": "Amine",
+      "last_name": "Adli",
+      "listed_position": "Midfielder",
+      "player_external_id": "77",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Junior Kroupi",
+      "first_name": "Junior",
+      "last_name": "Kroupi",
+      "listed_position": "Midfielder",
+      "player_external_id": "78",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Francisco Evanilson de Lima Barbosa",
+      "first_name": "Francisco Evanilson",
+      "last_name": "de Lima Barbosa",
+      "listed_position": "Forward",
+      "player_external_id": "79",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Enes \u00dcnal",
+      "first_name": "Enes",
+      "last_name": "\u00dcnal",
+      "listed_position": "Forward",
+      "player_external_id": "80",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "\u00c1lvaro Rodr\u00edguez",
+      "first_name": "\u00c1lvaro",
+      "last_name": "Rodr\u00edguez",
+      "listed_position": "Forward",
+      "player_external_id": "81",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Ant\u00f3nio Jo\u00e3o Pereira de Albuquerque Tavares da Silva",
+      "first_name": "Ant\u00f3nio Jo\u00e3o",
+      "last_name": "Pereira de Albuquerque Tavares da Silva",
+      "listed_position": "Defender",
+      "player_external_id": "566",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Juanlu S\u00e1nchez",
+      "first_name": "Juanlu",
+      "last_name": "S\u00e1nchez",
+      "listed_position": "Defender",
+      "player_external_id": "573",
+      "team_name": "Bournemouth"
+    },
+    {
+      "display_name": "Caoimh\u00edn Kelleher",
+      "first_name": "Caoimh\u00edn",
+      "last_name": "Kelleher",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "82",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "H\u00e1kon Rafn Valdimarsson",
+      "first_name": "H\u00e1kon Rafn",
+      "last_name": "Valdimarsson",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "83",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Nathan Collins",
+      "first_name": "Nathan",
+      "last_name": "Collins",
+      "listed_position": "Defender",
+      "player_external_id": "84",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Sepp van den Berg",
+      "first_name": "Sepp",
+      "last_name": "van den Berg",
+      "listed_position": "Defender",
+      "player_external_id": "85",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Keane Lewis-Potter",
+      "first_name": "Keane",
+      "last_name": "Lewis-Potter",
+      "listed_position": "Midfielder",
+      "player_external_id": "86",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Kristoffer Ajer",
+      "first_name": "Kristoffer",
+      "last_name": "Ajer",
+      "listed_position": "Defender",
+      "player_external_id": "87",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Michael Kayode",
+      "first_name": "Michael",
+      "last_name": "Kayode",
+      "listed_position": "Defender",
+      "player_external_id": "88",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Rico Henry",
+      "first_name": "Rico",
+      "last_name": "Henry",
+      "listed_position": "Defender",
+      "player_external_id": "89",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Aaron Hickey",
+      "first_name": "Aaron",
+      "last_name": "Hickey",
+      "listed_position": "Defender",
+      "player_external_id": "90",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Ethan Pinnock",
+      "first_name": "Ethan",
+      "last_name": "Pinnock",
+      "listed_position": "Defender",
+      "player_external_id": "91",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Kim Ji-soo",
+      "first_name": "Kim",
+      "last_name": "Ji-soo",
+      "listed_position": "Defender",
+      "player_external_id": "92",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Jannik Schuster",
+      "first_name": "Jannik",
+      "last_name": "Schuster",
+      "listed_position": "Defender",
+      "player_external_id": "93",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Kevin Schade",
+      "first_name": "Kevin",
+      "last_name": "Schade",
+      "listed_position": "Midfielder",
+      "player_external_id": "94",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Dango Ouattara",
+      "first_name": "Dango",
+      "last_name": "Ouattara",
+      "listed_position": "Midfielder",
+      "player_external_id": "95",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Mikkel Damsgaard",
+      "first_name": "Mikkel",
+      "last_name": "Damsgaard",
+      "listed_position": "Midfielder",
+      "player_external_id": "96",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Mathias Jensen",
+      "first_name": "Mathias",
+      "last_name": "Jensen",
+      "listed_position": "Midfielder",
+      "player_external_id": "97",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Vitaly Janelt",
+      "first_name": "Vitaly",
+      "last_name": "Janelt",
+      "listed_position": "Midfielder",
+      "player_external_id": "98",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Antoni Milambo",
+      "first_name": "Antoni",
+      "last_name": "Milambo",
+      "listed_position": "Midfielder",
+      "player_external_id": "99",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "F\u00e1bio Freitas Gouveia Carvalho",
+      "first_name": "F\u00e1bio",
+      "last_name": "Freitas Gouveia Carvalho",
+      "listed_position": "Midfielder",
+      "player_external_id": "100",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Yehor Yarmoliuk",
+      "first_name": "Yehor",
+      "last_name": "Yarmoliuk",
+      "listed_position": "Midfielder",
+      "player_external_id": "102",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Josh Dasilva",
+      "first_name": "Josh",
+      "last_name": "Dasilva",
+      "listed_position": "Midfielder",
+      "player_external_id": "103",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Jaidon Anthony",
+      "first_name": "Jaidon",
+      "last_name": "Anthony",
+      "listed_position": "Midfielder",
+      "player_external_id": "105",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Igor Thiago Nascimento Rodrigues",
+      "first_name": "Igor Thiago",
+      "last_name": "Nascimento Rodrigues",
+      "listed_position": "Forward",
+      "player_external_id": "106",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Kaye Furo",
+      "first_name": "Kaye",
+      "last_name": "Furo",
+      "listed_position": "Forward",
+      "player_external_id": "107",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Callum Wilson",
+      "first_name": "Callum",
+      "last_name": "Wilson",
+      "listed_position": "Forward",
+      "player_external_id": "108",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Mamadou Sangar\u00e9",
+      "first_name": "Mamadou",
+      "last_name": "Sangar\u00e9",
+      "listed_position": "Midfielder",
+      "player_external_id": "565",
+      "team_name": "Brentford"
+    },
+    {
+      "display_name": "Bart Verbruggen",
+      "first_name": "Bart",
+      "last_name": "Verbruggen",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "109",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Jason Steele",
+      "first_name": "Jason",
+      "last_name": "Steele",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "111",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Ferdi Kad\u0131o\u011flu",
+      "first_name": "Ferdi",
+      "last_name": "Kad\u0131o\u011flu",
+      "listed_position": "Defender",
+      "player_external_id": "113",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Olivier Boscagli",
+      "first_name": "Olivier",
+      "last_name": "Boscagli",
+      "listed_position": "Defender",
+      "player_external_id": "114",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Maxim De Cuyper",
+      "first_name": "Maxim",
+      "last_name": "De Cuyper",
+      "listed_position": "Defender",
+      "player_external_id": "115",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Lewis Dunk",
+      "first_name": "Lewis",
+      "last_name": "Dunk",
+      "listed_position": "Defender",
+      "player_external_id": "116",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Diego Coppola",
+      "first_name": "Diego",
+      "last_name": "Coppola",
+      "listed_position": "Defender",
+      "player_external_id": "117",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Igor Julio dos Santos de Paulo",
+      "first_name": "Igor Julio",
+      "last_name": "dos Santos de Paulo",
+      "listed_position": "Defender",
+      "player_external_id": "118",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Jo\u00e3o Pedro Loureiro da Costa",
+      "first_name": "Jo\u00e3o Pedro",
+      "last_name": "Loureiro da Costa",
+      "listed_position": "Defender",
+      "player_external_id": "119",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Michael Svoboda",
+      "first_name": "Michael",
+      "last_name": "Svoboda",
+      "listed_position": "Defender",
+      "player_external_id": "120",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Mitoma Kaoru",
+      "first_name": "Mitoma",
+      "last_name": "Kaoru",
+      "listed_position": "Midfielder",
+      "player_external_id": "121",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Yankuba Minteh",
+      "first_name": "Yankuba",
+      "last_name": "Minteh",
+      "listed_position": "Midfielder",
+      "player_external_id": "122",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Jack Hinshelwood",
+      "first_name": "Jack",
+      "last_name": "Hinshelwood",
+      "listed_position": "Midfielder",
+      "player_external_id": "123",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Pascal Gro\u00df",
+      "first_name": "Pascal",
+      "last_name": "Gro\u00df",
+      "listed_position": "Midfielder",
+      "player_external_id": "124",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Georginio Rutter",
+      "first_name": "Georginio",
+      "last_name": "Rutter",
+      "listed_position": "Forward",
+      "player_external_id": "125",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Matt O'Riley",
+      "first_name": "Matt",
+      "last_name": "O'Riley",
+      "listed_position": "Midfielder",
+      "player_external_id": "126",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Diego G\u00f3mez Amarilla",
+      "first_name": "Diego",
+      "last_name": "G\u00f3mez Amarilla",
+      "listed_position": "Midfielder",
+      "player_external_id": "127",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Facundo Buonanotte",
+      "first_name": "Facundo",
+      "last_name": "Buonanotte",
+      "listed_position": "Midfielder",
+      "player_external_id": "128",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Yasin Ayari",
+      "first_name": "Yasin",
+      "last_name": "Ayari",
+      "listed_position": "Midfielder",
+      "player_external_id": "129",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Mats Wieffer",
+      "first_name": "Mats",
+      "last_name": "Wieffer",
+      "listed_position": "Defender",
+      "player_external_id": "130",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Carlos Baleba",
+      "first_name": "Carlos",
+      "last_name": "Baleba",
+      "listed_position": "Midfielder",
+      "player_external_id": "131",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Harry Howell",
+      "first_name": "Harry",
+      "last_name": "Howell",
+      "listed_position": "Midfielder",
+      "player_external_id": "132",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Tom Watson",
+      "first_name": "Tom",
+      "last_name": "Watson",
+      "listed_position": "Midfielder",
+      "player_external_id": "133",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Nehemiah Oriola",
+      "first_name": "Nehemiah",
+      "last_name": "Oriola",
+      "listed_position": "Midfielder",
+      "player_external_id": "134",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Zadok Yohanna",
+      "first_name": "Zadok",
+      "last_name": "Yohanna",
+      "listed_position": "Midfielder",
+      "player_external_id": "135",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Stefanos Tzimas",
+      "first_name": "Stefanos",
+      "last_name": "Tzimas",
+      "listed_position": "Forward",
+      "player_external_id": "137",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Charalampos Kostoulas",
+      "first_name": "Charalampos",
+      "last_name": "Kostoulas",
+      "listed_position": "Forward",
+      "player_external_id": "138",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Evan Ferguson",
+      "first_name": "Evan",
+      "last_name": "Ferguson",
+      "listed_position": "Forward",
+      "player_external_id": "139",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Pascal Struijk",
+      "first_name": "Pascal",
+      "last_name": "Struijk",
+      "listed_position": "Defender",
+      "player_external_id": "328",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Luka Vu\u0161kovi\u0107",
+      "first_name": "Luka",
+      "last_name": "Vu\u0161kovi\u0107",
+      "listed_position": "Defender",
+      "player_external_id": "504",
+      "team_name": "Brighton"
+    },
+    {
+      "display_name": "Morgan Rogers",
+      "first_name": "Morgan",
+      "last_name": "Rogers",
+      "listed_position": "Midfielder",
+      "player_external_id": "40",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Jordan Henderson",
+      "first_name": "Jordan",
+      "last_name": "Henderson",
+      "listed_position": "Midfielder",
+      "player_external_id": "101",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Danny Welbeck",
+      "first_name": "Danny",
+      "last_name": "Welbeck",
+      "listed_position": "Forward",
+      "player_external_id": "136",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Robert Lynch S\u00e1nchez",
+      "first_name": "Robert",
+      "last_name": "Lynch S\u00e1nchez",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "140",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Filip J\u00f6rgensen",
+      "first_name": "Filip",
+      "last_name": "J\u00f6rgensen",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "141",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Reece James",
+      "first_name": "Reece",
+      "last_name": "James",
+      "listed_position": "Defender",
+      "player_external_id": "142",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Trevoh Chalobah",
+      "first_name": "Trevoh",
+      "last_name": "Chalobah",
+      "listed_position": "Defender",
+      "player_external_id": "143",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Malo Gusto",
+      "first_name": "Malo",
+      "last_name": "Gusto",
+      "listed_position": "Defender",
+      "player_external_id": "144",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Wesley Fofana",
+      "first_name": "Wesley",
+      "last_name": "Fofana",
+      "listed_position": "Defender",
+      "player_external_id": "145",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Beno\u00eet Badiashile Mukinayi",
+      "first_name": "Beno\u00eet",
+      "last_name": "Badiashile Mukinayi",
+      "listed_position": "Defender",
+      "player_external_id": "146",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Tosin Adarabioyo",
+      "first_name": "Tosin",
+      "last_name": "Adarabioyo",
+      "listed_position": "Defender",
+      "player_external_id": "147",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Jorrel Hato",
+      "first_name": "Jorrel",
+      "last_name": "Hato",
+      "listed_position": "Defender",
+      "player_external_id": "148",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Levi Samuels Colwill",
+      "first_name": "Levi",
+      "last_name": "Samuels Colwill",
+      "listed_position": "Defender",
+      "player_external_id": "149",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Mamadou Sarr",
+      "first_name": "Mamadou",
+      "last_name": "Sarr",
+      "listed_position": "Defender",
+      "player_external_id": "150",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Josh Acheampong",
+      "first_name": "Josh",
+      "last_name": "Acheampong",
+      "listed_position": "Defender",
+      "player_external_id": "151",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Marco Palestra",
+      "first_name": "Marco",
+      "last_name": "Palestra",
+      "listed_position": "Defender",
+      "player_external_id": "152",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Axel Disasi",
+      "first_name": "Axel",
+      "last_name": "Disasi",
+      "listed_position": "Defender",
+      "player_external_id": "153",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Cole Palmer",
+      "first_name": "Cole",
+      "last_name": "Palmer",
+      "listed_position": "Midfielder",
+      "player_external_id": "154",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Enzo Fern\u00e1ndez",
+      "first_name": "Enzo",
+      "last_name": "Fern\u00e1ndez",
+      "listed_position": "Midfielder",
+      "player_external_id": "155",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Pedro Lomba Neto",
+      "first_name": "Pedro",
+      "last_name": "Lomba Neto",
+      "listed_position": "Midfielder",
+      "player_external_id": "156",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Est\u00eav\u00e3o Almeida de Oliveira Gon\u00e7alves",
+      "first_name": "Est\u00eav\u00e3o",
+      "last_name": "Almeida de Oliveira Gon\u00e7alves",
+      "listed_position": "Midfielder",
+      "player_external_id": "157",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Jamie Bynoe-Gittens",
+      "first_name": "Jamie",
+      "last_name": "Bynoe-Gittens",
+      "listed_position": "Midfielder",
+      "player_external_id": "158",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Mois\u00e9s Caicedo Corozo",
+      "first_name": "Mois\u00e9s",
+      "last_name": "Caicedo Corozo",
+      "listed_position": "Midfielder",
+      "player_external_id": "159",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Rom\u00e9o Lavia",
+      "first_name": "Rom\u00e9o",
+      "last_name": "Lavia",
+      "listed_position": "Midfielder",
+      "player_external_id": "161",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "D\u00e1rio Lu\u00eds Essugo",
+      "first_name": "D\u00e1rio",
+      "last_name": "Lu\u00eds Essugo",
+      "listed_position": "Midfielder",
+      "player_external_id": "163",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Geovany Quenda",
+      "first_name": "Geovany",
+      "last_name": "Quenda",
+      "listed_position": "Midfielder",
+      "player_external_id": "164",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Jo\u00e3o Pedro Junqueira de Jesus",
+      "first_name": "Jo\u00e3o Pedro",
+      "last_name": "Junqueira de Jesus",
+      "listed_position": "Forward",
+      "player_external_id": "165",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Nicolas Jackson",
+      "first_name": "Nicolas",
+      "last_name": "Jackson",
+      "listed_position": "Forward",
+      "player_external_id": "166",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Liam Delap",
+      "first_name": "Liam",
+      "last_name": "Delap",
+      "listed_position": "Forward",
+      "player_external_id": "167",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Marc Guiu Paz",
+      "first_name": "Marc",
+      "last_name": "Guiu Paz",
+      "listed_position": "Forward",
+      "player_external_id": "168",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Shumaira Mheuka",
+      "first_name": "Shumaira",
+      "last_name": "Mheuka",
+      "listed_position": "Forward",
+      "player_external_id": "169",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Emmanuel Emegha",
+      "first_name": "Emmanuel",
+      "last_name": "Emegha",
+      "listed_position": "Forward",
+      "player_external_id": "170",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Maxence Lacroix",
+      "first_name": "Maxence",
+      "last_name": "Lacroix",
+      "listed_position": "Defender",
+      "player_external_id": "200",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Mike Penders",
+      "first_name": "Mike",
+      "last_name": "Penders",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "560",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Aaron Anselmino",
+      "first_name": "Aaron",
+      "last_name": "Anselmino",
+      "listed_position": "Defender",
+      "player_external_id": "561",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Valent\u00edn Barco",
+      "first_name": "Valent\u00edn",
+      "last_name": "Barco",
+      "listed_position": "Midfielder",
+      "player_external_id": "568",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Mykhailo Mudryk",
+      "first_name": "Mykhailo",
+      "last_name": "Mudryk",
+      "listed_position": "Midfielder",
+      "player_external_id": "578",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Pep Chavarr\u00eda",
+      "first_name": "Pep",
+      "last_name": "Chavarr\u00eda",
+      "listed_position": "Defender",
+      "player_external_id": "583",
+      "team_name": "Chelsea"
+    },
+    {
+      "display_name": "Frank Onyeka",
+      "first_name": "Frank",
+      "last_name": "Onyeka",
+      "listed_position": "Midfielder",
+      "player_external_id": "104",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Carl Rushworth",
+      "first_name": "Carl",
+      "last_name": "Rushworth",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "110",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Oliver Dovin",
+      "first_name": "Oliver",
+      "last_name": "Dovin",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "171",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Ben Wilson",
+      "first_name": "Ben",
+      "last_name": "Wilson",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "172",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Bobby Thomas",
+      "first_name": "Bobby",
+      "last_name": "Thomas",
+      "listed_position": "Defender",
+      "player_external_id": "173",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Liam Kitching",
+      "first_name": "Liam",
+      "last_name": "Kitching",
+      "listed_position": "Defender",
+      "player_external_id": "174",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Milan van Ewijk",
+      "first_name": "Milan",
+      "last_name": "van Ewijk",
+      "listed_position": "Defender",
+      "player_external_id": "175",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Jay Dasilva",
+      "first_name": "Jay",
+      "last_name": "Dasilva",
+      "listed_position": "Defender",
+      "player_external_id": "176",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Kaine Kesler-Hayden",
+      "first_name": "Kaine",
+      "last_name": "Kesler-Hayden",
+      "listed_position": "Defender",
+      "player_external_id": "177",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Jake Bidwell",
+      "first_name": "Jake",
+      "last_name": "Bidwell",
+      "listed_position": "Defender",
+      "player_external_id": "178",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Joel Latibeaudiere",
+      "first_name": "Joel",
+      "last_name": "Latibeaudiere",
+      "listed_position": "Defender",
+      "player_external_id": "179",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Luke Woolfenden",
+      "first_name": "Luke",
+      "last_name": "Woolfenden",
+      "listed_position": "Defender",
+      "player_external_id": "180",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Miguel Brau",
+      "first_name": "Miguel",
+      "last_name": "Brau",
+      "listed_position": "Defender",
+      "player_external_id": "181",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Aur\u00e8le Amenda",
+      "first_name": "Aur\u00e8le",
+      "last_name": "Amenda",
+      "listed_position": "Defender",
+      "player_external_id": "182",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Jack Rudoni",
+      "first_name": "Jack",
+      "last_name": "Rudoni",
+      "listed_position": "Midfielder",
+      "player_external_id": "183",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Matt Grimes",
+      "first_name": "Matt",
+      "last_name": "Grimes",
+      "listed_position": "Midfielder",
+      "player_external_id": "184",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Tatsuhiro Sakamoto",
+      "first_name": "Tatsuhiro",
+      "last_name": "Sakamoto",
+      "listed_position": "Midfielder",
+      "player_external_id": "185",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Ephron Mason-Clark",
+      "first_name": "Ephron",
+      "last_name": "Mason-Clark",
+      "listed_position": "Midfielder",
+      "player_external_id": "186",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Josh Eccles",
+      "first_name": "Josh",
+      "last_name": "Eccles",
+      "listed_position": "Midfielder",
+      "player_external_id": "187",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Victor Torp",
+      "first_name": "Victor",
+      "last_name": "Torp",
+      "listed_position": "Midfielder",
+      "player_external_id": "188",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "George Shepherd",
+      "first_name": "George",
+      "last_name": "Shepherd",
+      "listed_position": "Midfielder",
+      "player_external_id": "189",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Loum Tchaouna",
+      "first_name": "Loum",
+      "last_name": "Tchaouna",
+      "listed_position": "Midfielder",
+      "player_external_id": "190",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Raphael Borges Rodrigues",
+      "first_name": "Raphael",
+      "last_name": "Borges Rodrigues",
+      "listed_position": "Midfielder",
+      "player_external_id": "191",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Kaine Andrews",
+      "first_name": "Kaine",
+      "last_name": "Andrews",
+      "listed_position": "Midfielder",
+      "player_external_id": "192",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Haji Wright",
+      "first_name": "Haji",
+      "last_name": "Wright",
+      "listed_position": "Forward",
+      "player_external_id": "193",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Brandon Thomas-Asante",
+      "first_name": "Brandon",
+      "last_name": "Thomas-Asante",
+      "listed_position": "Forward",
+      "player_external_id": "194",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Ellis Simms",
+      "first_name": "Ellis",
+      "last_name": "Simms",
+      "listed_position": "Forward",
+      "player_external_id": "195",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Jahnoah Markelo",
+      "first_name": "Jahnoah",
+      "last_name": "Markelo",
+      "listed_position": "Forward",
+      "player_external_id": "196",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Norman Bassette",
+      "first_name": "Norman",
+      "last_name": "Bassette",
+      "listed_position": "Forward",
+      "player_external_id": "197",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Caleb Yirenkyi",
+      "first_name": "Caleb",
+      "last_name": "Yirenkyi",
+      "listed_position": "Midfielder",
+      "player_external_id": "575",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Gustavo Hamer",
+      "first_name": "Gustavo",
+      "last_name": "Hamer",
+      "listed_position": "Midfielder",
+      "player_external_id": "584",
+      "team_name": "Coventry City"
+    },
+    {
+      "display_name": "Evann Guessand",
+      "first_name": "Evann",
+      "last_name": "Guessand",
+      "listed_position": "Midfielder",
+      "player_external_id": "42",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Dean Henderson",
+      "first_name": "Dean",
+      "last_name": "Henderson",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "198",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Walter Ben\u00edtez",
+      "first_name": "Walter",
+      "last_name": "Ben\u00edtez",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "199",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Daniel Mu\u00f1oz Mej\u00eda",
+      "first_name": "Daniel",
+      "last_name": "Mu\u00f1oz Mej\u00eda",
+      "listed_position": "Defender",
+      "player_external_id": "201",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Chris Richards",
+      "first_name": "Chris",
+      "last_name": "Richards",
+      "listed_position": "Defender",
+      "player_external_id": "202",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Jaydee Canvot",
+      "first_name": "Jaydee",
+      "last_name": "Canvot",
+      "listed_position": "Defender",
+      "player_external_id": "203",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Tyrick Mitchell",
+      "first_name": "Tyrick",
+      "last_name": "Mitchell",
+      "listed_position": "Defender",
+      "player_external_id": "204",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Borna Sosa",
+      "first_name": "Borna",
+      "last_name": "Sosa",
+      "listed_position": "Defender",
+      "player_external_id": "205",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Chadi Riad Dnanou",
+      "first_name": "Chadi",
+      "last_name": "Riad Dnanou",
+      "listed_position": "Defender",
+      "player_external_id": "206",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Oscar Mingueza",
+      "first_name": "Oscar",
+      "last_name": "Mingueza",
+      "listed_position": "Defender",
+      "player_external_id": "207",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Isma\u00efla Sarr",
+      "first_name": "Isma\u00efla",
+      "last_name": "Sarr",
+      "listed_position": "Midfielder",
+      "player_external_id": "208",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Adam Wharton",
+      "first_name": "Adam",
+      "last_name": "Wharton",
+      "listed_position": "Midfielder",
+      "player_external_id": "210",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Y\u00e9remy Pino Santos",
+      "first_name": "Y\u00e9remy",
+      "last_name": "Pino Santos",
+      "listed_position": "Midfielder",
+      "player_external_id": "211",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Will Hughes",
+      "first_name": "Will",
+      "last_name": "Hughes",
+      "listed_position": "Midfielder",
+      "player_external_id": "212",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Jefferson Lerma Sol\u00eds",
+      "first_name": "Jefferson",
+      "last_name": "Lerma Sol\u00eds",
+      "listed_position": "Midfielder",
+      "player_external_id": "213",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Daichi Kamada",
+      "first_name": "Daichi",
+      "last_name": "Kamada",
+      "listed_position": "Midfielder",
+      "player_external_id": "214",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Justin Devenny",
+      "first_name": "Justin",
+      "last_name": "Devenny",
+      "listed_position": "Midfielder",
+      "player_external_id": "215",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Romain Esse",
+      "first_name": "Romain",
+      "last_name": "Esse",
+      "listed_position": "Midfielder",
+      "player_external_id": "216",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Matheus Fran\u00e7a de Oliveira",
+      "first_name": "Matheus",
+      "last_name": "Fran\u00e7a de Oliveira",
+      "listed_position": "Midfielder",
+      "player_external_id": "217",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Cheick Doucour\u00e9",
+      "first_name": "Cheick",
+      "last_name": "Doucour\u00e9",
+      "listed_position": "Midfielder",
+      "player_external_id": "218",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Jesurun Rak-Sakyi",
+      "first_name": "Jesurun",
+      "last_name": "Rak-Sakyi",
+      "listed_position": "Midfielder",
+      "player_external_id": "219",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Rio Cardines",
+      "first_name": "Rio",
+      "last_name": "Cardines",
+      "listed_position": "Defender",
+      "player_external_id": "220",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Jo\u00e9l Drakes-Thomas",
+      "first_name": "Jo\u00e9l",
+      "last_name": "Drakes-Thomas",
+      "listed_position": "Midfielder",
+      "player_external_id": "221",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "J\u00f8rgen Strand Larsen",
+      "first_name": "J\u00f8rgen",
+      "last_name": "Strand Larsen",
+      "listed_position": "Forward",
+      "player_external_id": "222",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Jean-Philippe Mateta",
+      "first_name": "Jean-Philippe",
+      "last_name": "Mateta",
+      "listed_position": "Forward",
+      "player_external_id": "223",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Eddie Nketiah",
+      "first_name": "Eddie",
+      "last_name": "Nketiah",
+      "listed_position": "Forward",
+      "player_external_id": "224",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Christantus Uche",
+      "first_name": "Christantus",
+      "last_name": "Uche",
+      "listed_position": "Forward",
+      "player_external_id": "225",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Dwight McNeil",
+      "first_name": "Dwight",
+      "last_name": "McNeil",
+      "listed_position": "Midfielder",
+      "player_external_id": "241",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Remi Matthews",
+      "first_name": "Remi",
+      "last_name": "Matthews",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "555",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Takehiro Tomiyasu",
+      "first_name": "Takehiro",
+      "last_name": "Tomiyasu",
+      "listed_position": "Defender",
+      "player_external_id": "577",
+      "team_name": "Crystal Palace"
+    },
+    {
+      "display_name": "Christian N\u00f8rgaard",
+      "first_name": "Christian",
+      "last_name": "N\u00f8rgaard",
+      "listed_position": "Midfielder",
+      "player_external_id": "21",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Brennan Johnson",
+      "first_name": "Brennan",
+      "last_name": "Johnson",
+      "listed_position": "Midfielder",
+      "player_external_id": "209",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Jordan Pickford",
+      "first_name": "Jordan",
+      "last_name": "Pickford",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "226",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Mark Travers",
+      "first_name": "Mark",
+      "last_name": "Travers",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "227",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Tom King",
+      "first_name": "Tom",
+      "last_name": "King",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "228",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "James Tarkowski",
+      "first_name": "James",
+      "last_name": "Tarkowski",
+      "listed_position": "Defender",
+      "player_external_id": "229",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Jarrad Branthwaite",
+      "first_name": "Jarrad",
+      "last_name": "Branthwaite",
+      "listed_position": "Defender",
+      "player_external_id": "230",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Michael Keane",
+      "first_name": "Michael",
+      "last_name": "Keane",
+      "listed_position": "Defender",
+      "player_external_id": "231",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Jake O'Brien",
+      "first_name": "Jake",
+      "last_name": "O'Brien",
+      "listed_position": "Defender",
+      "player_external_id": "232",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Vitalii Mykolenko",
+      "first_name": "Vitalii",
+      "last_name": "Mykolenko",
+      "listed_position": "Defender",
+      "player_external_id": "233",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Nathan Patterson",
+      "first_name": "Nathan",
+      "last_name": "Patterson",
+      "listed_position": "Defender",
+      "player_external_id": "234",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Adam Aznou",
+      "first_name": "Adam",
+      "last_name": "Aznou",
+      "listed_position": "Defender",
+      "player_external_id": "235",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Kiernan Dewsbury-Hall",
+      "first_name": "Kiernan",
+      "last_name": "Dewsbury-Hall",
+      "listed_position": "Midfielder",
+      "player_external_id": "236",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Iliman Ndiaye",
+      "first_name": "Iliman",
+      "last_name": "Ndiaye",
+      "listed_position": "Midfielder",
+      "player_external_id": "237",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "James Garner",
+      "first_name": "James",
+      "last_name": "Garner",
+      "listed_position": "Midfielder",
+      "player_external_id": "239",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Tim Iroegbunam",
+      "first_name": "Tim",
+      "last_name": "Iroegbunam",
+      "listed_position": "Midfielder",
+      "player_external_id": "240",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Tyrique George",
+      "first_name": "Tyrique",
+      "last_name": "George",
+      "listed_position": "Midfielder",
+      "player_external_id": "242",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Carlos Alcaraz Dur\u00e1n",
+      "first_name": "Carlos",
+      "last_name": "Alcaraz Dur\u00e1n",
+      "listed_position": "Midfielder",
+      "player_external_id": "243",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Harrison Armstrong",
+      "first_name": "Harrison",
+      "last_name": "Armstrong",
+      "listed_position": "Midfielder",
+      "player_external_id": "244",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Tyler Dibling",
+      "first_name": "Tyler",
+      "last_name": "Dibling",
+      "listed_position": "Midfielder",
+      "player_external_id": "245",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Merlin R\u00f6hl",
+      "first_name": "Merlin",
+      "last_name": "R\u00f6hl",
+      "listed_position": "Midfielder",
+      "player_external_id": "246",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Hayden Hackney",
+      "first_name": "Hayden",
+      "last_name": "Hackney",
+      "listed_position": "Midfielder",
+      "player_external_id": "247",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Norberto Bercique Gomes Betuncal",
+      "first_name": "Norberto Bercique",
+      "last_name": "Gomes Betuncal",
+      "listed_position": "Forward",
+      "player_external_id": "248",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Thierno Barry",
+      "first_name": "Thierno",
+      "last_name": "Barry",
+      "listed_position": "Forward",
+      "player_external_id": "249",
+      "team_name": "Everton"
+    },
+    {
+      "display_name": "Bernd Leno",
+      "first_name": "Bernd",
+      "last_name": "Leno",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "250",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Benjamin Lecomte",
+      "first_name": "Benjamin",
+      "last_name": "Lecomte",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "251",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Alfie McNally",
+      "first_name": "Alfie",
+      "last_name": "McNally",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "252",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Joachim Andersen",
+      "first_name": "Joachim",
+      "last_name": "Andersen",
+      "listed_position": "Defender",
+      "player_external_id": "253",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Antonee Robinson",
+      "first_name": "Antonee",
+      "last_name": "Robinson",
+      "listed_position": "Defender",
+      "player_external_id": "254",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Jorge Cuenca Barreno",
+      "first_name": "Jorge",
+      "last_name": "Cuenca Barreno",
+      "listed_position": "Defender",
+      "player_external_id": "255",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Kenny Tete",
+      "first_name": "Kenny",
+      "last_name": "Tete",
+      "listed_position": "Defender",
+      "player_external_id": "256",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Calvin Bassey",
+      "first_name": "Calvin",
+      "last_name": "Bassey",
+      "listed_position": "Defender",
+      "player_external_id": "257",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Timothy Castagne",
+      "first_name": "Timothy",
+      "last_name": "Castagne",
+      "listed_position": "Defender",
+      "player_external_id": "258",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Alex Iwobi",
+      "first_name": "Alex",
+      "last_name": "Iwobi",
+      "listed_position": "Midfielder",
+      "player_external_id": "261",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Emile Smith Rowe",
+      "first_name": "Emile",
+      "last_name": "Smith Rowe",
+      "listed_position": "Midfielder",
+      "player_external_id": "262",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Kevin Santos Lopes de Macedo",
+      "first_name": "Kevin",
+      "last_name": "Santos Lopes de Macedo",
+      "listed_position": "Midfielder",
+      "player_external_id": "263",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Oscar Bobb",
+      "first_name": "Oscar",
+      "last_name": "Bobb",
+      "listed_position": "Midfielder",
+      "player_external_id": "264",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Sander Berge",
+      "first_name": "Sander",
+      "last_name": "Berge",
+      "listed_position": "Midfielder",
+      "player_external_id": "265",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Tom Cairney",
+      "first_name": "Tom",
+      "last_name": "Cairney",
+      "listed_position": "Midfielder",
+      "player_external_id": "266",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Josh King",
+      "first_name": "Josh",
+      "last_name": "King",
+      "listed_position": "Midfielder",
+      "player_external_id": "268",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Ryan Sessegnon",
+      "first_name": "Ryan",
+      "last_name": "Sessegnon",
+      "listed_position": "Defender",
+      "player_external_id": "269",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Harrison Reed",
+      "first_name": "Harrison",
+      "last_name": "Reed",
+      "listed_position": "Midfielder",
+      "player_external_id": "270",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Rodrigo Muniz Carvalho",
+      "first_name": "Rodrigo",
+      "last_name": "Muniz Carvalho",
+      "listed_position": "Forward",
+      "player_external_id": "271",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Jonah Kusi-Asare",
+      "first_name": "Jonah",
+      "last_name": "Kusi-Asare",
+      "listed_position": "Forward",
+      "player_external_id": "272",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Gonzalo Garc\u00eda",
+      "first_name": "Gonzalo",
+      "last_name": "Garc\u00eda",
+      "listed_position": "Forward",
+      "player_external_id": "569",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "C\u00e9sar Palacios",
+      "first_name": "C\u00e9sar",
+      "last_name": "Palacios",
+      "listed_position": "Midfielder",
+      "player_external_id": "570",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Shea Charles",
+      "first_name": "Shea",
+      "last_name": "Charles",
+      "listed_position": "Midfielder",
+      "player_external_id": "580",
+      "team_name": "Fulham"
+    },
+    {
+      "display_name": "Dillon Phillips",
+      "first_name": "Dillon",
+      "last_name": "Phillips",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "273",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Jack Butland",
+      "first_name": "Jack",
+      "last_name": "Butland",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "274",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Harvey Cartwright",
+      "first_name": "Harvey",
+      "last_name": "Cartwright",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "275",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Thimoth\u00e9e Lo-Tutala",
+      "first_name": "Thimoth\u00e9e",
+      "last_name": "Lo-Tutala",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "276",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "John Egan",
+      "first_name": "John",
+      "last_name": "Egan",
+      "listed_position": "Defender",
+      "player_external_id": "277",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Charlie Hughes",
+      "first_name": "Charlie",
+      "last_name": "Hughes",
+      "listed_position": "Defender",
+      "player_external_id": "278",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Semi Ajayi",
+      "first_name": "Semi",
+      "last_name": "Ajayi",
+      "listed_position": "Defender",
+      "player_external_id": "279",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Lewie Coyle",
+      "first_name": "Lewie",
+      "last_name": "Coyle",
+      "listed_position": "Defender",
+      "player_external_id": "280",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Cody Drameh",
+      "first_name": "Cody",
+      "last_name": "Drameh",
+      "listed_position": "Defender",
+      "player_external_id": "281",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Ryan Giles",
+      "first_name": "Ryan",
+      "last_name": "Giles",
+      "listed_position": "Defender",
+      "player_external_id": "282",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Matty Jacob",
+      "first_name": "Matty",
+      "last_name": "Jacob",
+      "listed_position": "Defender",
+      "player_external_id": "283",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Cathal McCarthy",
+      "first_name": "Cathal",
+      "last_name": "McCarthy",
+      "listed_position": "Defender",
+      "player_external_id": "284",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Paddy McNair",
+      "first_name": "Paddy",
+      "last_name": "McNair",
+      "listed_position": "Defender",
+      "player_external_id": "285",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Mohamed Belloumi",
+      "first_name": "Mohamed",
+      "last_name": "Belloumi",
+      "listed_position": "Midfielder",
+      "player_external_id": "286",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Liam Millar",
+      "first_name": "Liam",
+      "last_name": "Millar",
+      "listed_position": "Midfielder",
+      "player_external_id": "287",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Kieran Dowell",
+      "first_name": "Kieran",
+      "last_name": "Dowell",
+      "listed_position": "Midfielder",
+      "player_external_id": "288",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Matt Crooks",
+      "first_name": "Matt",
+      "last_name": "Crooks",
+      "listed_position": "Midfielder",
+      "player_external_id": "289",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Regan Slater",
+      "first_name": "Regan",
+      "last_name": "Slater",
+      "listed_position": "Midfielder",
+      "player_external_id": "290",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Eliot Matazo",
+      "first_name": "Eliot",
+      "last_name": "Matazo",
+      "listed_position": "Midfielder",
+      "player_external_id": "291",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Abd\u00fclkadir \u00d6m\u00fcr",
+      "first_name": "Abd\u00fclkadir",
+      "last_name": "\u00d6m\u00fcr",
+      "listed_position": "Midfielder",
+      "player_external_id": "292",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Abu Kamara",
+      "first_name": "Abu",
+      "last_name": "Kamara",
+      "listed_position": "Midfielder",
+      "player_external_id": "293",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "\u00d3scar Zambrano",
+      "first_name": "\u00d3scar",
+      "last_name": "Zambrano",
+      "listed_position": "Midfielder",
+      "player_external_id": "294",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Oli McBurnie",
+      "first_name": "Oli",
+      "last_name": "McBurnie",
+      "listed_position": "Forward",
+      "player_external_id": "295",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "David Akintola",
+      "first_name": "David",
+      "last_name": "Akintola",
+      "listed_position": "Midfielder",
+      "player_external_id": "296",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Darko Gyabi",
+      "first_name": "Darko",
+      "last_name": "Gyabi",
+      "listed_position": "Midfielder",
+      "player_external_id": "297",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Enis Destan",
+      "first_name": "Enis",
+      "last_name": "Destan",
+      "listed_position": "Forward",
+      "player_external_id": "298",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Mason Burstow",
+      "first_name": "Mason",
+      "last_name": "Burstow",
+      "listed_position": "Forward",
+      "player_external_id": "299",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Matt Targett",
+      "first_name": "Matt",
+      "last_name": "Targett",
+      "listed_position": "Defender",
+      "player_external_id": "556",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Hidemasa Morita",
+      "first_name": "Hidemasa",
+      "last_name": "Morita",
+      "listed_position": "Midfielder",
+      "player_external_id": "563",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Konstantinos Tzolakis",
+      "first_name": "Konstantinos",
+      "last_name": "Tzolakis",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "572",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Jens Hjert\u00f8-Dahl",
+      "first_name": "Jens",
+      "last_name": "Hjert\u00f8-Dahl",
+      "listed_position": "Midfielder",
+      "player_external_id": "574",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Elliot Stroud",
+      "first_name": "Elliot",
+      "last_name": "Stroud",
+      "listed_position": "Midfielder",
+      "player_external_id": "576",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Lucas Herrington",
+      "first_name": "Lucas",
+      "last_name": "Herrington",
+      "listed_position": "Defender",
+      "player_external_id": "585",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Nobel Mendy",
+      "first_name": "Nobel",
+      "last_name": "Mendy",
+      "listed_position": "Defender",
+      "player_external_id": "586",
+      "team_name": "Hull City"
+    },
+    {
+      "display_name": "Issa Diop",
+      "first_name": "Issa",
+      "last_name": "Diop",
+      "listed_position": "Defender",
+      "player_external_id": "259",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Sa\u0161a Luki\u0107",
+      "first_name": "Sa\u0161a",
+      "last_name": "Luki\u0107",
+      "listed_position": "Midfielder",
+      "player_external_id": "267",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Christian Walton",
+      "first_name": "Christian",
+      "last_name": "Walton",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "300",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Alex Palmer",
+      "first_name": "Alex",
+      "last_name": "Palmer",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "301",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "David Button",
+      "first_name": "David",
+      "last_name": "Button",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "302",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "C\u00e9dric Kipr\u00e9",
+      "first_name": "C\u00e9dric",
+      "last_name": "Kipr\u00e9",
+      "listed_position": "Defender",
+      "player_external_id": "303",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Dara O'Shea",
+      "first_name": "Dara",
+      "last_name": "O'Shea",
+      "listed_position": "Defender",
+      "player_external_id": "304",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Leif Davis",
+      "first_name": "Leif",
+      "last_name": "Davis",
+      "listed_position": "Defender",
+      "player_external_id": "305",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Jacob Greaves",
+      "first_name": "Jacob",
+      "last_name": "Greaves",
+      "listed_position": "Defender",
+      "player_external_id": "306",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Ben Johnson",
+      "first_name": "Ben",
+      "last_name": "Johnson",
+      "listed_position": "Defender",
+      "player_external_id": "307",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Darnell Furlong",
+      "first_name": "Darnell",
+      "last_name": "Furlong",
+      "listed_position": "Defender",
+      "player_external_id": "308",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Marcelino N\u00fa\u00f1ez",
+      "first_name": "Marcelino",
+      "last_name": "N\u00fa\u00f1ez",
+      "listed_position": "Midfielder",
+      "player_external_id": "309",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Azor Matusiwa",
+      "first_name": "Azor",
+      "last_name": "Matusiwa",
+      "listed_position": "Midfielder",
+      "player_external_id": "310",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Wes Burns",
+      "first_name": "Wes",
+      "last_name": "Burns",
+      "listed_position": "Midfielder",
+      "player_external_id": "311",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Jack Taylor",
+      "first_name": "Jack",
+      "last_name": "Taylor",
+      "listed_position": "Midfielder",
+      "player_external_id": "312",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Jack Clarke",
+      "first_name": "Jack",
+      "last_name": "Clarke",
+      "listed_position": "Midfielder",
+      "player_external_id": "313",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Chiedozie Ogbene",
+      "first_name": "Chiedozie",
+      "last_name": "Ogbene",
+      "listed_position": "Midfielder",
+      "player_external_id": "314",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Abdul Fatawu",
+      "first_name": "Abdul",
+      "last_name": "Fatawu",
+      "listed_position": "Midfielder",
+      "player_external_id": "315",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Emersonn Correia da Silva",
+      "first_name": "Emersonn",
+      "last_name": "Correia da Silva",
+      "listed_position": "Forward",
+      "player_external_id": "316",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "George Hirst",
+      "first_name": "George",
+      "last_name": "Hirst",
+      "listed_position": "Forward",
+      "player_external_id": "317",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Jaden Philogene",
+      "first_name": "Jaden",
+      "last_name": "Philogene",
+      "listed_position": "Midfielder",
+      "player_external_id": "318",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Sam Szmodics",
+      "first_name": "Sam",
+      "last_name": "Szmodics",
+      "listed_position": "Midfielder",
+      "player_external_id": "319",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Chuba Akpom",
+      "first_name": "Chuba",
+      "last_name": "Akpom",
+      "listed_position": "Forward",
+      "player_external_id": "320",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Sindre Walle Egeli",
+      "first_name": "Sindre",
+      "last_name": "Walle Egeli",
+      "listed_position": "Forward",
+      "player_external_id": "321",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Ali Al-Hamadi",
+      "first_name": "Ali",
+      "last_name": "Al-Hamadi",
+      "listed_position": "Forward",
+      "player_external_id": "322",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Kasey McAteer",
+      "first_name": "Kasey",
+      "last_name": "McAteer",
+      "listed_position": "Midfielder",
+      "player_external_id": "323",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Anis Mehmeti",
+      "first_name": "Anis",
+      "last_name": "Mehmeti",
+      "listed_position": "Midfielder",
+      "player_external_id": "324",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Kayne van Oevelen",
+      "first_name": "Kayne",
+      "last_name": "van Oevelen",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "554",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Daizen Maeda",
+      "first_name": "Daizen",
+      "last_name": "Maeda",
+      "listed_position": "Midfielder",
+      "player_external_id": "562",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Kjell Scherpen",
+      "first_name": "Kjell",
+      "last_name": "Scherpen",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "564",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Florentino Ibrain Morris Lu\u00eds",
+      "first_name": "Florentino Ibrain",
+      "last_name": "Morris Lu\u00eds",
+      "listed_position": "Midfielder",
+      "player_external_id": "571",
+      "team_name": "Ipswich Town"
+    },
+    {
+      "display_name": "Harry Wilson",
+      "first_name": "Harry",
+      "last_name": "Wilson",
+      "listed_position": "Midfielder",
+      "player_external_id": "260",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Lucas Estella Perri",
+      "first_name": "Lucas Estella",
+      "last_name": "Perri",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "326",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Jaka Bijol",
+      "first_name": "Jaka",
+      "last_name": "Bijol",
+      "listed_position": "Defender",
+      "player_external_id": "327",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Joe Rodon",
+      "first_name": "Joe",
+      "last_name": "Rodon",
+      "listed_position": "Defender",
+      "player_external_id": "329",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Jayden Bogle",
+      "first_name": "Jayden",
+      "last_name": "Bogle",
+      "listed_position": "Defender",
+      "player_external_id": "330",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Gabriel Gudmundsson",
+      "first_name": "Gabriel",
+      "last_name": "Gudmundsson",
+      "listed_position": "Defender",
+      "player_external_id": "331",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "James Justin",
+      "first_name": "James",
+      "last_name": "Justin",
+      "listed_position": "Defender",
+      "player_external_id": "332",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Sebastiaan Bornauw",
+      "first_name": "Sebastiaan",
+      "last_name": "Bornauw",
+      "listed_position": "Defender",
+      "player_external_id": "333",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Tarik Muharemovi\u0107",
+      "first_name": "Tarik",
+      "last_name": "Muharemovi\u0107",
+      "listed_position": "Defender",
+      "player_external_id": "334",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Anton Stach",
+      "first_name": "Anton",
+      "last_name": "Stach",
+      "listed_position": "Midfielder",
+      "player_external_id": "335",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Noah Okafor",
+      "first_name": "Noah",
+      "last_name": "Okafor",
+      "listed_position": "Midfielder",
+      "player_external_id": "336",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Brenden Aaronson",
+      "first_name": "Brenden",
+      "last_name": "Aaronson",
+      "listed_position": "Midfielder",
+      "player_external_id": "337",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Ethan Ampadu",
+      "first_name": "Ethan",
+      "last_name": "Ampadu",
+      "listed_position": "Midfielder",
+      "player_external_id": "338",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Sean Longstaff",
+      "first_name": "Sean",
+      "last_name": "Longstaff",
+      "listed_position": "Midfielder",
+      "player_external_id": "339",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Joe Gelhardt",
+      "first_name": "Joe",
+      "last_name": "Gelhardt",
+      "listed_position": "Midfielder",
+      "player_external_id": "340",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Wilfried Gnonto",
+      "first_name": "Wilfried",
+      "last_name": "Gnonto",
+      "listed_position": "Midfielder",
+      "player_external_id": "341",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Jack Harrison",
+      "first_name": "Jack",
+      "last_name": "Harrison",
+      "listed_position": "Midfielder",
+      "player_external_id": "342",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Daniel James",
+      "first_name": "Daniel",
+      "last_name": "James",
+      "listed_position": "Midfielder",
+      "player_external_id": "343",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Ilia Gruev",
+      "first_name": "Ilia",
+      "last_name": "Gruev",
+      "listed_position": "Midfielder",
+      "player_external_id": "344",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Tanaka Ao",
+      "first_name": "Tanaka",
+      "last_name": "Ao",
+      "listed_position": "Midfielder",
+      "player_external_id": "345",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Dominic Calvert-Lewin",
+      "first_name": "Dominic",
+      "last_name": "Calvert-Lewin",
+      "listed_position": "Forward",
+      "player_external_id": "346",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Lukas Nmecha",
+      "first_name": "Lukas",
+      "last_name": "Nmecha",
+      "listed_position": "Forward",
+      "player_external_id": "347",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Jo\u00ebl Piroe",
+      "first_name": "Jo\u00ebl",
+      "last_name": "Piroe",
+      "listed_position": "Forward",
+      "player_external_id": "348",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Mateo Joseph Fern\u00e1ndez-Regatillo",
+      "first_name": "Mateo",
+      "last_name": "Joseph Fern\u00e1ndez-Regatillo",
+      "listed_position": "Forward",
+      "player_external_id": "349",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "James Trafford",
+      "first_name": "James",
+      "last_name": "Trafford",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "385",
+      "team_name": "Leeds"
+    },
+    {
+      "display_name": "Alisson Becker",
+      "first_name": "Alisson",
+      "last_name": "Becker",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "350",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Giorgi Mamardashvili",
+      "first_name": "Giorgi",
+      "last_name": "Mamardashvili",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "351",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Freddie Woodman",
+      "first_name": "Freddie",
+      "last_name": "Woodman",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "352",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Armin Pecsi",
+      "first_name": "Armin",
+      "last_name": "Pecsi",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "353",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Vitezslav Jaros",
+      "first_name": "Vitezslav",
+      "last_name": "Jaros",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "354",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Harvey Davies",
+      "first_name": "Harvey",
+      "last_name": "Davies",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "355",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Virgil van Dijk",
+      "first_name": "Virgil",
+      "last_name": "van Dijk",
+      "listed_position": "Defender",
+      "player_external_id": "356",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Jeremie Frimpong",
+      "first_name": "Jeremie",
+      "last_name": "Frimpong",
+      "listed_position": "Defender",
+      "player_external_id": "357",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Milos Kerkez",
+      "first_name": "Milos",
+      "last_name": "Kerkez",
+      "listed_position": "Defender",
+      "player_external_id": "358",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Joe Gomez",
+      "first_name": "Joe",
+      "last_name": "Gomez",
+      "listed_position": "Defender",
+      "player_external_id": "359",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Conor Bradley",
+      "first_name": "Conor",
+      "last_name": "Bradley",
+      "listed_position": "Defender",
+      "player_external_id": "360",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Wellity Lucky",
+      "first_name": "Wellity",
+      "last_name": "Lucky",
+      "listed_position": "Defender",
+      "player_external_id": "361",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Jeremy Jacquet",
+      "first_name": "Jeremy",
+      "last_name": "Jacquet",
+      "listed_position": "Defender",
+      "player_external_id": "362",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Giovanni Leoni",
+      "first_name": "Giovanni",
+      "last_name": "Leoni",
+      "listed_position": "Defender",
+      "player_external_id": "363",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Kostas Tsimikas",
+      "first_name": "Kostas",
+      "last_name": "Tsimikas",
+      "listed_position": "Defender",
+      "player_external_id": "364",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Calvin Ramsay",
+      "first_name": "Calvin",
+      "last_name": "Ramsay",
+      "listed_position": "Defender",
+      "player_external_id": "365",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Florian Wirtz",
+      "first_name": "Florian",
+      "last_name": "Wirtz",
+      "listed_position": "Midfielder",
+      "player_external_id": "366",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Cody Gakpo",
+      "first_name": "Cody",
+      "last_name": "Gakpo",
+      "listed_position": "Midfielder",
+      "player_external_id": "367",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Dominik Szoboszlai",
+      "first_name": "Dominik",
+      "last_name": "Szoboszlai",
+      "listed_position": "Midfielder",
+      "player_external_id": "368",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Rio Ngumoha",
+      "first_name": "Rio",
+      "last_name": "Ngumoha",
+      "listed_position": "Midfielder",
+      "player_external_id": "369",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Federico Chiesa",
+      "first_name": "Federico",
+      "last_name": "Chiesa",
+      "listed_position": "Midfielder",
+      "player_external_id": "370",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Ryan Gravenberch",
+      "first_name": "Ryan",
+      "last_name": "Gravenberch",
+      "listed_position": "Midfielder",
+      "player_external_id": "371",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Alexis Mac Allister",
+      "first_name": "Alexis",
+      "last_name": "Mac Allister",
+      "listed_position": "Midfielder",
+      "player_external_id": "372",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Curtis Jones",
+      "first_name": "Curtis",
+      "last_name": "Jones",
+      "listed_position": "Midfielder",
+      "player_external_id": "373",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Endo Wataru",
+      "first_name": "Endo",
+      "last_name": "Wataru",
+      "listed_position": "Midfielder",
+      "player_external_id": "374",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Trey Nyoni",
+      "first_name": "Trey",
+      "last_name": "Nyoni",
+      "listed_position": "Midfielder",
+      "player_external_id": "375",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Stefan Baj\u010deti\u0107 Maquieira",
+      "first_name": "Stefan",
+      "last_name": "Baj\u010deti\u0107 Maquieira",
+      "listed_position": "Midfielder",
+      "player_external_id": "376",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Victor Munoz",
+      "first_name": "Victor",
+      "last_name": "Munoz",
+      "listed_position": "Midfielder",
+      "player_external_id": "377",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "James McConnell",
+      "first_name": "James",
+      "last_name": "McConnell",
+      "listed_position": "Midfielder",
+      "player_external_id": "378",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Alexander Isak",
+      "first_name": "Alexander",
+      "last_name": "Isak",
+      "listed_position": "Forward",
+      "player_external_id": "379",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Hugo Ekitik\u00e9",
+      "first_name": "Hugo",
+      "last_name": "Ekitik\u00e9",
+      "listed_position": "Forward",
+      "player_external_id": "380",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Lewis Koumas",
+      "first_name": "Lewis",
+      "last_name": "Koumas",
+      "listed_position": "Midfielder",
+      "player_external_id": "381",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Jayden Danns",
+      "first_name": "Jayden",
+      "last_name": "Danns",
+      "listed_position": "Forward",
+      "player_external_id": "382",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Harvey Elliott",
+      "first_name": "Harvey",
+      "last_name": "Elliott",
+      "listed_position": "Midfielder",
+      "player_external_id": "383",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Ronald Araujo",
+      "first_name": "Ronald",
+      "last_name": "Araujo",
+      "listed_position": "Defender",
+      "player_external_id": "579",
+      "team_name": "Liverpool"
+    },
+    {
+      "display_name": "Jack Grealish",
+      "first_name": "Jack",
+      "last_name": "Grealish",
+      "listed_position": "Midfielder",
+      "player_external_id": "238",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Gianluigi Donnarumma",
+      "first_name": "Gianluigi",
+      "last_name": "Donnarumma",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "384",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Marcus Bettinelli",
+      "first_name": "Marcus",
+      "last_name": "Bettinelli",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "386",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Nico O'Reilly",
+      "first_name": "Nico",
+      "last_name": "O'Reilly",
+      "listed_position": "Defender",
+      "player_external_id": "387",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Marc Gu\u00e9hi",
+      "first_name": "Marc",
+      "last_name": "Gu\u00e9hi",
+      "listed_position": "Defender",
+      "player_external_id": "388",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Matheus Nunes",
+      "first_name": "Matheus",
+      "last_name": "Nunes",
+      "listed_position": "Defender",
+      "player_external_id": "389",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "R\u00faben dos Santos Gato Alves Dias",
+      "first_name": "R\u00faben",
+      "last_name": "dos Santos Gato Alves Dias",
+      "listed_position": "Defender",
+      "player_external_id": "390",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Jo\u0161ko Gvardiol",
+      "first_name": "Jo\u0161ko",
+      "last_name": "Gvardiol",
+      "listed_position": "Defender",
+      "player_external_id": "391",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Rayan A\u00eft-Nouri",
+      "first_name": "Rayan",
+      "last_name": "A\u00eft-Nouri",
+      "listed_position": "Defender",
+      "player_external_id": "392",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Abdukodir Khusanov",
+      "first_name": "Abdukodir",
+      "last_name": "Khusanov",
+      "listed_position": "Defender",
+      "player_external_id": "393",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Max Alleyne",
+      "first_name": "Max",
+      "last_name": "Alleyne",
+      "listed_position": "Defender",
+      "player_external_id": "394",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Rico Lewis",
+      "first_name": "Rico",
+      "last_name": "Lewis",
+      "listed_position": "Defender",
+      "player_external_id": "395",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Vitor de Oliveira Nunes dos Reis",
+      "first_name": "Vitor",
+      "last_name": "de Oliveira Nunes dos Reis",
+      "listed_position": "Defender",
+      "player_external_id": "396",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Antoine Semenyo",
+      "first_name": "Antoine",
+      "last_name": "Semenyo",
+      "listed_position": "Midfielder",
+      "player_external_id": "397",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Phil Foden",
+      "first_name": "Phil",
+      "last_name": "Foden",
+      "listed_position": "Midfielder",
+      "player_external_id": "398",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Rayan Cherki",
+      "first_name": "Rayan",
+      "last_name": "Cherki",
+      "listed_position": "Midfielder",
+      "player_external_id": "399",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "J\u00e9r\u00e9my Doku",
+      "first_name": "J\u00e9r\u00e9my",
+      "last_name": "Doku",
+      "listed_position": "Midfielder",
+      "player_external_id": "400",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Omar Marmoush",
+      "first_name": "Omar",
+      "last_name": "Marmoush",
+      "listed_position": "Forward",
+      "player_external_id": "401",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Rodrigo 'Rodri' Hernandez Cascante",
+      "first_name": "Rodrigo 'Rodri'",
+      "last_name": "Hernandez Cascante",
+      "listed_position": "Midfielder",
+      "player_external_id": "402",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "S\u00e1vio Moreira de Oliveira",
+      "first_name": "S\u00e1vio",
+      "last_name": "Moreira de Oliveira",
+      "listed_position": "Midfielder",
+      "player_external_id": "403",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Tijjani Reijnders",
+      "first_name": "Tijjani",
+      "last_name": "Reijnders",
+      "listed_position": "Midfielder",
+      "player_external_id": "404",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Nico Gonz\u00e1lez Iglesias",
+      "first_name": "Nico",
+      "last_name": "Gonz\u00e1lez Iglesias",
+      "listed_position": "Midfielder",
+      "player_external_id": "405",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Mateo Kova\u010di\u0107",
+      "first_name": "Mateo",
+      "last_name": "Kova\u010di\u0107",
+      "listed_position": "Midfielder",
+      "player_external_id": "406",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Claudio Echeverri",
+      "first_name": "Claudio",
+      "last_name": "Echeverri",
+      "listed_position": "Midfielder",
+      "player_external_id": "407",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Kalvin Phillips",
+      "first_name": "Kalvin",
+      "last_name": "Phillips",
+      "listed_position": "Midfielder",
+      "player_external_id": "408",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Divine Mukasa",
+      "first_name": "Divine",
+      "last_name": "Mukasa",
+      "listed_position": "Midfielder",
+      "player_external_id": "409",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Jeremy Monga",
+      "first_name": "Jeremy",
+      "last_name": "Monga",
+      "listed_position": "Midfielder",
+      "player_external_id": "410",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Erling Haaland",
+      "first_name": "Erling",
+      "last_name": "Haaland",
+      "listed_position": "Forward",
+      "player_external_id": "411",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Elliot Anderson",
+      "first_name": "Elliot",
+      "last_name": "Anderson",
+      "listed_position": "Midfielder",
+      "player_external_id": "481",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Ger\u00f3nimo Rulli",
+      "first_name": "Ger\u00f3nimo",
+      "last_name": "Rulli",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "587",
+      "team_name": "Man City"
+    },
+    {
+      "display_name": "Youri Tielemans",
+      "first_name": "Youri",
+      "last_name": "Tielemans",
+      "listed_position": "Midfielder",
+      "player_external_id": "43",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Andrey Nascimento dos Santos",
+      "first_name": "Andrey",
+      "last_name": "Nascimento dos Santos",
+      "listed_position": "Midfielder",
+      "player_external_id": "162",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Karl Darlow",
+      "first_name": "Karl",
+      "last_name": "Darlow",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "325",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Senne Lammens",
+      "first_name": "Senne",
+      "last_name": "Lammens",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "412",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Altay Bay\u0131nd\u0131r",
+      "first_name": "Altay",
+      "last_name": "Bay\u0131nd\u0131r",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "413",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Tom Heaton",
+      "first_name": "Tom",
+      "last_name": "Heaton",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "414",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Patrick Dorgu",
+      "first_name": "Patrick",
+      "last_name": "Dorgu",
+      "listed_position": "Midfielder",
+      "player_external_id": "415",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Matthijs de Ligt",
+      "first_name": "Matthijs",
+      "last_name": "de Ligt",
+      "listed_position": "Defender",
+      "player_external_id": "416",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Diogo Dalot Teixeira",
+      "first_name": "Diogo",
+      "last_name": "Dalot Teixeira",
+      "listed_position": "Defender",
+      "player_external_id": "417",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Harry Maguire",
+      "first_name": "Harry",
+      "last_name": "Maguire",
+      "listed_position": "Defender",
+      "player_external_id": "418",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Lisandro Mart\u00ednez",
+      "first_name": "Lisandro",
+      "last_name": "Mart\u00ednez",
+      "listed_position": "Defender",
+      "player_external_id": "419",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Leny Yoro",
+      "first_name": "Leny",
+      "last_name": "Yoro",
+      "listed_position": "Defender",
+      "player_external_id": "420",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Ayden Heaven",
+      "first_name": "Ayden",
+      "last_name": "Heaven",
+      "listed_position": "Defender",
+      "player_external_id": "421",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Noussair Mazraoui",
+      "first_name": "Noussair",
+      "last_name": "Mazraoui",
+      "listed_position": "Defender",
+      "player_external_id": "422",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Luke Shaw",
+      "first_name": "Luke",
+      "last_name": "Shaw",
+      "listed_position": "Defender",
+      "player_external_id": "423",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Harry Amass",
+      "first_name": "Harry",
+      "last_name": "Amass",
+      "listed_position": "Defender",
+      "player_external_id": "424",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Tyler Fredricson",
+      "first_name": "Tyler",
+      "last_name": "Fredricson",
+      "listed_position": "Defender",
+      "player_external_id": "425",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Bruno Borges Fernandes",
+      "first_name": "Bruno",
+      "last_name": "Borges Fernandes",
+      "listed_position": "Midfielder",
+      "player_external_id": "426",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Bryan Mbeumo",
+      "first_name": "Bryan",
+      "last_name": "Mbeumo",
+      "listed_position": "Midfielder",
+      "player_external_id": "427",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Matheus Santos Carneiro da Cunha",
+      "first_name": "Matheus",
+      "last_name": "Santos Carneiro da Cunha",
+      "listed_position": "Midfielder",
+      "player_external_id": "428",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Marcus Rashford",
+      "first_name": "Marcus",
+      "last_name": "Rashford",
+      "listed_position": "Midfielder",
+      "player_external_id": "429",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Mason Mount",
+      "first_name": "Mason",
+      "last_name": "Mount",
+      "listed_position": "Midfielder",
+      "player_external_id": "430",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Amad Diallo",
+      "first_name": "Amad",
+      "last_name": "Diallo",
+      "listed_position": "Midfielder",
+      "player_external_id": "431",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Kobbie Mainoo",
+      "first_name": "Kobbie",
+      "last_name": "Mainoo",
+      "listed_position": "Midfielder",
+      "player_external_id": "432",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Manuel Ugarte Ribeiro",
+      "first_name": "Manuel",
+      "last_name": "Ugarte Ribeiro",
+      "listed_position": "Midfielder",
+      "player_external_id": "433",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Jack Fletcher",
+      "first_name": "Jack",
+      "last_name": "Fletcher",
+      "listed_position": "Midfielder",
+      "player_external_id": "434",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Shea Lacey",
+      "first_name": "Shea",
+      "last_name": "Lacey",
+      "listed_position": "Midfielder",
+      "player_external_id": "435",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Toby Collyer",
+      "first_name": "Toby",
+      "last_name": "Collyer",
+      "listed_position": "Midfielder",
+      "player_external_id": "436",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Bendito Mantato",
+      "first_name": "Bendito",
+      "last_name": "Mantato",
+      "listed_position": "Midfielder",
+      "player_external_id": "437",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Tyler Fletcher",
+      "first_name": "Tyler",
+      "last_name": "Fletcher",
+      "listed_position": "Midfielder",
+      "player_external_id": "438",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Benjamin Sesko",
+      "first_name": "Benjamin",
+      "last_name": "Sesko",
+      "listed_position": "Forward",
+      "player_external_id": "439",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Joshua Zirkzee",
+      "first_name": "Joshua",
+      "last_name": "Zirkzee",
+      "listed_position": "Forward",
+      "player_external_id": "440",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Chido Obi",
+      "first_name": "Chido",
+      "last_name": "Obi",
+      "listed_position": "Forward",
+      "player_external_id": "441",
+      "team_name": "Man Utd"
+    },
+    {
+      "display_name": "Nick Pope",
+      "first_name": "Nick",
+      "last_name": "Pope",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "442",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Mark Gillespie",
+      "first_name": "Mark",
+      "last_name": "Gillespie",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "443",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Ewen Jaouen",
+      "first_name": "Ewen",
+      "last_name": "Jaouen",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "444",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Malick Thiaw",
+      "first_name": "Malick",
+      "last_name": "Thiaw",
+      "listed_position": "Defender",
+      "player_external_id": "445",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Fabian Sch\u00e4r",
+      "first_name": "Fabian",
+      "last_name": "Sch\u00e4r",
+      "listed_position": "Defender",
+      "player_external_id": "446",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Sven Botman",
+      "first_name": "Sven",
+      "last_name": "Botman",
+      "listed_position": "Defender",
+      "player_external_id": "447",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Dan Burn",
+      "first_name": "Dan",
+      "last_name": "Burn",
+      "listed_position": "Defender",
+      "player_external_id": "448",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Lewis Hall",
+      "first_name": "Lewis",
+      "last_name": "Hall",
+      "listed_position": "Defender",
+      "player_external_id": "449",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Tino Livramento",
+      "first_name": "Tino",
+      "last_name": "Livramento",
+      "listed_position": "Defender",
+      "player_external_id": "450",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Alex Murphy",
+      "first_name": "Alex",
+      "last_name": "Murphy",
+      "listed_position": "Defender",
+      "player_external_id": "451",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Harvey Barnes",
+      "first_name": "Harvey",
+      "last_name": "Barnes",
+      "listed_position": "Midfielder",
+      "player_external_id": "453",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Anthony Elanga",
+      "first_name": "Anthony",
+      "last_name": "Elanga",
+      "listed_position": "Midfielder",
+      "player_external_id": "454",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Jacob Ramsey",
+      "first_name": "Jacob",
+      "last_name": "Ramsey",
+      "listed_position": "Midfielder",
+      "player_external_id": "456",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Jacob Murphy",
+      "first_name": "Jacob",
+      "last_name": "Murphy",
+      "listed_position": "Midfielder",
+      "player_external_id": "457",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Joelinton C\u00e1ssio Apolin\u00e1rio de Lira",
+      "first_name": "Joelinton C\u00e1ssio",
+      "last_name": "Apolin\u00e1rio de Lira",
+      "listed_position": "Midfielder",
+      "player_external_id": "458",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Lewis Miley",
+      "first_name": "Lewis",
+      "last_name": "Miley",
+      "listed_position": "Midfielder",
+      "player_external_id": "459",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Joe Willock",
+      "first_name": "Joe",
+      "last_name": "Willock",
+      "listed_position": "Midfielder",
+      "player_external_id": "460",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Bazoumana Tour\u00e9",
+      "first_name": "Bazoumana",
+      "last_name": "Tour\u00e9",
+      "listed_position": "Midfielder",
+      "player_external_id": "461",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Sean Steur",
+      "first_name": "Sean",
+      "last_name": "Steur",
+      "listed_position": "Midfielder",
+      "player_external_id": "462",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Nick Woltemade",
+      "first_name": "Nick",
+      "last_name": "Woltemade",
+      "listed_position": "Forward",
+      "player_external_id": "463",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Yoane Wissa",
+      "first_name": "Yoane",
+      "last_name": "Wissa",
+      "listed_position": "Forward",
+      "player_external_id": "464",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "William Osula",
+      "first_name": "William",
+      "last_name": "Osula",
+      "listed_position": "Forward",
+      "player_external_id": "465",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Sean Neave",
+      "first_name": "Sean",
+      "last_name": "Neave",
+      "listed_position": "Forward",
+      "player_external_id": "466",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Aladji Bamba",
+      "first_name": "Aladji",
+      "last_name": "Bamba",
+      "listed_position": "Midfielder",
+      "player_external_id": "559",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Luk\u00e1s Horn\u00edcek",
+      "first_name": "Luk\u00e1s",
+      "last_name": "Horn\u00edcek",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "567",
+      "team_name": "Newcastle"
+    },
+    {
+      "display_name": "Matz Sels",
+      "first_name": "Matz",
+      "last_name": "Sels",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "467",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "John Victor Maciel Furtado",
+      "first_name": "John Victor",
+      "last_name": "Maciel Furtado",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "468",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Neco Williams",
+      "first_name": "Neco",
+      "last_name": "Williams",
+      "listed_position": "Defender",
+      "player_external_id": "469",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Felipe Rodrigues da Silva",
+      "first_name": "Felipe",
+      "last_name": "Rodrigues da Silva",
+      "listed_position": "Defender",
+      "player_external_id": "470",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Nikola Milenkovi\u0107",
+      "first_name": "Nikola",
+      "last_name": "Milenkovi\u0107",
+      "listed_position": "Defender",
+      "player_external_id": "471",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Murillo Costa dos Santos",
+      "first_name": "Murillo",
+      "last_name": "Costa dos Santos",
+      "listed_position": "Defender",
+      "player_external_id": "472",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Ola Aina",
+      "first_name": "Ola",
+      "last_name": "Aina",
+      "listed_position": "Defender",
+      "player_external_id": "473",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Jair Paula da Cunha Filho",
+      "first_name": "Jair",
+      "last_name": "Paula da Cunha Filho",
+      "listed_position": "Defender",
+      "player_external_id": "474",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Nicol\u00f2 Savona",
+      "first_name": "Nicol\u00f2",
+      "last_name": "Savona",
+      "listed_position": "Defender",
+      "player_external_id": "475",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Omar Richards",
+      "first_name": "Omar",
+      "last_name": "Richards",
+      "listed_position": "Defender",
+      "player_external_id": "476",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Zach Abbott",
+      "first_name": "Zach",
+      "last_name": "Abbott",
+      "listed_position": "Defender",
+      "player_external_id": "477",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Luca Netz",
+      "first_name": "Luca",
+      "last_name": "Netz",
+      "listed_position": "Defender",
+      "player_external_id": "478",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Tyler Bindon",
+      "first_name": "Tyler",
+      "last_name": "Bindon",
+      "listed_position": "Defender",
+      "player_external_id": "479",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Morgan Gibbs-White",
+      "first_name": "Morgan",
+      "last_name": "Gibbs-White",
+      "listed_position": "Midfielder",
+      "player_external_id": "480",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Callum Hudson-Odoi",
+      "first_name": "Callum",
+      "last_name": "Hudson-Odoi",
+      "listed_position": "Midfielder",
+      "player_external_id": "482",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Dan Ndoye",
+      "first_name": "Dan",
+      "last_name": "Ndoye",
+      "listed_position": "Midfielder",
+      "player_external_id": "483",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Omari Hutchinson",
+      "first_name": "Omari",
+      "last_name": "Hutchinson",
+      "listed_position": "Midfielder",
+      "player_external_id": "484",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Dilane Bakwa",
+      "first_name": "Dilane",
+      "last_name": "Bakwa",
+      "listed_position": "Midfielder",
+      "player_external_id": "485",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "James McAtee",
+      "first_name": "James",
+      "last_name": "McAtee",
+      "listed_position": "Midfielder",
+      "player_external_id": "486",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Nicol\u00e1s Dom\u00ednguez",
+      "first_name": "Nicol\u00e1s",
+      "last_name": "Dom\u00ednguez",
+      "listed_position": "Midfielder",
+      "player_external_id": "487",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Ibrahim Sangar\u00e9",
+      "first_name": "Ibrahim",
+      "last_name": "Sangar\u00e9",
+      "listed_position": "Midfielder",
+      "player_external_id": "488",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Ryan Yates",
+      "first_name": "Ryan",
+      "last_name": "Yates",
+      "listed_position": "Midfielder",
+      "player_external_id": "489",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Chris Wood",
+      "first_name": "Chris",
+      "last_name": "Wood",
+      "listed_position": "Forward",
+      "player_external_id": "490",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Igor Jesus Maciel da Cruz",
+      "first_name": "Igor Jesus",
+      "last_name": "Maciel da Cruz",
+      "listed_position": "Forward",
+      "player_external_id": "491",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Taiwo Awoniyi",
+      "first_name": "Taiwo",
+      "last_name": "Awoniyi",
+      "listed_position": "Forward",
+      "player_external_id": "492",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Arnaud Kalimuendo",
+      "first_name": "Arnaud",
+      "last_name": "Kalimuendo",
+      "listed_position": "Forward",
+      "player_external_id": "493",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Xaver Schlager",
+      "first_name": "Xaver",
+      "last_name": "Schlager",
+      "listed_position": "Midfielder",
+      "player_external_id": "558",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Ousmane Diomande",
+      "first_name": "Ousmane",
+      "last_name": "Diomande",
+      "listed_position": "Defender",
+      "player_external_id": "581",
+      "team_name": "Nott'm Forest"
+    },
+    {
+      "display_name": "Jan Paul van Hecke",
+      "first_name": "Jan Paul",
+      "last_name": "van Hecke",
+      "listed_position": "Defender",
+      "player_external_id": "112",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Sandro Tonali",
+      "first_name": "Sandro",
+      "last_name": "Tonali",
+      "listed_position": "Midfielder",
+      "player_external_id": "455",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Guglielmo Vicario",
+      "first_name": "Guglielmo",
+      "last_name": "Vicario",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "494",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Brandon Austin",
+      "first_name": "Brandon",
+      "last_name": "Austin",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "495",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Anton\u00edn Kinsk\u00fd",
+      "first_name": "Anton\u00edn",
+      "last_name": "Kinsk\u00fd",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "496",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Martin Dubravka",
+      "first_name": "Martin",
+      "last_name": "Dubravka",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "497",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Marcos Senesi Bar\u00f3n",
+      "first_name": "Marcos",
+      "last_name": "Senesi Bar\u00f3n",
+      "listed_position": "Defender",
+      "player_external_id": "498",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Pedro Porro Sauceda",
+      "first_name": "Pedro",
+      "last_name": "Porro Sauceda",
+      "listed_position": "Defender",
+      "player_external_id": "499",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Cristian Romero",
+      "first_name": "Cristian",
+      "last_name": "Romero",
+      "listed_position": "Defender",
+      "player_external_id": "500",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Kevin Danso",
+      "first_name": "Kevin",
+      "last_name": "Danso",
+      "listed_position": "Defender",
+      "player_external_id": "501",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Andrew Robertson",
+      "first_name": "Andrew",
+      "last_name": "Robertson",
+      "listed_position": "Defender",
+      "player_external_id": "502",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Micky van de Ven",
+      "first_name": "Micky",
+      "last_name": "van de Ven",
+      "listed_position": "Defender",
+      "player_external_id": "503",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Djed Spence",
+      "first_name": "Djed",
+      "last_name": "Spence",
+      "listed_position": "Defender",
+      "player_external_id": "505",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Destiny Udogie",
+      "first_name": "Destiny",
+      "last_name": "Udogie",
+      "listed_position": "Defender",
+      "player_external_id": "506",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Ashley Phillips",
+      "first_name": "Ashley",
+      "last_name": "Phillips",
+      "listed_position": "Defender",
+      "player_external_id": "507",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Ben Davies",
+      "first_name": "Ben",
+      "last_name": "Davies",
+      "listed_position": "Defender",
+      "player_external_id": "508",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Jun'ai Byfield",
+      "first_name": "Jun'ai",
+      "last_name": "Byfield",
+      "listed_position": "Defender",
+      "player_external_id": "509",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "James Rowswell",
+      "first_name": "James",
+      "last_name": "Rowswell",
+      "listed_position": "Defender",
+      "player_external_id": "510",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Jo\u00e3o Victor de Souza Menezes",
+      "first_name": "Jo\u00e3o Victor",
+      "last_name": "de Souza Menezes",
+      "listed_position": "Defender",
+      "player_external_id": "511",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Mohammed Kudus",
+      "first_name": "Mohammed",
+      "last_name": "Kudus",
+      "listed_position": "Midfielder",
+      "player_external_id": "512",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Xavi Simons",
+      "first_name": "Xavi",
+      "last_name": "Simons",
+      "listed_position": "Midfielder",
+      "player_external_id": "513",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Mathys Tel",
+      "first_name": "Mathys",
+      "last_name": "Tel",
+      "listed_position": "Midfielder",
+      "player_external_id": "514",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "James Maddison",
+      "first_name": "James",
+      "last_name": "Maddison",
+      "listed_position": "Midfielder",
+      "player_external_id": "515",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Rodrigo Bentancur",
+      "first_name": "Rodrigo",
+      "last_name": "Bentancur",
+      "listed_position": "Midfielder",
+      "player_external_id": "516",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Wilson Odobert",
+      "first_name": "Wilson",
+      "last_name": "Odobert",
+      "listed_position": "Midfielder",
+      "player_external_id": "517",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Pape Matar Sarr",
+      "first_name": "Pape Matar",
+      "last_name": "Sarr",
+      "listed_position": "Midfielder",
+      "player_external_id": "518",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Conor Gallagher",
+      "first_name": "Conor",
+      "last_name": "Gallagher",
+      "listed_position": "Midfielder",
+      "player_external_id": "519",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Lucas Bergvall",
+      "first_name": "Lucas",
+      "last_name": "Bergvall",
+      "listed_position": "Midfielder",
+      "player_external_id": "520",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Dejan Kulusevski",
+      "first_name": "Dejan",
+      "last_name": "Kulusevski",
+      "listed_position": "Midfielder",
+      "player_external_id": "521",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Archie Gray",
+      "first_name": "Archie",
+      "last_name": "Gray",
+      "listed_position": "Midfielder",
+      "player_external_id": "522",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Mikey Moore",
+      "first_name": "Mikey",
+      "last_name": "Moore",
+      "listed_position": "Midfielder",
+      "player_external_id": "523",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Callum Olusesi",
+      "first_name": "Callum",
+      "last_name": "Olusesi",
+      "listed_position": "Midfielder",
+      "player_external_id": "524",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Mateus Fernandes",
+      "first_name": "Mateus",
+      "last_name": "Fernandes",
+      "listed_position": "Midfielder",
+      "player_external_id": "525",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Dominic Solanke-Mitchell",
+      "first_name": "Dominic",
+      "last_name": "Solanke-Mitchell",
+      "listed_position": "Forward",
+      "player_external_id": "526",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Richarlison de Andrade",
+      "first_name": "Richarlison",
+      "last_name": "de Andrade",
+      "listed_position": "Forward",
+      "player_external_id": "527",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Dane Scarlett",
+      "first_name": "Dane",
+      "last_name": "Scarlett",
+      "listed_position": "Forward",
+      "player_external_id": "528",
+      "team_name": "Spurs"
+    },
+    {
+      "display_name": "Robin Roefs",
+      "first_name": "Robin",
+      "last_name": "Roefs",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "529",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Anthony Patterson",
+      "first_name": "Anthony",
+      "last_name": "Patterson",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "530",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Melker Ellborg",
+      "first_name": "Melker",
+      "last_name": "Ellborg",
+      "listed_position": "Goalkeeper",
+      "player_external_id": "531",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Daniel Ballard",
+      "first_name": "Daniel",
+      "last_name": "Ballard",
+      "listed_position": "Defender",
+      "player_external_id": "532",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Nordi Mukiele",
+      "first_name": "Nordi",
+      "last_name": "Mukiele",
+      "listed_position": "Defender",
+      "player_external_id": "533",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Trai Hume",
+      "first_name": "Trai",
+      "last_name": "Hume",
+      "listed_position": "Defender",
+      "player_external_id": "534",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Omar Alderete",
+      "first_name": "Omar",
+      "last_name": "Alderete",
+      "listed_position": "Defender",
+      "player_external_id": "535",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Reinildo Mandava",
+      "first_name": "Reinildo",
+      "last_name": "Mandava",
+      "listed_position": "Defender",
+      "player_external_id": "536",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Jenson Seelt",
+      "first_name": "Jenson",
+      "last_name": "Seelt",
+      "listed_position": "Defender",
+      "player_external_id": "537",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Leo Fuhr Hjelde",
+      "first_name": "Leo Fuhr",
+      "last_name": "Hjelde",
+      "listed_position": "Defender",
+      "player_external_id": "538",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Luke O'Nien",
+      "first_name": "Luke",
+      "last_name": "O'Nien",
+      "listed_position": "Defender",
+      "player_external_id": "539",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Arthur Masuaku",
+      "first_name": "Arthur",
+      "last_name": "Masuaku",
+      "listed_position": "Defender",
+      "player_external_id": "540",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Thomas Meunier",
+      "first_name": "Thomas",
+      "last_name": "Meunier",
+      "listed_position": "Defender",
+      "player_external_id": "541",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Enzo Le F\u00e9e",
+      "first_name": "Enzo",
+      "last_name": "Le F\u00e9e",
+      "listed_position": "Midfielder",
+      "player_external_id": "542",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Habib Diarra",
+      "first_name": "Habib",
+      "last_name": "Diarra",
+      "listed_position": "Midfielder",
+      "player_external_id": "543",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Granit Xhaka",
+      "first_name": "Granit",
+      "last_name": "Xhaka",
+      "listed_position": "Midfielder",
+      "player_external_id": "544",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Noah Sadiki",
+      "first_name": "Noah",
+      "last_name": "Sadiki",
+      "listed_position": "Midfielder",
+      "player_external_id": "545",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Simon Adingra",
+      "first_name": "Simon",
+      "last_name": "Adingra",
+      "listed_position": "Midfielder",
+      "player_external_id": "546",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Romaine Mundle",
+      "first_name": "Romaine",
+      "last_name": "Mundle",
+      "listed_position": "Midfielder",
+      "player_external_id": "547",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Chris Rigg",
+      "first_name": "Chris",
+      "last_name": "Rigg",
+      "listed_position": "Midfielder",
+      "player_external_id": "548",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Chemsdine Talbi",
+      "first_name": "Chemsdine",
+      "last_name": "Talbi",
+      "listed_position": "Midfielder",
+      "player_external_id": "549",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Djiamgone Jocelin Ta Bi",
+      "first_name": "Djiamgone Jocelin Ta",
+      "last_name": "Bi",
+      "listed_position": "Midfielder",
+      "player_external_id": "550",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Nilson Angulo",
+      "first_name": "Nilson",
+      "last_name": "Angulo",
+      "listed_position": "Midfielder",
+      "player_external_id": "551",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Brian Brobbey",
+      "first_name": "Brian",
+      "last_name": "Brobbey",
+      "listed_position": "Forward",
+      "player_external_id": "552",
+      "team_name": "Sunderland"
+    },
+    {
+      "display_name": "Wilson Isidor",
+      "first_name": "Wilson",
+      "last_name": "Isidor",
+      "listed_position": "Forward",
+      "player_external_id": "553",
+      "team_name": "Sunderland"
+    }
+  ]
+}

@@ -1,0 +1,302 @@
+from __future__ import annotations
+
+import dataclasses
+from datetime import UTC, datetime
+
+from football_intelligence.player_analytics import engine as engine_v1
+from football_intelligence.player_analytics.engine_v2 import (
+    MIN_RANKING_CONFIDENCE,
+    MODEL_VERSION,
+    calculate_player_analytics_v2,
+    classify_results_vs_process,
+    rank_by_confidence_gated_score,
+)
+from football_intelligence.player_analytics.models import PlayerObservation
+
+_NOW = datetime(2026, 8, 14, tzinfo=UTC)
+
+
+def _observation(
+    *,
+    player_id: int,
+    player_name: str,
+    match_id: int,
+    minutes: int,
+    listed_position: str,
+    stats: dict[str, float | None],
+) -> PlayerObservation:
+    return PlayerObservation(
+        player_id=player_id,
+        player_name=player_name,
+        match_id=match_id,
+        kickoff_at=datetime(2026, 1, match_id, tzinfo=UTC),
+        team_id=1,
+        minutes=minutes,
+        listed_position=listed_position,
+        possession_pct=50.0,
+        stats=stats,
+    )
+
+
+def test_confidence_gated_ranking_scenario_verbatim() -> None:
+    # Player A: score 96, confidence 94% (well above the gate), 2183 minutes.
+    # Player B: score 98, confidence 31% (below the 40% gate), 238 minutes.
+    # B's raw score is higher, but B must not outrank A.
+    entries = [(96.0, 0.94, 2183), (98.0, 0.31, 238)]
+    ranking = rank_by_confidence_gated_score(entries)
+    assert ranking == (0, 1)
+
+
+def test_ranking_gate_threshold_is_documented_and_applied() -> None:
+    assert MIN_RANKING_CONFIDENCE == 0.40
+    # Two entries both above the gate: higher score wins normally.
+    entries = [(70.0, 0.50, 1000), (80.0, 0.55, 1000)]
+    assert rank_by_confidence_gated_score(entries) == (1, 0)
+    # Two entries both below the gate: still ordered, but the tier boundary
+    # means neither can beat an eligible peer -- verified alongside one.
+    entries_mixed = [(99.0, 0.10, 100), (60.0, 0.50, 900)]
+    assert rank_by_confidence_gated_score(entries_mixed) == (1, 0)
+
+
+def test_results_vs_process_returns_insufficient_data_without_expected_output() -> None:
+    signal = classify_results_vs_process(
+        raw_output=10.0,
+        output_percentile=80.0,
+        expected_output=None,
+        expected_output_percentile=None,
+    )
+    assert signal == "insufficient_data"
+
+
+def test_results_vs_process_returns_insufficient_data_without_percentile() -> None:
+    # Even if a raw expected_output value exists, a missing percentile must
+    # still gate to insufficient_data -- never silently treated as 0.
+    signal = classify_results_vs_process(
+        raw_output=10.0,
+        output_percentile=80.0,
+        expected_output=6.0,
+        expected_output_percentile=None,
+    )
+    assert signal == "insufficient_data"
+
+
+def test_results_above_process_when_output_percentile_far_exceeds_expected() -> None:
+    signal = classify_results_vs_process(
+        raw_output=15.0,
+        output_percentile=90.0,
+        expected_output=6.0,
+        expected_output_percentile=60.0,
+    )
+    assert signal == "results_above_process"
+
+
+def test_results_below_process_when_output_percentile_far_trails_expected() -> None:
+    signal = classify_results_vs_process(
+        raw_output=2.0,
+        output_percentile=30.0,
+        expected_output=10.0,
+        expected_output_percentile=75.0,
+    )
+    assert signal == "results_below_process"
+
+
+def test_results_aligned_within_threshold() -> None:
+    signal = classify_results_vs_process(
+        raw_output=8.0,
+        output_percentile=55.0,
+        expected_output=7.5,
+        expected_output_percentile=50.0,
+    )
+    assert signal == "aligned"
+
+
+def _midfield_population() -> list[PlayerObservation]:
+    observations: list[PlayerObservation] = []
+    # A creative attacking midfielder: high key_passes, goals, dribbles.
+    for match_id in range(1, 6):
+        observations.append(
+            _observation(
+                player_id=1,
+                player_name="Creator One",
+                match_id=match_id,
+                minutes=90,
+                listed_position="CAM",
+                stats={
+                    "goals": 1,
+                    "assists": 1,
+                    "shots_total": 3,
+                    "shots_on_target": 2,
+                    "passes_total": 40,
+                    "key_passes": 3,
+                    "tackles": 1,
+                    "blocks": 0,
+                    "interceptions": 1,
+                    "dribbles_successful": 3,
+                    "duels_won": 4,
+                    "fouls_drawn": 2,
+                    "fouls_committed": 1,
+                    "saves": None,
+                },
+            )
+        )
+    # A defensive-minded central midfielder: low creation, high defending.
+    for match_id in range(1, 6):
+        observations.append(
+            _observation(
+                player_id=2,
+                player_name="Anchor Two",
+                match_id=match_id,
+                minutes=90,
+                listed_position="CDM",
+                stats={
+                    "goals": 0,
+                    "assists": 0,
+                    "shots_total": 0,
+                    "shots_on_target": 0,
+                    "passes_total": 60,
+                    "key_passes": 0,
+                    "tackles": 5,
+                    "blocks": 2,
+                    "interceptions": 4,
+                    "dribbles_successful": 0,
+                    "duels_won": 6,
+                    "fouls_drawn": 1,
+                    "fouls_committed": 2,
+                    "saves": None,
+                },
+            )
+        )
+    # A neutral third midfielder to give the coarse "midfielder" population
+    # more than 2 members (both fine families collapse into the same broad
+    # role for V1 percentile computation).
+    for match_id in range(1, 6):
+        observations.append(
+            _observation(
+                player_id=3,
+                player_name="Neutral Three",
+                match_id=match_id,
+                minutes=90,
+                listed_position="CM",
+                stats={
+                    "goals": 0,
+                    "assists": 1,
+                    "shots_total": 1,
+                    "shots_on_target": 0,
+                    "passes_total": 50,
+                    "key_passes": 1,
+                    "tackles": 2,
+                    "blocks": 1,
+                    "interceptions": 2,
+                    "dribbles_successful": 1,
+                    "duels_won": 3,
+                    "fouls_drawn": 1,
+                    "fouls_committed": 1,
+                    "saves": None,
+                },
+            )
+        )
+    return observations
+
+
+def test_v2_model_version_is_distinguishable_from_v1() -> None:
+    observations = _midfield_population()
+    v1_result = engine_v1.calculate_player_analytics(
+        observations, scope_key="core:test", calculated_at=_NOW
+    )
+    v2_scores = calculate_player_analytics_v2(
+        observations, scope_key="core:test", calculated_at=_NOW
+    )
+
+    assert MODEL_VERSION == "player-v2.0"
+    assert engine_v1.MODEL_VERSION == "player-v1.0"
+    assert all(score.model_version == "player-v2.0" for score in v2_scores)
+    assert all(score.model_version == "player-v1.0" for score in v1_result.scores)
+
+
+def test_v2_exposes_both_coarse_role_and_fine_position_family() -> None:
+    observations = _midfield_population()
+    v2_scores = calculate_player_analytics_v2(
+        observations, scope_key="core:test", calculated_at=_NOW
+    )
+    season_scores = {score.player_id: score for score in v2_scores if score.window == "season"}
+
+    assert season_scores[1].role == "midfielder"
+    assert season_scores[1].position_family == "attacking_midfielder"
+    assert season_scores[2].role == "midfielder"
+    assert season_scores[2].position_family == "defensive_midfielder"
+
+
+def test_v2_overall_score_differs_from_v1_when_family_weights_differ() -> None:
+    # V1's own role recognition only understands broad tokens (G/D/M/F), so
+    # this replicates V2's internal broad-token rewrite to get a like-for-like
+    # V1 baseline that actually classifies and scores these fine-token
+    # players, matching what `calculate_player_analytics_v2` does internally.
+    broad_observations = [
+        dataclasses.replace(observation, listed_position="M")
+        for observation in _midfield_population()
+    ]
+    v1_result = engine_v1.calculate_player_analytics(
+        broad_observations, scope_key="core:test", calculated_at=_NOW
+    )
+    v2_scores = calculate_player_analytics_v2(
+        _midfield_population(), scope_key="core:test", calculated_at=_NOW
+    )
+
+    v1_creator = next(
+        score for score in v1_result.scores if score.player_id == 1 and score.window == "season"
+    )
+    v2_creator = next(
+        score for score in v2_scores if score.player_id == 1 and score.window == "season"
+    )
+    # attacking_midfielder weights differ materially from the coarse V1
+    # midfielder weights (more creation/goals weight, less defending), so the
+    # V2 recombination is expected to diverge from the V1 score.
+    assert v2_creator.overall_score != v1_creator.overall_score
+
+
+def test_v2_falls_back_to_v1_score_when_only_the_coarse_broad_role_is_known() -> None:
+    # "D" is a bare broad-role token (the kind API-Football's fixture payload
+    # actually exposes, per docs/PLAYER_ANALYTICS.md) -- V1 classifies it
+    # fine (coarse "defender"), but it is not one of the 8 fine position
+    # families, so `classify_position_family` falls back to the broad
+    # "defender" string, which is not a POSITION_FAMILY_SCORE_WEIGHTS key.
+    observations = [
+        _observation(
+            player_id=9,
+            player_name="Broad Role Defender",
+            match_id=match_id,
+            minutes=90,
+            listed_position="D",
+            stats={
+                "goals": 0,
+                "assists": 0,
+                "shots_total": 1,
+                "shots_on_target": 0,
+                "passes_total": 40,
+                "key_passes": 1,
+                "tackles": 3,
+                "blocks": 1,
+                "interceptions": 2,
+                "dribbles_successful": 1,
+                "duels_won": 2,
+                "fouls_drawn": 1,
+                "fouls_committed": 1,
+                "saves": None,
+            },
+        )
+        for match_id in range(1, 4)
+    ]
+    v1_result = engine_v1.calculate_player_analytics(
+        observations, scope_key="core:test", calculated_at=_NOW
+    )
+    v2_scores = calculate_player_analytics_v2(
+        observations, scope_key="core:test", calculated_at=_NOW
+    )
+    assert v1_result.scores  # sanity: V1 did classify and score this player
+    assert v2_scores
+    assert all(score.position_family == "defender" for score in v2_scores)
+    # No fine weight profile applies to the broad "defender" fallback, so V2
+    # reuses V1's own overall_score exactly rather than fabricating one.
+    v1_by_window = {score.window: score.overall_score for score in v1_result.scores}
+    for score in v2_scores:
+        assert score.overall_score == v1_by_window[score.window]

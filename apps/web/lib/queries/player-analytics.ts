@@ -1,4 +1,5 @@
 import { getDatabase } from "@/lib/db/postgres";
+import { classifyPositionFamily, type PositionFamily } from "@/lib/position-family";
 
 export type AnalyticsWindow = "season" | "last_10" | "last_5" | "last_3";
 export type PlayerRole = "goalkeeper" | "defender" | "midfielder" | "forward";
@@ -45,12 +46,18 @@ export interface RankingsFilters {
   minConfidence: number;
   search: string;
   limit: number;
+  positionFamily: PositionFamily | "all";
+}
+
+export interface RankingPlayerWithPosition extends RankingPlayer {
+  listedPosition: string | null;
+  positionFamily: PositionFamily | null;
 }
 
 export interface RankingsData {
   context: SnapshotContext | null;
   filters: RankingsFilters;
-  players: RankingPlayer[];
+  players: RankingPlayerWithPosition[];
 }
 
 export interface PlayerWindowScore {
@@ -136,6 +143,10 @@ interface DbRankingRow {
   overall_score: string | number;
   confidence: string | number;
   dimension_scores: unknown;
+}
+
+interface DbRankingRowWithPosition extends DbRankingRow {
+  listed_position: string | null;
 }
 
 interface DbTrendRow extends DbRankingRow {
@@ -421,7 +432,17 @@ export async function getRankings(
 
     const searchPattern = `%${filters.search.trim()}%`;
 
-    const rows = await sql<DbRankingRow[]>`
+    // `listed_position` -> position-family classification happens in JS
+    // (`classifyPositionFamily`), not SQL, to avoid duplicating the alias
+    // table as a CASE expression. Because the filter runs after the SQL
+    // LIMIT would otherwise apply, fetch a wider batch whenever a specific
+    // family is requested and slice down to `filters.limit` afterward --
+    // simpler than pushing the alias table into SQL, at the cost of not
+    // being a perfectly exhaustive scan for very narrow families.
+    const fetchLimit =
+      filters.positionFamily === "all" ? filters.limit : Math.min(filters.limit * 4, 400);
+
+    const rows = await sql<DbRankingRowWithPosition[]>`
       select
         p.id as player_id,
         p.display_name,
@@ -431,10 +452,21 @@ export async function getRankings(
         s.appearances,
         s.overall_score,
         s.confidence,
-        s.dimension_scores
+        s.dimension_scores,
+        latest_position.listed_position
       from analytics.player_score_snapshots as s
       join football.players as p
         on p.id = s.player_id
+      left join lateral (
+        select pa.listed_position
+        from football.player_appearances as pa
+        join football.matches as m
+          on m.id = pa.match_id
+        where pa.player_id = p.id
+          and pa.listed_position is not null
+        order by m.kickoff_at desc nulls last
+        limit 1
+      ) as latest_position on true
       where s.scope_key = ${context.scopeKey}
         and s.model_version = ${context.modelVersion}
         and s.window_key = ${filters.window}
@@ -442,15 +474,26 @@ export async function getRankings(
         and s.confidence >= ${filters.minConfidence}
         and (${filters.search.trim()} = '' or p.display_name ilike ${searchPattern})
       order by s.overall_score desc, s.confidence desc, p.display_name
-      limit ${filters.limit}
+      limit ${fetchLimit}
     `;
+
+    const withPosition: RankingPlayerWithPosition[] = rows.map((row) => ({
+      ...mapRanking(row),
+      listedPosition: row.listed_position,
+      positionFamily: classifyPositionFamily(row.listed_position),
+    }));
+
+    const filtered =
+      filters.positionFamily === "all"
+        ? withPosition
+        : withPosition.filter((player) => player.positionFamily === filters.positionFamily);
 
     return {
       status: "ready",
       data: {
         context,
         filters,
-        players: rows.map(mapRanking),
+        players: filtered.slice(0, filters.limit),
       },
     };
   } catch {
@@ -558,9 +601,13 @@ export async function getPlayerDetail(
       `,
     ]);
 
-    if (scoreRows.length === 0) {
-      return { status: "ready", data: null };
-    }
+    // A player can be real, identified, and have real evidence (Block 16
+    // season-aggregate stats, diagnostic findings) without ever having gone
+    // through the V1 per-match scoring pipeline -- e.g. every player in the
+    // real ENG_PL 2025/26 snapshot, which has no match-by-match rows for V1
+    // to aggregate. Only 404 when the player itself doesn't exist; an empty
+    // `scores`/`features` array is a valid, honest state the page must
+    // render around, never a reason to hide a real player entirely.
 
     return {
       status: "ready",

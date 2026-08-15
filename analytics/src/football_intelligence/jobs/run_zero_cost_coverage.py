@@ -1127,9 +1127,11 @@ def _build_report(
         # PRODUCT coverage: "can Football Intelligence cover this metric, for
         # this competition, from ANY free current/historical source?" --
         # denominator is target_metric_count x target_competition_count
-        # (48 x 10 = 480), independent of provider count. This is the number
-        # that answers the product question; the "provider_diagnostics"
-        # figures below are diagnostic, not the headline result.
+        # (127 x 10 = 1270 since Block 16's Metric Catalog V2 grew the
+        # catalog from 48; was 48 x 10 = 480 before), independent of
+        # provider count. This is the number that answers the product
+        # question; the "provider_diagnostics" figures below are
+        # diagnostic, not the headline result.
         "product_current_coverage": _coverage_fraction(product_current),
         "product_recent_season_coverage": _coverage_fraction(product_recent_season),
         "product_historical_deep_coverage": _coverage_fraction(product_historical),

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 
+import { DiagnosticFindingCard } from "@/features/diagnostics/finding-card";
 import { PerceptionEvidenceCard } from "@/features/perception/evidence-card";
 import { DataNotice } from "@/features/players/data-notice";
 import { formatSigned, SURPRISE_LABELS, TREND_LABELS, WATCHLIST_LABELS } from "@/lib/meta-display";
@@ -17,9 +18,16 @@ import {
   WINDOW_LABELS,
 } from "@/lib/player-display";
 import { getPlayerMeta } from "@/lib/queries/meta-analytics";
+import { getEntityDiagnostics, type DiagnosticFinding } from "@/lib/queries/diagnostics";
 import { getPlayerPerceptionEvidence } from "@/lib/queries/perception";
 import { getPlayerRating } from "@/lib/queries/rating-intelligence";
 import { RATING_SIGNAL_LABELS } from "@/lib/rating-display";
+import { getPlayerSeasonStats } from "@/lib/queries/season-stats";
+import {
+  formatSeasonStat,
+  SEASON_STAT_LABELS,
+  SEASON_STAT_ORDER,
+} from "@/lib/season-stats-display";
 import {
   getPlayerDetail,
   type AnalyticsWindow,
@@ -46,6 +54,17 @@ function featuresForWindow(features: PlayerFeature[], window: AnalyticsWindow): 
     .sort((a, b) => b.percentile - a.percentile);
 }
 
+function findByCode(findings: DiagnosticFinding[], code: string): DiagnosticFinding | undefined {
+  return findings.find((finding) => finding.diagnosticCode === code);
+}
+
+function metricNumber(finding: DiagnosticFinding, key: string): number | null {
+  const value = finding.supportingMetrics[key];
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export default async function PlayerPage({
   params,
 }: {
@@ -59,12 +78,15 @@ export default async function PlayerPage({
     notFound();
   }
 
-  const [result, metaResult, perceptionResult, ratingResult] = await Promise.all([
-    getPlayerDetail(playerId),
-    getPlayerMeta(playerId),
-    getPlayerPerceptionEvidence(playerId),
-    getPlayerRating(playerId),
-  ]);
+  const [result, metaResult, perceptionResult, ratingResult, diagnosticsResult, seasonStatsResult] =
+    await Promise.all([
+      getPlayerDetail(playerId),
+      getPlayerMeta(playerId),
+      getPlayerPerceptionEvidence(playerId),
+      getPlayerRating(playerId),
+      getEntityDiagnostics("player", playerId),
+      getPlayerSeasonStats(playerId),
+    ]);
 
   if (result.status !== "ready") {
     return (
@@ -85,6 +107,7 @@ export default async function PlayerPage({
   }
 
   const { player, scores, features, context } = result.data;
+  const hasV1Score = scores.length > 0;
   const seasonScore = scores.find((score) => score.window === "season") ?? scores[0];
   const primaryWindow: AnalyticsWindow = scores.some((score) => score.window === "last_5")
     ? "last_5"
@@ -92,6 +115,12 @@ export default async function PlayerPage({
   const primaryFeatures = featuresForWindow(features, primaryWindow);
   const strengths = primaryFeatures.slice(0, 4);
   const watchItems = [...primaryFeatures].sort((a, b) => a.percentile - b.percentile).slice(0, 4);
+
+  const diagnostics = diagnosticsResult.status === "ready" ? diagnosticsResult.data : [];
+  const finishingFinding =
+    findByCode(diagnostics, "finishing_underperformance") ??
+    findByCode(diagnostics, "finishing_overperformance");
+  const seasonStats = seasonStatsResult.status === "ready" ? seasonStatsResult.data : null;
 
   return (
     <main className="page-shell">
@@ -101,54 +130,100 @@ export default async function PlayerPage({
 
       <section className="player-hero">
         <div>
-          <p className="eyebrow">{ROLE_LABELS_SINGULAR[seasonScore.role]}</p>
+          <p className="eyebrow">{hasV1Score ? ROLE_LABELS_SINGULAR[seasonScore.role] : "JUGADOR"}</p>
           <h1>{player.playerName}</h1>
           <div className="player-facts">
             {player.latestTeam ? <span>Último equipo registrado · {player.latestTeam}</span> : null}
             {player.nationalityCode ? <span>Nacionalidad · {player.nationalityCode}</span> : null}
             {player.dateOfBirth ? <span>Nacimiento · {player.dateOfBirth}</span> : null}
           </div>
-          <p className="player-context">
-            {context.scopeKey} · {context.modelVersion} · {formatDateTime(context.calculatedAt)}
-          </p>
+          {hasV1Score ? (
+            <p className="player-context">
+              {context.scopeKey} · {context.modelVersion} · {formatDateTime(context.calculatedAt)}
+            </p>
+          ) : (
+            <p className="player-context">
+              Sin score V1 (sin partidos individuales en la fuente actual) · ver datos reales de
+              temporada y diagnósticos abajo.
+            </p>
+          )}
         </div>
 
-        <div className="player-score-hero">
-          <span>Performance</span>
-          <strong>{formatScore(seasonScore.overallScore)}</strong>
-          <small>Confianza {formatConfidence(seasonScore.confidence)}</small>
-          <div className="confidence-track wide" aria-hidden="true">
-            <span style={{ width: `${Math.round(seasonScore.confidence * 100)}%` }} />
+        {hasV1Score ? (
+          <div className="player-score-hero">
+            <span>Performance</span>
+            <strong>{formatScore(seasonScore.overallScore)}</strong>
+            <small>Confianza {formatConfidence(seasonScore.confidence)}</small>
+            <div className="confidence-track wide" aria-hidden="true">
+              <span style={{ width: `${Math.round(seasonScore.confidence * 100)}%` }} />
+            </div>
           </div>
-        </div>
+        ) : null}
       </section>
+
+      {hasV1Score ? (
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">TREND</p>
+              <h2>Performance vs Forma</h2>
+            </div>
+            <p>Las ventanas recientes pesan más los partidos más cercanos.</p>
+          </div>
+          <div className="window-grid">
+            {WINDOW_ORDER.map((window) => {
+              const score = scores.find((candidate) => candidate.window === window);
+              if (!score) {
+                return null;
+              }
+              return (
+                <article className="window-card" key={window}>
+                  <span>{WINDOW_LABELS[window]}</span>
+                  <strong>{formatScore(score.overallScore)}</strong>
+                  <small>
+                    {score.appearances} PJ · {score.minutes} min · conf.{" "}
+                    {formatConfidence(score.confidence)}
+                  </small>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">TREND</p>
-            <h2>Performance vs Forma</h2>
+            <p className="eyebrow">DIAGNOSTIC RULES</p>
+            <h2>Resultados vs. rendimiento subyacente</h2>
           </div>
-          <p>Las ventanas recientes pesan más los partidos más cercanos.</p>
+          <p>Goles reales contra xG. No implica suerte, mérito ni una predicción futura.</p>
         </div>
-        <div className="window-grid">
-          {WINDOW_ORDER.map((window) => {
-            const score = scores.find((candidate) => candidate.window === window);
-            if (!score) {
-              return null;
-            }
-            return (
-              <article className="window-card" key={window}>
-                <span>{WINDOW_LABELS[window]}</span>
-                <strong>{formatScore(score.overallScore)}</strong>
-                <small>
-                  {score.appearances} PJ · {score.minutes} min · conf.{" "}
-                  {formatConfidence(score.confidence)}
-                </small>
-              </article>
-            );
-          })}
-        </div>
+        {finishingFinding ? (
+          <div className="window-grid">
+            <article className="window-card">
+              <span>Goles</span>
+              <strong>{formatScore(metricNumber(finishingFinding, "goals") ?? 0)}</strong>
+              <small>P{Math.round(metricNumber(finishingFinding, "goals_percentile") ?? 0)}</small>
+            </article>
+            <article className="window-card">
+              <span>xG</span>
+              <strong>{formatScore(metricNumber(finishingFinding, "xg") ?? 0)}</strong>
+              <small>P{Math.round(metricNumber(finishingFinding, "xg_percentile") ?? 0)}</small>
+            </article>
+            <article className="window-card">
+              <span>Lectura</span>
+              <strong>
+                {finishingFinding.diagnosticCode === "finishing_underperformance"
+                  ? "Por debajo del proceso"
+                  : "Por encima del proceso"}
+              </strong>
+              <small>Confianza {formatConfidence(finishingFinding.confidence)}</small>
+            </article>
+          </div>
+        ) : (
+          <p className="ranking-summary">Sin datos suficientes de xG para esta comparación.</p>
+        )}
       </section>
 
       {metaResult.status === "ready" && metaResult.data ? (
@@ -256,55 +331,103 @@ export default async function PlayerPage({
           </div>
         </section>
       ) : null}
-      <section className="player-analysis-grid">
-        <div className="panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">SKILL PROFILE</p>
-              <h2>Dimensiones</h2>
+      {hasV1Score ? (
+        <section className="player-analysis-grid">
+          <div className="panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">SKILL PROFILE</p>
+                <h2>Dimensiones</h2>
+              </div>
+              <p>Percentiles agregados del rol.</p>
             </div>
-            <p>Percentiles agregados del rol.</p>
+            <div className="dimension-list">
+              {Object.entries(seasonScore.dimensionScores)
+                .sort((a, b) => b[1] - a[1])
+                .map(([dimension, value]) => (
+                  <div className="dimension-row" key={dimension}>
+                    <div>
+                      <span>{DIMENSION_LABELS[dimension] ?? dimension}</span>
+                      <strong>{formatScore(value)}</strong>
+                    </div>
+                    <div className="percentile-track" aria-hidden="true">
+                      <span style={{ width: `${Math.round(value)}%` }} />
+                    </div>
+                  </div>
+                ))}
+            </div>
           </div>
-          <div className="dimension-list">
-            {Object.entries(seasonScore.dimensionScores)
-              .sort((a, b) => b[1] - a[1])
-              .map(([dimension, value]) => (
-                <div className="dimension-row" key={dimension}>
+
+          <div className="panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">EVIDENCIA</p>
+                <h2>Fortalezas · {WINDOW_LABELS[primaryWindow]}</h2>
+              </div>
+            </div>
+            <div className="metric-list">
+              {strengths.map((feature) => (
+                <div className="metric-row" key={`${feature.window}-${feature.metricName}`}>
                   <div>
-                    <span>{DIMENSION_LABELS[dimension] ?? dimension}</span>
-                    <strong>{formatScore(value)}</strong>
+                    <strong>{METRIC_LABELS[feature.metricName] ?? feature.metricName}</strong>
+                    <span>
+                      {formatPer90(feature.adjustedPer90)} /90 · muestra {feature.referenceSampleSize}
+                    </span>
                   </div>
-                  <div className="percentile-track" aria-hidden="true">
-                    <span style={{ width: `${Math.round(value)}%` }} />
-                  </div>
+                  <span className="metric-percentile">P{Math.round(feature.percentile)}</span>
                 </div>
               ))}
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">EVIDENCIA</p>
-              <h2>Fortalezas · {WINDOW_LABELS[primaryWindow]}</h2>
             </div>
           </div>
-          <div className="metric-list">
-            {strengths.map((feature) => (
-              <div className="metric-row" key={`${feature.window}-${feature.metricName}`}>
-                <div>
-                  <strong>{METRIC_LABELS[feature.metricName] ?? feature.metricName}</strong>
-                  <span>
-                    {formatPer90(feature.adjustedPer90)} /90 · muestra {feature.referenceSampleSize}
-                  </span>
-                </div>
-                <span className="metric-percentile">P{Math.round(feature.percentile)}</span>
-              </div>
+        </section>
+      ) : null}
+
+      {seasonStats ? (
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">REAL SEASON DATA</p>
+              <h2>Datos reales de temporada · {seasonStats.seasonLabel}</h2>
+            </div>
+            <p>Observación directa de la fuente, no una estimación del modelo.</p>
+          </div>
+          <div className="metric-grid">
+            {SEASON_STAT_ORDER.map((key) => (
+              <article className="metric-tile" key={key}>
+                <span>{SEASON_STAT_LABELS[key]}</span>
+                <strong>{formatSeasonStat(seasonStats[key])}</strong>
+              </article>
             ))}
           </div>
+          <p className="ranking-summary">
+            Fuente: {seasonStats.source} · actualizado {formatDateTime(seasonStats.retrievedAt)}
+          </p>
+        </section>
+      ) : null}
+
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">DIAGNOSTIC RULES</p>
+            <h2>Diagnósticos</h2>
+          </div>
+          <p>Reglas deterministas sobre evidencia ya calculada. No son una predicción.</p>
         </div>
+        {diagnostics.length === 0 ? (
+          <p className="ranking-summary">Sin hallazgos relevantes en esta ventana.</p>
+        ) : (
+          <div className="ranking-list">
+            {diagnostics.map((finding) => (
+              <DiagnosticFindingCard
+                finding={finding}
+                key={`${finding.diagnosticCode}-${finding.comparisonGroup}-${finding.windowKey}`}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
+      {hasV1Score ? (
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -336,28 +459,31 @@ export default async function PlayerPage({
           </article>
         </div>
       </section>
+      ) : null}
 
-      <section className="panel">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">WATCH</p>
-            <h2>Métricas para mirar</h2>
+      {hasV1Score ? (
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">WATCH</p>
+              <h2>Métricas para mirar</h2>
+            </div>
+            <p>No son “debilidades” automáticas: también pueden reflejar rol o estilo.</p>
           </div>
-          <p>No son “debilidades” automáticas: también pueden reflejar rol o estilo.</p>
-        </div>
-        <div className="metric-grid">
-          {watchItems.map((feature) => (
-            <article className="metric-tile" key={`${feature.window}-${feature.metricName}`}>
-              <span>{METRIC_LABELS[feature.metricName] ?? feature.metricName}</span>
-              <strong>P{Math.round(feature.percentile)}</strong>
-              <small>
-                raw {formatPer90(feature.rawPer90)} /90 · adj.{" "}
-                {formatPer90(feature.adjustedPer90)} /90
-              </small>
-            </article>
-          ))}
-        </div>
-      </section>
+          <div className="metric-grid">
+            {watchItems.map((feature) => (
+              <article className="metric-tile" key={`${feature.window}-${feature.metricName}`}>
+                <span>{METRIC_LABELS[feature.metricName] ?? feature.metricName}</span>
+                <strong>P{Math.round(feature.percentile)}</strong>
+                <small>
+                  raw {formatPer90(feature.rawPer90)} /90 · adj.{" "}
+                  {formatPer90(feature.adjustedPer90)} /90
+                </small>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </main>
   );
 }

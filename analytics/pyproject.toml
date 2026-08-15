@@ -24,6 +24,10 @@ football-intelligence-world-radar = "football_intelligence.jobs.sync_world_radar
 football-intelligence-validate-v1 = "football_intelligence.jobs.validate_v1:main"
 football-intelligence-data-mesh-poc = "football_intelligence.jobs.run_data_mesh_poc:main"
 football-intelligence-zero-cost-coverage = "football_intelligence.jobs.run_zero_cost_coverage:main"
+football-intelligence-collect-real-snapshot = "football_intelligence.jobs.collect_real_snapshot:main"
+football-intelligence-load-real-snapshot = "football_intelligence.jobs.load_real_snapshot:main"
+football-intelligence-collect-validation-snapshot = "football_intelligence.jobs.collect_validation_snapshot:main"
+football-intelligence-score-real-snapshot = "football_intelligence.jobs.score_real_snapshot:main"
 
 [dependency-groups]
 dev = [

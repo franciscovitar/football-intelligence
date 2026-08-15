@@ -154,6 +154,10 @@ jobs:
         run: >-
           psql -v ON_ERROR_STOP=1
           -f database/fixtures/006_coverage_lab_smoke.sql
+      - name: Seed deterministic diagnostic findings smoke evidence
+        run: >-
+          psql -v ON_ERROR_STOP=1
+          -f database/fixtures/007_diagnostic_findings_smoke.sql
       - name: Verify Next.js PostgreSQL read path
         shell: bash
         run: |

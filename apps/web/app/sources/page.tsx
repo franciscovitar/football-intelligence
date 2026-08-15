@@ -231,6 +231,14 @@ export default async function SourcesPage() {
                 configurado, football-data.org se muestra como &ldquo;TOKEN&rdquo;, nunca como
                 error.
               </p>
+              <p>
+                El catálogo de métricas objetivo creció de 48 a 127 métricas (denominador 480 →
+                1270, contra las mismas 10 competiciones) para representar el producto
+                estadístico completo que Football Intelligence quiere, no lo que los proveedores
+                gratuitos ya cubren hoy. Las 48 originales conservan la misma identidad
+                (métrica, granularidad) que antes, así que un número más bajo abajo no significa
+                que perdimos cobertura: significa que estamos midiendo contra una vara más alta.
+              </p>
             </div>
             {coverageResult.status !== "ready" ? (
               <DataNotice title="Cobertura no disponible" message={coverageResult.message} />

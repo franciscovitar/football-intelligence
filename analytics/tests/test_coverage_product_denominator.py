@@ -20,10 +20,15 @@ def test_adding_a_provider_does_not_change_the_product_denominator() -> None:
     # regardless of how many providers exist -- computed here with the full,
     # real provider list (5) vs a trimmed one (1), proving the denominator is
     # identical either way.
+    #
+    # Block 16 grew the target catalog from 48 to 127 metrics (Metric Catalog
+    # V2, `metric_catalog.METRIC_CATALOG_V2`, collapsed onto coverage_lab's
+    # existing 5-grain identity space) -- the denominator grew truthfully with
+    # it, it did not shrink to keep the old number.
     target_metrics = build_target_metric_catalog()
     target_competitions = build_target_competitions()
     expected_denominator = len(target_metrics) * len(target_competitions)
-    assert expected_denominator == 48 * 10
+    assert expected_denominator == 127 * 10
 
     full_coverage = compute_coverage(
         target_metrics=target_metrics,

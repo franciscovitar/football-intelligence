@@ -8,6 +8,7 @@ import {
   ROLE_LABELS,
   WINDOW_LABELS,
 } from "@/lib/player-display";
+import { POSITION_FAMILIES, POSITION_FAMILY_LABELS, type PositionFamily } from "@/lib/position-family";
 import {
   getRankings,
   type AnalyticsWindow,
@@ -36,6 +37,12 @@ function parseRole(value: string): PlayerRole | "all" {
     : "all";
 }
 
+function parsePositionFamily(value: string): PositionFamily | "all" {
+  return value === "all" || POSITION_FAMILIES.includes(value as PositionFamily)
+    ? (value as PositionFamily | "all")
+    : "all";
+}
+
 function parseConfidence(value: string): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
@@ -58,6 +65,7 @@ export default async function RankingsPage({
     minConfidence: parseConfidence(firstValue(params.confidence) || "0.25"),
     search: firstValue(params.q).trim().slice(0, 80),
     limit: 100,
+    positionFamily: parsePositionFamily(firstValue(params.position) || "all"),
   };
 
   const result = await getRankings(filters);
@@ -116,6 +124,18 @@ export default async function RankingsPage({
           </select>
         </label>
 
+        <label>
+          <span>Familia posicional (beta)</span>
+          <select defaultValue={filters.positionFamily} name="position">
+            <option value="all">Todas</option>
+            {POSITION_FAMILIES.map((family) => (
+              <option key={family} value={family}>
+                {POSITION_FAMILY_LABELS[family]}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <label className="search-field">
           <span>Jugador</span>
           <input defaultValue={filters.search} name="q" placeholder="Buscar por nombre" type="search" />
@@ -148,11 +168,25 @@ export default async function RankingsPage({
             <span>
               {filters.role === "all" ? "Todos los roles" : ROLE_LABELS[filters.role]} · confianza ≥{" "}
               {Math.round(filters.minConfidence * 100)}%
+              {filters.positionFamily !== "all"
+                ? ` · ${POSITION_FAMILY_LABELS[filters.positionFamily]} (beta)`
+                : ""}
             </span>
           </div>
+          {filters.positionFamily !== "all" ? (
+            <p className="ranking-meta">
+              Familia posicional en beta: se clasifica desde la última posición observada en
+              cancha, puede no coincidir con el rol táctico habitual del jugador.
+            </p>
+          ) : null}
           <div className="ranking-list">
             {result.data.players.map((player, index) => (
-              <PlayerRankingCard key={player.playerId} player={player} rank={index + 1} />
+              <PlayerRankingCard
+                key={player.playerId}
+                player={player}
+                positionFamily={player.positionFamily}
+                rank={index + 1}
+              />
             ))}
           </div>
         </section>

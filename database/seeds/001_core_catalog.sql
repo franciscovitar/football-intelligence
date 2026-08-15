@@ -7,7 +7,8 @@ values
     ('openligadb', 'OpenLigaDB'),
     ('statsbomb-open', 'StatsBomb Open Data'),
     ('football-data-org', 'football-data.org'),
-    ('football-data-uk', 'Football-Data.co.uk')
+    ('football-data-uk', 'Football-Data.co.uk'),
+    ('fpl', 'Official Fantasy Premier League API')
 on conflict (code) do update
 set
     display_name = excluded.display_name,

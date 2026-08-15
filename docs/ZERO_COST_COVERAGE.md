@@ -27,6 +27,17 @@ hand-maintained list that could silently drift or shrink. Adding a new
 `advanced.*` metric never requires a database migration: coverage rows key
 on `metric_name` as free text.
 
+**Block 16 update**: `target_metrics.build_target_metric_catalog()` is now
+sourced from `metric_catalog.METRIC_CATALOG_V2` (`analytics/.../metric_catalog/`)
+instead of deriving purely from the 5 normalization DTOs -- the target
+catalog grew from **48 metrics** (denominator 480) to **127 metrics**
+(denominator 1270) to represent the full statistical product spec, not just
+what those 5 DTOs happen to carry. The original 48 keep the exact same
+`(metric_name, granularity)` identity (never renamed); every number below
+that still says "48" or "480" describes the pre-Block-16 catalog accurately
+as historical record of what Block 14/15 measured against at the time, not a
+live figure.
+
 ## Target competitions
 
 `analytics/.../coverage_lab/target_competitions.py` reuses `CORE_LEAGUES` (6)
