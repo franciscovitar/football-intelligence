@@ -9,11 +9,12 @@
     "dev": "npm --workspace @football-intelligence/web run dev",
     "web:lint": "npm --workspace @football-intelligence/web run lint",
     "web:typecheck": "npm --workspace @football-intelligence/web run typecheck",
+    "web:test": "npm --workspace @football-intelligence/web run test",
     "web:build": "npm --workspace @football-intelligence/web run build",
     "analytics:lint": "cd analytics && uv run ruff check . && uv run ruff format --check .",
     "analytics:typecheck": "cd analytics && uv run mypy src",
     "analytics:test": "cd analytics && uv run pytest",
-    "check:web": "npm run web:lint && npm run web:typecheck && npm run web:build",
+    "check:web": "npm run web:lint && npm run web:typecheck && npm run web:test && npm run web:build",
     "check:analytics": "npm run analytics:lint && npm run analytics:typecheck && npm run analytics:test",
     "check": "npm run check:web && npm run check:analytics"
   },

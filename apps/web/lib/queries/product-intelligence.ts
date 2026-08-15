@@ -812,6 +812,15 @@ export async function getProductTeamDetail(
   }
 }
 
+/**
+ * Reads only diagnostic findings that are themselves proven product-safe --
+ * `data_context = 'real'` and `source_model_version` matching the
+ * corresponding V2 statistical model, scoped to whichever snapshot is
+ * currently active (see `analytics.product_player_diagnostic_findings_v2` /
+ * `product_team_diagnostic_findings_v2`). Entity existence in a V2 detail
+ * view is never sufficient on its own: a legacy/smoke finding for the same
+ * entity_id must stay hidden even though the entity itself is real.
+ */
 async function productDiagnostics(
   sql: Sql,
   entityType: "player" | "team" | "all",
@@ -823,7 +832,11 @@ async function productDiagnostics(
            coalesce(player.display_name, team.name, 'Entidad') as entity_name,
            finding.severity, finding.confidence, finding.supporting_metrics,
            finding.window_key, finding.model_version
-    from analytics.diagnostic_findings as finding
+    from (
+      select * from analytics.product_player_diagnostic_findings_v2
+      union all
+      select * from analytics.product_team_diagnostic_findings_v2
+    ) as finding
     left join football.players as player
       on finding.entity_type = 'player' and player.id = finding.entity_id
     left join football.teams as team
@@ -831,17 +844,6 @@ async function productDiagnostics(
     where (${entityType} = 'all' or finding.entity_type = ${entityType})
       and finding.diagnostic_code = any(${codes})
       and finding.supporting_metrics <> '{}'::jsonb
-      and (
-        (finding.entity_type = 'player' and exists (
-          select 1 from analytics.product_player_detail_v2 as real_player
-          where real_player.player_id = finding.entity_id
-        ))
-        or
-        (finding.entity_type = 'team' and exists (
-          select 1 from analytics.product_team_detail_v2 as real_team
-          where real_team.team_id = finding.entity_id
-        ))
-      )
     order by finding.confidence desc, finding.computed_at desc
     limit ${limit}
   `;

@@ -75,6 +75,7 @@ jobs:
       PGDATABASE: football_intelligence_test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_test
       INTERNAL_LAB_ENABLED: "true"
+      FOOTBALL_INTELLIGENCE_WRITE_TOKEN: ci-e2e-write-token-not-a-real-secret
     steps:
       - uses: actions/checkout@v6.0.2
       - name: Apply migrations
@@ -243,6 +244,19 @@ jobs:
           grep -q "RESULTS VS PERFORMANCE" "$RUNNER_TEMP/results-vs-performance.html"
           grep -q "PERSISTENT WATCHLIST" "$RUNNER_TEMP/watchlist.html"
           grep -q "COMPARE · V2" "$RUNNER_TEMP/compare.html"
+
+          # Watchlist write gate: with a token configured, an unauthenticated
+          # visitor must see the locked (unlock-form) state, never the raw
+          # secret and never the add/remove forms. The authorized/unauthorized
+          # mutation behavior itself is covered deterministically by
+          # `apps/web/app/watchlist/mutations.test.ts` (`npm run web:test`) --
+          # this step intentionally stays a single non-mutating GET rather
+          # than replaying Next's dev-mode Server Action protocol, which is
+          # not a stable target for CI (action ids can be invalidated by
+          # Turbopack's on-demand route recompilation between requests).
+          ! grep -q "$FOOTBALL_INTELLIGENCE_WRITE_TOKEN" "$RUNNER_TEMP/watchlist.html"
+          grep -q "Token de escritura" "$RUNNER_TEMP/watchlist.html"
+          ! grep -q "name=\"playerId\"" "$RUNNER_TEMP/watchlist.html"
 
           curl -fsS \
             "http://127.0.0.1:3000/tactics?competition=ENG_PL&confidence=0" \

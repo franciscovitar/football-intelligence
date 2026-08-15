@@ -93,6 +93,72 @@ begin
     if exists (select 1 from analytics.product_player_watchlist_v2 where player_id = smoke_player_id) then
         raise exception 'test-only player leaked into product watchlist';
     end if;
+
+    -- Diagnostic findings must never be treated as product-safe merely
+    -- because their entity_id happens to be real V2: only a finding whose
+    -- OWN data_context is 'real', whose source_model_version matches the
+    -- corresponding V2 statistical model, and whose scope_key matches the
+    -- currently active scope may appear in `product_player_diagnostic_findings_v2`
+    -- / `product_team_diagnostic_findings_v2`. `real_player_id` and
+    -- `real_team_id` are real V2 entities (inserted above with scope_key
+    -- 'product:v2'), which makes them the exact leak vector this contract
+    -- protects against.
+    insert into analytics.diagnostic_findings (
+        diagnostic_code, entity_type, entity_id, severity, confidence,
+        supporting_metrics, comparison_group, window_key, model_version, computed_at,
+        data_context, source_model_version, scope_key
+    ) values
+        -- smoke diagnostic on a real player id: must stay hidden.
+        ('contract-smoke-on-real-id', 'player', real_player_id, 'notable', 0.7,
+         '{"x": 1}'::jsonb, 'role:forward', 'season', 'diagnostic-v1.0', now(),
+         'test_smoke', 'player-v2.0', 'product:v2'),
+        -- real diagnostic sourced from V1 stats on a real V2 entity: must stay hidden.
+        ('contract-v1-source-on-real-v2', 'player', real_player_id, 'notable', 0.7,
+         '{"x": 1}'::jsonb, 'role:forward', 'season', 'diagnostic-v1.0', now(),
+         'real', 'player-v1.0', 'product:v2'),
+        -- real, correctly-sourced, but tied to a scope that is not the active one: must stay hidden.
+        ('contract-stale-scope', 'player', real_player_id, 'notable', 0.7,
+         '{"x": 1}'::jsonb, 'role:forward', 'season', 'diagnostic-v1.0', now(),
+         'real', 'player-v2.0', 'product:v2-stale'),
+        -- explicitly real player-v2.0 finding in the active scope: must appear.
+        ('contract-real-player-v2', 'player', real_player_id, 'notable', 0.7,
+         '{"x": 1}'::jsonb, 'role:forward', 'season', 'diagnostic-v1.0', now(),
+         'real', 'player-v2.0', 'product:v2'),
+        -- explicitly real team-v2.0 finding in the active scope: must appear.
+        ('contract-real-team-v2', 'team', real_team_id, 'notable', 0.7,
+         '{"x": 1}'::jsonb, 'competition:ENG_PL:2025', 'season', 'diagnostic-v1.0', now(),
+         'real', 'team-v2.0', 'product:v2');
+
+    if exists (
+        select 1 from analytics.product_player_diagnostic_findings_v2
+        where diagnostic_code = 'contract-smoke-on-real-id'
+    ) then
+        raise exception 'smoke diagnostic leaked into product via a real entity id';
+    end if;
+    if exists (
+        select 1 from analytics.product_player_diagnostic_findings_v2
+        where diagnostic_code = 'contract-v1-source-on-real-v2'
+    ) then
+        raise exception 'V1-sourced diagnostic leaked into product via a real V2 entity';
+    end if;
+    if exists (
+        select 1 from analytics.product_player_diagnostic_findings_v2
+        where diagnostic_code = 'contract-stale-scope'
+    ) then
+        raise exception 'stale-scope diagnostic leaked into the active product context';
+    end if;
+    if not exists (
+        select 1 from analytics.product_player_diagnostic_findings_v2
+        where diagnostic_code = 'contract-real-player-v2' and entity_id = real_player_id
+    ) then
+        raise exception 'explicitly real player-v2.0 finding did not surface';
+    end if;
+    if not exists (
+        select 1 from analytics.product_team_diagnostic_findings_v2
+        where diagnostic_code = 'contract-real-team-v2' and entity_id = real_team_id
+    ) then
+        raise exception 'explicitly real team-v2.0 finding did not surface';
+    end if;
 end;
 $$;
 
