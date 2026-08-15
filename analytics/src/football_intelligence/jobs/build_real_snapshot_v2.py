@@ -2,48 +2,74 @@
 
 Single reproducible command that:
 
-1. acquires Football-Data.co.uk's published results CSV (the primary
-   current source; already the source `load_real_snapshot.py` loads into
-   `football.*`, unchanged here) and OpenFootball's published season JSON
-   (a second, independent, public-domain current source, new in Block 18);
+1. acquires Football-Data.co.uk's published results CSV in memory only
+   (never rewriting the committed, already-accepted
+   `data/real/2025-26/eng_pl_matches.json` file -- that file remains the
+   unchanged canonical `football.*` load source) and OpenFootball's
+   published season JSON (a second, independent, public-domain current
+   source, written to the committed snapshot directory because its CC0
+   licence makes that safe);
 2. normalizes both into provider-independent observations through the
    existing adapters -- missing stays missing, never fabricated;
 3. resolves entity identity and reconciles the two sources' overlapping
    match-result facts through the existing Data Mesh pipeline
    (`resolve_and_reconcile`), proving real multi-source agreement/conflict
-   detection on the canonical current-season snapshot rather than only a
-   Bundesliga PoC sample;
+   detection rather than only a Bundesliga PoC sample;
 4. measures real coverage against the full, dynamic Metric Catalog V2
-   (never a shrunk or hand-maintained list);
+   (never a shrunk or hand-maintained list), keeping "true current period"
+   (as of today), "recent completed season" (what this snapshot actually
+   is), and "historical/deep" strictly separate -- see "Temporal semantics"
+   below;
 5. writes a machine-readable snapshot manifest
-   (`data/manifests/real/ENG_PL/2025-26.json` by default).
+   (`data/manifests/real/ENG_PL/2025-26.json` by default) including a
+   SHA-256 content fingerprint for every source actually fetched this run.
 
-This job never writes to `football.*` canonical tables itself. Reconciled
-evidence is audit-only, persisted (when `--database-url` is given) to the
-`ingestion` schema only -- the same boundary the Block 13 PoC and Zero-Cost
-Coverage Lab already use (see docs/MULTI_SOURCE_DATA_MESH.md's "Future
-promotion contract"). The canonical `football.*` load remains
-`football-intelligence-load-real-snapshot`'s job, run separately, using the
-single already-trusted Football-Data.co.uk source.
+## Temporal semantics
+
+ENG_PL 2025/26 is the latest COMPLETED season, not the true current period.
+A provider's structural ability to report current data
+(`freshness_role == "current"` in `coverage_lab.provider_capabilities`) is a
+different fact from which period this snapshot actually acquired. This job
+never reports evidence from a completed season as `current_period` coverage
+-- see `_metric_coverage`'s `available_current_period_identity_count`
+(always 0 here) vs `available_recent_completed_identity_count` (the real
+count from this snapshot).
+
+## Database safety
+
+This job NEVER connects to a database implicitly. `DATABASE_URL` in the
+environment is never read. Connecting at all requires an explicit
+`--database-url` naming a clearly local PostgreSQL instance
+(`localhost`/`127.0.0.1`/`::1`, or a host-less DSN resolving to a local Unix
+socket) -- anything else is rejected before any connection is attempted.
+Writing audit evidence additionally requires the explicit `--persist-audit-local`
+flag; `--database-url` alone only enables a read-only canonical-state check.
+This job never writes to `football.*` canonical tables itself in any case --
+reconciled evidence is audit-only, persisted only to the `ingestion` schema,
+the same boundary the Block 13 PoC and Zero-Cost Coverage Lab already use.
 
 Only ENG_PL 2025/26 is implemented. `--competition`/`--season` exist for an
-honest, explicit contract (and to keep the job self-documenting), not
-because another combination is actually supported -- claiming coverage for
-a competition/season that was never acquired would fabricate evidence.
+honest, explicit contract, not because another combination is actually
+supported -- claiming coverage for a competition/season that was never
+acquired would fabricate evidence.
 """
 
 from __future__ import annotations
 
 import argparse
 import dataclasses
+import hashlib
 import json
-import os
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
-from football_intelligence.coverage_lab.provider_capabilities import PROVIDER_CAPABILITIES
+from football_intelligence.coverage_lab.provider_capabilities import (
+    PROVIDER_CAPABILITIES,
+    capability_by_code,
+)
 from football_intelligence.coverage_lab.target_metrics import build_metric_granularity_index
 from football_intelligence.data_mesh.adapters.openfootball import parse_season_matches
 from football_intelligence.data_mesh.entity_resolution import COMPETITION_MAPPINGS
@@ -52,13 +78,22 @@ from football_intelligence.data_mesh.pipeline import resolve_and_reconcile
 from football_intelligence.data_mesh.reconciliation import MODEL_VERSION
 from football_intelligence.db.data_mesh_repository import DataMeshRepository
 from football_intelligence.db.provider_repository import connect
-from football_intelligence.jobs.collect_real_snapshot import collect_football_data_uk_matches
+from football_intelligence.jobs.collect_real_snapshot import fetch_football_data_uk_matches
 from football_intelligence.jobs.score_real_snapshot import assess_real_snapshot
 from football_intelligence.metric_catalog.catalog import METRIC_CATALOG_V2
+from football_intelligence.providers.football_data_uk import FootballDataUkResponse
 from football_intelligence.providers.openfootball import OpenFootballClient, OpenFootballError
 
 SUPPORTED_COMPETITION_CODE = "ENG_PL"
 SUPPORTED_SEASON_LABEL = "2025/26"
+
+# This snapshot is the latest COMPLETED season, never the true current
+# period -- see module docstring "Temporal semantics".
+SNAPSHOT_PERIOD_ROLE = "latest_completed"
+
+FOOTBALL_DATA_UK_SOURCE_CODE = "football-data-uk"
+FOOTBALL_DATA_UK_TRACKED_PATH = "data/real/2025-26/eng_pl_matches.json"
+FOOTBALL_DATA_UK_SOURCE_URL = "https://www.football-data.co.uk/mmz4281/2526/E0.csv"
 
 OPENFOOTBALL_SOURCE_CODE = "openfootball"
 OPENFOOTBALL_SEASON_CODE = "2025-26"
@@ -72,11 +107,14 @@ DEFAULT_REQUEST_BUDGET = 4
 MAX_REQUEST_BUDGET = 10
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_OUTPUT_DIR = _REPO_ROOT / "data" / "real" / "2025-26"
+DEFAULT_OPENFOOTBALL_OUTPUT_DIR = _REPO_ROOT / "data" / "real" / "2025-26"
 DEFAULT_MANIFEST_PATH = _REPO_ROOT / "data" / "manifests" / "real" / "ENG_PL" / "2025-26.json"
 
 SNAPSHOT_ID = "real-eng_pl-2025_26-v2"
 SOURCE_AUDIT_DOC = "docs/REAL_DATA_SOURCE_AUDIT_V2.md"
+
+_LOCAL_DATABASE_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+_LOCAL_DATABASE_SCHEMES = frozenset({"postgresql", "postgres"})
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -89,10 +127,38 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--competition", default=SUPPORTED_COMPETITION_CODE)
     parser.add_argument("--season", default=SUPPORTED_SEASON_LABEL)
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=DEFAULT_OPENFOOTBALL_OUTPUT_DIR,
+        help=(
+            "Where OpenFootball's CC0 evidence file is written. Football-Data.co.uk's "
+            "fresh fetch is never written to disk by this job (memory-only) -- see "
+            "docs/REAL_DATA_SNAPSHOT_V2.md."
+        ),
+    )
     parser.add_argument("--manifest-path", type=Path, default=DEFAULT_MANIFEST_PATH)
     parser.add_argument("--request-budget", type=int, default=DEFAULT_REQUEST_BUDGET)
-    parser.add_argument("--database-url", default=None)
+    parser.add_argument(
+        "--database-url",
+        default=None,
+        help=(
+            "Explicit local PostgreSQL URL. Never read from the DATABASE_URL "
+            "environment variable. Must resolve to localhost/127.0.0.1/::1 (or a "
+            "host-less local-socket DSN) -- anything else is rejected before "
+            "connecting."
+        ),
+    )
+    parser.add_argument(
+        "--persist-audit-local",
+        action="store_true",
+        help=(
+            "Opt-in: persist reconciliation evidence to --database-url's ingestion "
+            "schema (audit-only, never football.*). Requires --database-url. "
+            "Without this flag, --database-url (if given) is used only for a "
+            "read-only canonical-state check."
+        ),
+    )
     return parser
 
 
@@ -110,27 +176,34 @@ def main() -> None:
         raise SystemExit(
             f"--request-budget must be between {PLANNED_REQUESTS} and {MAX_REQUEST_BUDGET}"
         )
+    if args.persist_audit_local and not args.database_url:
+        raise SystemExit("--persist-audit-local requires --database-url")
+
+    database_url = _validate_database_url(args.database_url)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    fduk_observations = collect_football_data_uk_matches(output_dir=args.output_dir)
-    openfootball_observations, openfootball_status = _collect_openfootball_matches(
-        output_dir=args.output_dir
+    fduk_observations, fduk_fingerprint = _fetch_football_data_uk(FOOTBALL_DATA_UK_SOURCE_URL)
+    openfootball_observations, openfootball_status, openfootball_fingerprint = (
+        _collect_openfootball_matches(output_dir=args.output_dir)
     )
 
     all_observations = fduk_observations + openfootball_observations
     decisions, resolution_meta = resolve_and_reconcile(all_observations)
 
-    database_url = args.database_url or os.environ.get("DATABASE_URL")
     persistence = _persist_audit_evidence(
-        database_url=database_url, all_observations=all_observations, decisions=decisions
+        database_url=database_url if args.persist_audit_local else None,
+        all_observations=all_observations,
+        decisions=decisions,
     )
     canonical = _read_canonical_state(database_url)
 
     manifest = _build_manifest(
         fduk_observations=fduk_observations,
+        fduk_fingerprint=fduk_fingerprint,
         openfootball_observations=openfootball_observations,
         openfootball_status=openfootball_status,
+        openfootball_fingerprint=openfootball_fingerprint,
         all_observations=all_observations,
         decisions=decisions,
         resolution_meta=resolution_meta,
@@ -145,12 +218,46 @@ def main() -> None:
 
     coverage = manifest["metric_coverage"]
     print(
-        f"REAL SNAPSHOT V2: {SUPPORTED_COMPETITION_CODE} {SUPPORTED_SEASON_LABEL} -- "
-        f"{len(all_observations)} observations, {len(decisions)} reconciliation decisions, "
-        f"{coverage['available_current_identity_count']}/{coverage['catalog_identity_count']} "
-        "catalog identities covered by a real current source"
+        f"REAL SNAPSHOT V2: {SUPPORTED_COMPETITION_CODE} {SUPPORTED_SEASON_LABEL} "
+        f"({SNAPSHOT_PERIOD_ROLE}) -- {len(all_observations)} observations, "
+        f"{len(decisions)} reconciliation decisions, "
+        f"{coverage['available_recent_completed_identity_count']}/"
+        f"{coverage['catalog_identity_count']} catalog identities covered "
+        "by this recent-completed snapshot "
+        f"(current-period coverage: {coverage['available_current_period_identity_count']})"
     )
     print(f"MANIFEST: {args.manifest_path}")
+
+
+def _validate_database_url(database_url: str | None) -> str | None:
+    """Reject anything that is not clearly a local PostgreSQL instance.
+
+    Called for BOTH the optional audit-persistence write path and the
+    optional canonical-state read path -- a surprising remote connection is
+    refused by default in either case, before any socket is opened. A
+    `DATABASE_URL` environment variable is never consulted here; only an
+    explicit `--database-url` CLI value reaches this function at all.
+    """
+
+    if database_url is None:
+        return None
+    parsed = urlsplit(database_url)
+    if parsed.scheme not in _LOCAL_DATABASE_SCHEMES:
+        raise SystemExit(
+            f"--database-url must be a postgresql:// URL; refusing ambiguous scheme "
+            f"{parsed.scheme!r}"
+        )
+    hostname = parsed.hostname
+    # No host component (e.g. `postgresql:///dbname`) resolves to a local
+    # Unix-domain socket via libpq -- never a remote connection.
+    if hostname is not None and hostname.lower() not in _LOCAL_DATABASE_HOSTS:
+        raise SystemExit(
+            f"--database-url host {hostname!r} is not a recognized local database "
+            "(localhost/127.0.0.1/::1). Refusing to connect to a remote/ambiguous "
+            "database -- a generic DATABASE_URL environment variable is never read "
+            "automatically by this job."
+        )
+    return database_url
 
 
 def _competition_external_id(source_code: str) -> str:
@@ -164,7 +271,48 @@ def _competition_external_id(source_code: str) -> str:
     )
 
 
-def _collect_openfootball_matches(*, output_dir: Path) -> tuple[list[NormalizedObservation], str]:
+def _fetch_football_data_uk(source_url: str) -> tuple[list[NormalizedObservation], dict[str, Any]]:
+    """Fetch Football-Data.co.uk in memory only -- never rewrites the tracked file.
+
+    The committed `data/real/2025-26/eng_pl_matches.json` remains the
+    unchanged, already-accepted Block 16/17 evidence and the sole canonical
+    `football.*` load source (`football-intelligence-load-real-snapshot`).
+    This fresh fetch exists only to reconcile against OpenFootball in this
+    run and to report a real, current checksum in the manifest.
+    """
+
+    observations, response = fetch_football_data_uk_matches()
+    return observations, _football_data_uk_fingerprint(response, source_url=source_url)
+
+
+def _football_data_uk_fingerprint(
+    response: FootballDataUkResponse, *, source_url: str
+) -> dict[str, Any]:
+    """Pure fingerprint builder, extracted so it is unit-testable without a
+    real network fetch -- see `tests/test_build_real_snapshot_v2.py`.
+    """
+
+    return {
+        "provider": FOOTBALL_DATA_UK_SOURCE_CODE,
+        "source_locator": source_url,
+        "collection_method": "direct_csv_download",
+        "retrieved_at": response.fetched_at.isoformat(),
+        "sha256": hashlib.sha256(response.raw_bytes).hexdigest(),
+        "byte_size": len(response.raw_bytes),
+        "competition_code": SUPPORTED_COMPETITION_CODE,
+        "season_label": SUPPORTED_SEASON_LABEL,
+        "redistribution_permission": "unknown",
+        "certification_state": "not_certified",
+        "persisted_to": (
+            "not written by this job (memory-only fetch); the tracked canonical "
+            f"load source at {FOOTBALL_DATA_UK_TRACKED_PATH} is unchanged by this run"
+        ),
+    }
+
+
+def _collect_openfootball_matches(
+    *, output_dir: Path
+) -> tuple[list[NormalizedObservation], str, dict[str, Any] | None]:
     competition_external_id = _competition_external_id(OPENFOOTBALL_SOURCE_CODE)
     client = OpenFootballClient()
     print(f"OpenFootball: fetching {OPENFOOTBALL_SEASON_CODE}/{OPENFOOTBALL_COMPETITION_FILE} ...")
@@ -176,13 +324,15 @@ def _collect_openfootball_matches(*, output_dir: Path) -> tuple[list[NormalizedO
     except OpenFootballError as exc:
         # OpenFootball is the SECONDARY reconciliation source: its absence
         # degrades this run to single-source (still fully real) rather than
-        # blocking the primary Football-Data.co.uk snapshot, which
-        # `load_real_snapshot.py` already depends on independently. Never
-        # silently hidden -- the manifest records this status explicitly.
+        # blocking the primary Football-Data.co.uk evidence. Never silently
+        # hidden -- the manifest records this status explicitly.
         print(f"OpenFootball: fetch failed ({exc}); continuing with football-data-uk only")
-        return [], f"error: {exc}"
+        return [], f"error: {exc}", None
 
     source_reference = f"{OPENFOOTBALL_SEASON_CODE}/{OPENFOOTBALL_COMPETITION_FILE}"
+    source_url = (
+        f"https://raw.githubusercontent.com/openfootball/football.json/master/{source_reference}"
+    )
     observations = parse_season_matches(
         response.payload,
         competition_external_id=competition_external_id,
@@ -195,9 +345,29 @@ def _collect_openfootball_matches(*, output_dir: Path) -> tuple[list[NormalizedO
         retrieved_at=response.fetched_at,
         source_reference=source_reference,
     )
-    _write_json(output_dir / OPENFOOTBALL_MATCHES_FILENAME, output)
+    local_path = output_dir / OPENFOOTBALL_MATCHES_FILENAME
+    _write_json(local_path, output)
     print(f"OpenFootball: {len(observations)} normalized observations")
-    return observations, "ok"
+
+    fingerprint = {
+        "provider": OPENFOOTBALL_SOURCE_CODE,
+        "source_locator": source_url,
+        "collection_method": "direct_raw_json_download",
+        "retrieved_at": response.fetched_at.isoformat(),
+        "sha256": hashlib.sha256(response.raw_bytes).hexdigest(),
+        "byte_size": len(response.raw_bytes),
+        "competition_code": SUPPORTED_COMPETITION_CODE,
+        "season_label": SUPPORTED_SEASON_LABEL,
+        "redistribution_permission": "public_domain_cc0",
+        "certification_state": "certified",
+        "persisted_to": "data/real/2025-26/" + OPENFOOTBALL_MATCHES_FILENAME,
+        "upstream_ref_note": (
+            "fetched from mutable `master`; upstream Git commit SHA is not captured "
+            "to avoid an extra network request per run -- this content sha256 is the "
+            "snapshot's integrity anchor"
+        ),
+    }
+    return observations, "ok", fingerprint
 
 
 def _build_openfootball_output(
@@ -237,7 +407,13 @@ def _persist_audit_evidence(
     decisions: list[ReconciliationDecision],
 ) -> dict[str, Any]:
     if not database_url:
-        return {"mode": "not_requested"}
+        return {
+            "mode": "not_requested",
+            "reason": (
+                "requires both an explicit --database-url resolving to a local "
+                "database and the --persist-audit-local opt-in flag"
+            ),
+        }
     with connect(database_url) as connection:
         mesh_repository = DataMeshRepository(connection)
         observations_written = mesh_repository.persist_observations(all_observations)
@@ -253,7 +429,10 @@ def _persist_audit_evidence(
 
 def _read_canonical_state(database_url: str | None) -> dict[str, Any]:
     if not database_url:
-        return {"mode": "not_requested"}
+        return {
+            "mode": "not_requested",
+            "reason": "requires an explicit --database-url resolving to a local database",
+        }
     with connect(database_url) as connection:
         assessment = assess_real_snapshot(connection)
         connection.rollback()
@@ -265,7 +444,7 @@ def _read_canonical_state(database_url: str | None) -> dict[str, Any]:
         "note": (
             "Reflects football.* as of this run. Run "
             "football-intelligence-load-real-snapshot separately to (re)load it from "
-            "the Football-Data.co.uk evidence written by this job."
+            f"the unchanged, committed {FOOTBALL_DATA_UK_TRACKED_PATH}."
         ),
     }
 
@@ -281,6 +460,19 @@ def _observations_by_granularity(observations: list[NormalizedObservation]) -> d
 
 
 def _metric_coverage(observations: list[NormalizedObservation]) -> dict[str, Any]:
+    """Coverage against Metric Catalog V2, temporal roles kept non-overlapping.
+
+    Four mutually-exclusive buckets that must sum to `catalog_identity_count`:
+    `available_current_period_identity_count` (evidence from the TRUE
+    current period -- always 0 for this job, since it only ever acquires the
+    latest COMPLETED season), `available_recent_completed_identity_count`
+    (real evidence from this latest-completed-season snapshot),
+    `historical_deep_only_identity_count` (only ever satisfiable by a
+    historical/deep-role provider such as StatsBomb Open Data), and
+    `unavailable_identity_count` (everything else). Never blended into one
+    percentage -- see docs/ZERO_COST_COVERAGE.md's coverage-state discipline.
+    """
+
     granularity_index = build_metric_granularity_index()
 
     available_identities: set[tuple[str, str]] = set()
@@ -290,14 +482,13 @@ def _metric_coverage(observations: list[NormalizedObservation]) -> dict[str, Any
             available_identities.add((observation.metric_name, granularity))
 
     catalog_identities = {(metric.key, metric.granularity) for metric in METRIC_CATALOG_V2}
-    available_current = available_identities & catalog_identities
+    available_recent_completed = available_identities & catalog_identities
 
     # A catalog identity that only a `historical`-freshness-role provider
     # (StatsBomb Open Data) can ever supply, structurally -- never
-    # satisfiable by this current-season snapshot regardless of which
-    # current-role source is used. Reused, static, already-verified
-    # capability data (`coverage_lab.provider_capabilities`), never
-    # re-derived or guessed here.
+    # satisfiable by this snapshot regardless of which current-capable
+    # source is used. Reused, static, already-verified capability data
+    # (`coverage_lab.provider_capabilities`), never re-derived or guessed.
     current_capable_keys: set[tuple[str, str]] = set()
     historical_capable_keys: set[tuple[str, str]] = set()
     for capability in PROVIDER_CAPABILITIES:
@@ -316,24 +507,37 @@ def _metric_coverage(observations: list[NormalizedObservation]) -> dict[str, Any
         "catalog_identity_count": len(catalog_identities),
         "raw_identity_count": raw_count,
         "derived_identity_count": derived_count,
-        "available_current_identity_count": len(available_current),
-        "available_current_identities": sorted(f"{key}@{gran}" for key, gran in available_current),
+        # Always 0: this job never claims true-current-period coverage from
+        # a completed-season acquisition, regardless of provider capability.
+        "available_current_period_identity_count": 0,
+        "available_recent_completed_identity_count": len(available_recent_completed),
+        "available_recent_completed_identities": sorted(
+            f"{key}@{gran}" for key, gran in available_recent_completed
+        ),
         "historical_deep_only_identity_count": len(historical_deep_only),
         "unavailable_identity_count": len(catalog_identities)
-        - len(available_current)
+        - len(available_recent_completed)
         - len(historical_deep_only),
         "note": (
-            "available_current/historical_deep_only/unavailable are never blended into "
-            "one percentage -- see docs/ZERO_COST_COVERAGE.md's coverage-state discipline."
+            "current_period/recent_completed/historical_deep_only/unavailable are "
+            "mutually exclusive and never blended into one percentage -- see "
+            "docs/ZERO_COST_COVERAGE.md's coverage-state discipline."
         ),
     }
+
+
+def _provider_freshness_capability(provider_code: str) -> str | None:
+    capability = capability_by_code(provider_code)
+    return capability.freshness_role if capability is not None else None
 
 
 def _build_manifest(
     *,
     fduk_observations: list[NormalizedObservation],
+    fduk_fingerprint: dict[str, Any],
     openfootball_observations: list[NormalizedObservation],
     openfootball_status: str,
+    openfootball_fingerprint: dict[str, Any] | None,
     all_observations: list[NormalizedObservation],
     decisions: list[ReconciliationDecision],
     resolution_meta: dict[str, Any],
@@ -363,40 +567,42 @@ def _build_manifest(
         if decision.status == "conflict"
     ]
 
+    source_files = [fduk_fingerprint]
+    if openfootball_fingerprint is not None:
+        source_files.append(openfootball_fingerprint)
+
     return {
         "snapshot_id": SNAPSHOT_ID,
         "competition_code": SUPPORTED_COMPETITION_CODE,
         "season_label": SUPPORTED_SEASON_LABEL,
+        "period_role": SNAPSHOT_PERIOD_ROLE,
         "created_at": generated_at.isoformat(),
         "data_context": "real",
         "reconciliation_model_version": MODEL_VERSION,
         "providers_used": {
             "football-data-uk": {
                 "status": "ok",
-                "role": "primary_current_source_and_canonical_load_source",
+                "role": (
+                    "primary_recent_completed_source; canonical football.* load source "
+                    f"is the separately-maintained, unchanged {FOOTBALL_DATA_UK_TRACKED_PATH}"
+                ),
+                "provider_freshness_capability": _provider_freshness_capability(
+                    FOOTBALL_DATA_UK_SOURCE_CODE
+                ),
+                "period_acquired_this_run": SNAPSHOT_PERIOD_ROLE,
                 "observation_count": len(fduk_observations),
             },
             "openfootball": {
                 "status": openfootball_status,
-                "role": "secondary_current_source_for_reconciliation_audit",
+                "role": "secondary_recent_completed_source_for_reconciliation_audit",
+                "provider_freshness_capability": _provider_freshness_capability(
+                    OPENFOOTBALL_SOURCE_CODE
+                ),
+                "period_acquired_this_run": SNAPSHOT_PERIOD_ROLE,
                 "observation_count": len(openfootball_observations),
             },
         },
-        "source_files": [
-            {
-                "provider": "football-data-uk",
-                "local_path": "data/real/2025-26/eng_pl_matches.json",
-                "source_url": "https://www.football-data.co.uk/mmz4281/2526/E0.csv",
-            },
-            {
-                "provider": "openfootball",
-                "local_path": f"data/real/2025-26/{OPENFOOTBALL_MATCHES_FILENAME}",
-                "source_url": (
-                    "https://raw.githubusercontent.com/openfootball/football.json/master/"
-                    f"{OPENFOOTBALL_SEASON_CODE}/{OPENFOOTBALL_COMPETITION_FILE}"
-                ),
-            },
-        ],
+        "source_files": source_files,
         "teams_resolved": len(teams_resolved),
         "players_resolved": 0,
         "matches_resolved": len(matches_resolved),
@@ -417,7 +623,8 @@ def _build_manifest(
         },
         "provenance_completeness": (
             "full: every persisted observation carries source_code, source_reference, "
-            "observed_at and semantic_version"
+            "observed_at and semantic_version; every fetched source has a sha256 "
+            "content fingerprint in source_files"
         ),
         "audit_persistence": persistence,
         "canonical_database_state": canonical,

@@ -13,6 +13,15 @@ All "date verified" entries below reflect the Block 18 implementation pass
 material, not carried over from an earlier block's audit without
 re-verification.
 
+**"Freshness role" is a provider-capability fact, not a period claim.**
+"Current" below means the source is continuously updated and CAN
+structurally report current data -- it does not mean the ENG_PL 2025/26
+snapshot this block built is current-*period* evidence. That snapshot is
+the latest **completed** season (`period_role: "latest_completed"`); see
+`docs/REAL_DATA_SNAPSHOT_V2.md`'s "Temporal semantics" section for the full
+distinction and why the two are never conflated in the manifest or in this
+document.
+
 ## Legend
 
 - **APPROVED** -- automated, zero-cost acquisition is used as a live product
@@ -40,7 +49,7 @@ re-verification.
 | Automated acquisition permission | The site publishes the CSV as a direct, explicitly linked download with its own documented column key (`notes.txt`) -- there is no login wall, no scraping of rendered HTML, and no terms page prohibiting programmatic fetches of the published files. Treated as acquisition-permitted on that basis. |
 | Redistribution permission | **Unknown.** `notes.txt` and the site's pages contain no explicit redistribution/licence statement (re-verified 2026-08-15: no terms-of-use or licence page was found). |
 | Attribution requirements | None documented |
-| Product role | Primary current-season match/team-stat source for the ENG_PL 2025/26 real snapshot; already the source `load_real_snapshot.py` loads into `football.*` |
+| Product role | Primary recent-completed-season match/team-stat source for the ENG_PL 2025/26 real snapshot; already the source `load_real_snapshot.py` loads into `football.*`. The committed evidence file (`data/real/2025-26/eng_pl_matches.json`) is the unchanged Block 16/17 acquisition; `build-real-snapshot-v2`'s own fresh fetch (for reconciliation) is memory-only and never rewrites it -- see `docs/REAL_DATA_SNAPSHOT_V2.md`'s "Source storage" section |
 | **Status** | **APPROVED** for acquisition; **APPROVED_LOCAL_ONLY** for the specific question of redistribution, which stays `not_certified` in the committed file's own provenance block until an explicit licence is located |
 
 ## OpenFootball (`openfootball/football.json`)

@@ -38,6 +38,11 @@ class OpenFootballResponse:
     season_code: str
     payload: dict[str, Any]
     fetched_at: datetime
+    # The exact bytes as received over the wire, before JSON parsing -- the
+    # correct input for a source-integrity checksum. The upstream URL points
+    # at mutable `master`, so this content hash (not a fixed commit) is the
+    # snapshot's real integrity anchor.
+    raw_bytes: bytes
 
 
 class OpenFootballClient:
@@ -105,4 +110,5 @@ class OpenFootballClient:
             season_code=season_code,
             payload=payload,
             fetched_at=datetime.now(UTC),
+            raw_bytes=body,
         )

@@ -1,9 +1,11 @@
 {
   "audit_persistence": {
-    "mode": "not_requested"
+    "mode": "not_requested",
+    "reason": "requires both an explicit --database-url resolving to a local database and the --persist-audit-local opt-in flag"
   },
   "canonical_database_state": {
-    "mode": "not_requested"
+    "mode": "not_requested",
+    "reason": "requires an explicit --database-url resolving to a local database"
   },
   "competition_code": "ENG_PL",
   "conflicts": [
@@ -308,11 +310,12 @@
       ]
     }
   ],
-  "created_at": "2026-08-15T17:16:02.794015+00:00",
+  "created_at": "2026-08-15T18:14:59.620640+00:00",
   "data_context": "real",
   "matches_resolved": 380,
   "metric_coverage": {
-    "available_current_identities": [
+    "available_current_period_identity_count": 0,
+    "available_recent_completed_identities": [
       "away_score@match",
       "corners@team_match",
       "fouls@team_match",
@@ -323,11 +326,11 @@
       "status@match",
       "yellow_cards@team_match"
     ],
-    "available_current_identity_count": 9,
+    "available_recent_completed_identity_count": 9,
     "catalog_identity_count": 194,
     "derived_identity_count": 40,
     "historical_deep_only_identity_count": 22,
-    "note": "available_current/historical_deep_only/unavailable are never blended into one percentage -- see docs/ZERO_COST_COVERAGE.md's coverage-state discipline.",
+    "note": "current_period/recent_completed/historical_deep_only/unavailable are mutually exclusive and never blended into one percentage -- see docs/ZERO_COST_COVERAGE.md's coverage-state discipline.",
     "raw_identity_count": 154,
     "unavailable_identity_count": 163
   },
@@ -336,21 +339,26 @@
     "team_identity": 1520,
     "team_match": 4560
   },
+  "period_role": "latest_completed",
   "player_data": {
     "reason": "No compliant zero-cost source publishing ENG_PL 2025/26 player-match statistics was found in the Block 18 source audit; see docs/REAL_DATA_SOURCE_AUDIT_V2.md and docs/REAL_DATA_SNAPSHOT_V2.md.",
     "rich_player_source_found": false
   },
   "players_resolved": 0,
-  "provenance_completeness": "full: every persisted observation carries source_code, source_reference, observed_at and semantic_version",
+  "provenance_completeness": "full: every persisted observation carries source_code, source_reference, observed_at and semantic_version; every fetched source has a sha256 content fingerprint in source_files",
   "providers_used": {
     "football-data-uk": {
       "observation_count": 6460,
-      "role": "primary_current_source_and_canonical_load_source",
+      "period_acquired_this_run": "latest_completed",
+      "provider_freshness_capability": "current",
+      "role": "primary_recent_completed_source; canonical football.* load source is the separately-maintained, unchanged data/real/2025-26/eng_pl_matches.json",
       "status": "ok"
     },
     "openfootball": {
       "observation_count": 1900,
-      "role": "secondary_current_source_for_reconciliation_audit",
+      "period_acquired_this_run": "latest_completed",
+      "provider_freshness_capability": "current",
+      "role": "secondary_recent_completed_source_for_reconciliation_audit",
       "status": "ok"
     }
   },
@@ -366,14 +374,31 @@
   "source_audit_reference": "docs/REAL_DATA_SOURCE_AUDIT_V2.md",
   "source_files": [
     {
-      "local_path": "data/real/2025-26/eng_pl_matches.json",
+      "byte_size": 203438,
+      "certification_state": "not_certified",
+      "collection_method": "direct_csv_download",
+      "competition_code": "ENG_PL",
+      "persisted_to": "not written by this job (memory-only fetch); the tracked canonical load source at data/real/2025-26/eng_pl_matches.json is unchanged by this run",
       "provider": "football-data-uk",
-      "source_url": "https://www.football-data.co.uk/mmz4281/2526/E0.csv"
+      "redistribution_permission": "unknown",
+      "retrieved_at": "2026-08-15T18:14:59.046041+00:00",
+      "season_label": "2025/26",
+      "sha256": "3e3a8352f9ada6789c508d6ca184424421fed56a30400904a4a327c583407e62",
+      "source_locator": "https://www.football-data.co.uk/mmz4281/2526/E0.csv"
     },
     {
-      "local_path": "data/real/2025-26/eng_pl_matches_openfootball.json",
+      "byte_size": 108493,
+      "certification_state": "certified",
+      "collection_method": "direct_raw_json_download",
+      "competition_code": "ENG_PL",
+      "persisted_to": "data/real/2025-26/eng_pl_matches_openfootball.json",
       "provider": "openfootball",
-      "source_url": "https://raw.githubusercontent.com/openfootball/football.json/master/2025-26/en.1.json"
+      "redistribution_permission": "public_domain_cc0",
+      "retrieved_at": "2026-08-15T18:14:59.387808+00:00",
+      "season_label": "2025/26",
+      "sha256": "d6070bdf731546ccf97767f062e8af4bd26dd309dee69f6092025bf9c78f43c1",
+      "source_locator": "https://raw.githubusercontent.com/openfootball/football.json/master/2025-26/en.1.json",
+      "upstream_ref_note": "fetched from mutable `master`; upstream Git commit SHA is not captured to avoid an extra network request per run -- this content sha256 is the snapshot's integrity anchor"
     }
   ],
   "teams_resolved": 20,

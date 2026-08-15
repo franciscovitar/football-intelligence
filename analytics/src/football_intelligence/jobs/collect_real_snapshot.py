@@ -20,6 +20,7 @@ from football_intelligence.data_mesh.models import NormalizedObservation
 from football_intelligence.providers.football_data_uk import (
     FootballDataUkClient,
     FootballDataUkError,
+    FootballDataUkResponse,
 )
 
 FOOTBALL_DATA_UK_DIVISION = "E0"
@@ -48,7 +49,15 @@ def main() -> None:
     collect_football_data_uk_matches(output_dir=args.output_dir)
 
 
-def collect_football_data_uk_matches(*, output_dir: Path) -> list[NormalizedObservation]:
+def fetch_football_data_uk_matches() -> tuple[list[NormalizedObservation], FootballDataUkResponse]:
+    """Fetch and normalize Football-Data.co.uk's results CSV without writing any file.
+
+    Shared by `collect_football_data_uk_matches` (below, which writes the
+    committed snapshot file) and `build_real_snapshot_v2` (which uses this
+    directly, purely in memory, so a fresh audit/reconciliation fetch never
+    rewrites the committed, already-accepted snapshot file as a side effect).
+    """
+
     client = FootballDataUkClient()
     print(
         f"Football-Data.co.uk: fetching {FOOTBALL_DATA_UK_SEASON_CODE}/"
@@ -68,9 +77,14 @@ def collect_football_data_uk_matches(*, output_dir: Path) -> list[NormalizedObse
         season_code=FOOTBALL_DATA_UK_SEASON_CODE,
         ingestion_run_id=None,
     )
+    print(f"Football-Data.co.uk: {len(observations)} normalized observations")
+    return observations, response
+
+
+def collect_football_data_uk_matches(*, output_dir: Path) -> list[NormalizedObservation]:
+    observations, response = fetch_football_data_uk_matches()
     output = build_matches_output(observations=observations, retrieved_at=response.fetched_at)
     _write_json(output_dir / MATCHES_FILENAME, output)
-    print(f"Football-Data.co.uk: {len(observations)} normalized observations")
     return observations
 
 

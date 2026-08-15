@@ -54,9 +54,14 @@ Football-Data.co.uk match/team file into `football.seasons`,
 does not create player rows or player scores.
 
 `uv run football-intelligence-build-real-snapshot-v2` (Block 18) refreshes
-both files above, reconciles them, and writes
-`data/manifests/real/ENG_PL/2025-26.json`. It never writes to `football.*`
-itself -- see `docs/REAL_DATA_SNAPSHOT_V2.md`.
+`eng_pl_matches_openfootball.json`, fetches a fresh Football-Data.co.uk copy
+**in memory only** (never rewriting `eng_pl_matches.json` -- that file's
+redistribution permission is unknown, so this job never extends an
+unreviewed redistribution claim by silently rewriting it), reconciles both,
+and writes `data/manifests/real/ENG_PL/2025-26.json`. It never writes to
+`football.*` itself, and it never connects to any database unless an
+explicit, validated-local `--database-url` is passed -- see
+`docs/REAL_DATA_SNAPSHOT_V2.md`.
 
 ## Separate validation evidence
 

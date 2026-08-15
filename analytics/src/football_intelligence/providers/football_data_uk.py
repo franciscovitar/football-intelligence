@@ -34,6 +34,11 @@ class FootballDataUkResponse:
     season_code: str
     csv_text: str
     fetched_at: datetime
+    # The exact bytes as received over the wire, before any decoding --
+    # the correct input for a source-integrity checksum (SHA-256 of a
+    # re-encoded `csv_text` would not necessarily match the real download,
+    # e.g. if a BOM was stripped during decoding).
+    raw_bytes: bytes
 
 
 class FootballDataUkClient:
@@ -112,4 +117,5 @@ class FootballDataUkClient:
             season_code=season_code,
             csv_text=csv_text,
             fetched_at=datetime.now(UTC),
+            raw_bytes=body,
         )
