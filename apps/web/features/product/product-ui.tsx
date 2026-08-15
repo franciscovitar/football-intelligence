@@ -178,3 +178,33 @@ export function ComparisonRow({ label, left, right }: { label: string; left: num
     </div>
   );
 }
+
+export function MetricComparisonRow({
+  label,
+  left,
+  right,
+}: {
+  label: string;
+  left: ProductMetric | undefined;
+  right: ProductMetric | undefined;
+}) {
+  const leftValue = left?.adjustedValue ?? left?.per90Value ?? left?.rawValue ?? null;
+  const rightValue = right?.adjustedValue ?? right?.per90Value ?? right?.rawValue ?? null;
+  return (
+    <div className="comparison-row metric-comparison-row">
+      <strong>{formatNumber(leftValue, left?.metricUnit)}</strong>
+      <div>
+        <span>{label}</span>
+        <small>
+          {left?.percentile === null || left?.percentile === undefined
+            ? "P—"
+            : `P${Math.round(left.percentile)}`} {" / "}
+          {right?.percentile === null || right?.percentile === undefined
+            ? "P—"
+            : `P${Math.round(right.percentile)}`}
+        </small>
+      </div>
+      <strong>{formatNumber(rightValue, right?.metricUnit)}</strong>
+    </div>
+  );
+}
