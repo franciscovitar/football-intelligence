@@ -1,4 +1,4 @@
-"""Calculate and persist competition-relative Team Analytics V1."""
+"""Persist competition-relative Team V1 and evidence-aware Team V2."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from football_intelligence.team_analytics.engine import (
     MODEL_VERSION,
     calculate_team_analytics,
 )
+from football_intelligence.team_analytics.engine_v2 import calculate_team_analytics_v2
 from football_intelligence.team_analytics.models import TeamObservation
 
 
@@ -69,6 +70,12 @@ def main() -> None:
                 scope_key=scope_key,
                 season_id=season_id,
                 model_version=MODEL_VERSION,
+            )
+            v2_result = calculate_team_analytics_v2(scoped, scope_key=scope_key)
+            repository.replace_v2_snapshots(
+                v2_result,
+                scope_key=scope_key,
+                season_id=season_id,
             )
             counts = repository.snapshot_counts(
                 scope_key=scope_key,

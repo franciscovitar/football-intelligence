@@ -1,4 +1,4 @@
-"""Calculate V1 features and persist evidence-aware V2 player scores."""
+"""Persist V1 compatibility snapshots and catalog-driven Player V2."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from football_intelligence.player_analytics.engine_v2 import (
 )
 from football_intelligence.player_analytics.engine_v2 import (
     PlayerScoreV2,
-    calculate_player_analytics_v2,
+    calculate_player_analytics_v2_result,
 )
 
 
@@ -68,16 +68,17 @@ def main() -> None:
         if not result.scores:
             raise SystemExit("Player analytics produced no scores")
 
-        v2_scores = calculate_player_analytics_v2(
+        v2_result = calculate_player_analytics_v2_result(
             observations,
             scope_key=scope_key,
         )
+        v2_scores = v2_result.scores
 
         # Preserve the established V1 snapshots for downstream blocks that
         # explicitly version-pin them, then publish V2 through the same table
         # and product read path with explicit real/evidence context.
         repository.replace_snapshots(
-            result,
+            v2_result,
             scope_key=scope_key,
             model_version=V1_MODEL_VERSION,
         )
@@ -108,7 +109,7 @@ def main() -> None:
 
     print(
         f"PLAYER ANALYTICS: PASS "
-        f"({len(v2_scores)} score snapshots, {len(result.features)} feature snapshots)"
+        f"({len(v2_scores)} score snapshots, {len(v2_result.features)} feature snapshots)"
     )
     print(f"REPORT: {args.report}")
 

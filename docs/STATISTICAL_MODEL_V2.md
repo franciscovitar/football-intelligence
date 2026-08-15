@@ -25,10 +25,11 @@ Declaring a metric here **never implies a live data source exists for it
 yet**. Missing is not the same as removed: `coverage_lab` measures the real
 provider gap against this catalog (see `docs/ZERO_COST_COVERAGE.md`). Its
 denominator is always `len(unique catalog identities) * 10 competitions` and
-preserves all nine grains; no grain is collapsed. `player_analytics`/`team_analytics`
-scoring only ever use the subset backed by a real per-observation source
-today; everything else is honestly reported as not available (see "Missing
-data" below), never silently dropped from the catalog or fabricated as zero.
+preserves all nine grains; no grain is collapsed. Player V2 and Team V2 can
+consume every numeric analytics-relevant catalog metric when it appears in a
+provider-independent observation. Metrics absent from today's sources stay
+in the intended profiles and become explicit evidence gaps, never fabricated
+zeros.
 
 ## Raw vs. derived
 
@@ -41,9 +42,9 @@ never silently overwritten by a downstream computation.
 
 ## Per-90 and percentiles
 
-Count metrics convert to a rate per 90 minutes so players/teams with
-different playing time are compared on rate, not raw totals (unchanged from
-V1, `player_analytics`/`team_analytics`). Percentiles are always computed
+Player count/output metrics marked `per90_eligible` convert to per 90.
+Percentage, ratio, rate and contextual fields do not get nonsensical per-90
+projections. Team event counts use per-match rates. Percentiles are computed
 within an explicit **comparison group**, never a single universal pool:
 
 - competition (V1 team scoring is competition-scoped only, no cross-league
@@ -65,23 +66,39 @@ classification on top of V1's four broad roles: goalkeeper, centre_back,
 fullback_wingback, defensive_midfielder, central_midfielder,
 attacking_midfielder, winger, forward. `classify_position_family` maps common
 `listed_position` tokens to a family and records insufficient V2 evidence
-when no fine-grained token is available. Per-family score weight profiles
-(`POSITION_FAMILY_SCORE_WEIGHTS`) exist only where a materially different
-weighting is defensible -- a centre-back is not scored on shot/xG weights the
-way a forward is, and a fullback's profile weights progression/crossing
-higher than a centre-back's. Intended profiles retain catalog metrics even
-when the current provider cannot supply them. V2 exposes available/required
-weight, coverage percentage, core metrics and a `ready`/`partial`/
-`insufficient_data` state. Missing weight is never renormalized or treated as
-zero: a numeric score is published only when the complete intended profile
-is present. V2 (`player_analytics/engine_v2.py`, model version `player-v2.0`)
-layers this on top of V1's already-computed
-percentiles rather than recomputing them from scratch: recomputing
-percentiles within a materially smaller fine-family population would often
-be less reliable than V1's existing role-scoped populations, not more. When a
-player's position doesn't resolve to a fine family, or that family's
-weighted metrics are incomplete, V2 stores no numeric score rather than
-substituting V1 or fabricating one from incomplete evidence.
+when no fine-grained token is available. The V2 path is independent of V1's
+legacy `FEATURE_METRICS` ceiling. It computes catalog-backed feature values
+and fine-family comparison percentiles directly.
+
+Player V2 scores twelve evidence-aware dimensions: Performance, Underlying
+Performance, Finishing, Shot Generation, Creation, Progression, Passing,
+1v1, Defence, Ball Winning, Aerial and Goalkeeping. Overall is composed from
+position-relevant dimension scores, never a flat metric bag. Goalkeeper
+workload (`shots_on_target_faced`, `xg_on_target_faced`) is context only;
+skill uses save percentage, goals prevented, cross stopping, sweeper actions
+and distribution. Missing profile evidence is never treated as zero or
+renormalized into a complete Overall.
+
+Team V2 exposes Attack, Defence, Creation, Finishing, Chance Quality, Shot
+Generation, Control, Progression, Penetration, Build-up, Pressing, Offensive
+Transition, Defensive Transition and Set Pieces. It never manufactures
+pressing from possession, transition from goals, or build-up from pass volume.
+
+## Statistical product chain and lifecycle
+
+The implemented path is:
+
+`Metric → Feature → Derived Metric → Percentile → Dimension → Overall → Diagnostic`
+
+- **DECLARED**: the versioned catalog defines the ideal-product metric.
+- **OBSERVED**: a real provider supplied a raw observation.
+- **DERIVED**: all formula inputs existed and denominators were non-zero.
+- **SCORED**: a comparison percentile exists and the evidence threshold passed.
+- **PUBLISHED**: confidence, evidence and real-context product gates passed.
+
+The inspectable `derived-v2.0` registry never divides by zero or emits a
+derived metric from incomplete inputs. Evidence exposes intended metrics,
+core metrics, available metrics and missing metrics separately.
 
 ## Confidence and ranking eligibility
 

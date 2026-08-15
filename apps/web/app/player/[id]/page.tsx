@@ -107,7 +107,10 @@ export default async function PlayerPage({
   }
 
   const { player, scores, features, context } = result.data;
-  const hasReadyScore = scores.length > 0;
+  const hasScoreEvidence = scores.length > 0;
+  const hasReadyScore = scores.some(
+    (score) => score.evidenceState === "ready" && score.overallScore !== null,
+  );
   const seasonScore = scores.find((score) => score.window === "season") ?? scores[0];
   const primaryWindow: AnalyticsWindow = scores.some((score) => score.window === "last_5")
     ? "last_5"
@@ -130,14 +133,16 @@ export default async function PlayerPage({
 
       <section className="player-hero">
         <div>
-          <p className="eyebrow">{hasReadyScore ? ROLE_LABELS_SINGULAR[seasonScore.role] : "JUGADOR"}</p>
+          <p className="eyebrow">
+            {hasScoreEvidence ? ROLE_LABELS_SINGULAR[seasonScore.role] : "JUGADOR"}
+          </p>
           <h1>{player.playerName}</h1>
           <div className="player-facts">
             {player.latestTeam ? <span>Último equipo registrado · {player.latestTeam}</span> : null}
             {player.nationalityCode ? <span>Nacionalidad · {player.nationalityCode}</span> : null}
             {player.dateOfBirth ? <span>Nacimiento · {player.dateOfBirth}</span> : null}
           </div>
-          {hasReadyScore ? (
+          {hasScoreEvidence ? (
             <p className="player-context">
               {context.scopeKey} · {context.modelVersion} · {formatDateTime(context.calculatedAt)}
             </p>
@@ -152,7 +157,7 @@ export default async function PlayerPage({
         {hasReadyScore ? (
           <div className="player-score-hero">
             <span>Performance</span>
-            <strong>{formatScore(seasonScore.overallScore)}</strong>
+            <strong>{formatScore(seasonScore.overallScore ?? 0)}</strong>
             <small>Confianza {formatConfidence(seasonScore.confidence)}</small>
             <small>Evidencia disponible {Math.round(seasonScore.evidenceCoveragePct)}%</small>
             <div className="confidence-track wide" aria-hidden="true">
@@ -180,7 +185,11 @@ export default async function PlayerPage({
               return (
                 <article className="window-card" key={window}>
                   <span>{WINDOW_LABELS[window]}</span>
-                  <strong>{formatScore(score.overallScore)}</strong>
+                  <strong>
+                    {score.overallScore === null
+                      ? score.evidenceState
+                      : formatScore(score.overallScore)}
+                  </strong>
                   <small>
                     {score.appearances} PJ · {score.minutes} min · conf.{" "}
                     {formatConfidence(score.confidence)}
@@ -332,27 +341,30 @@ export default async function PlayerPage({
           </div>
         </section>
       ) : null}
-      {hasReadyScore ? (
+      {hasScoreEvidence ? (
         <section className="player-analysis-grid">
           <div className="panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">SKILL PROFILE</p>
+                <p className="eyebrow">SKILL PROFILE V2</p>
                 <h2>Dimensiones</h2>
               </div>
-              <p>Percentiles agregados del rol.</p>
+              <p>La evidencia faltante se muestra como estado, nunca como cero.</p>
             </div>
             <div className="dimension-list">
-              {Object.entries(seasonScore.dimensionScores)
-                .sort((a, b) => b[1] - a[1])
-                .map(([dimension, value]) => (
+              {Object.entries(seasonScore.dimensionEvidence).map(([dimension, evidence]) => (
                   <div className="dimension-row" key={dimension}>
                     <div>
                       <span>{DIMENSION_LABELS[dimension] ?? dimension}</span>
-                      <strong>{formatScore(value)}</strong>
+                      <strong>
+                        {evidence.score === null
+                          ? evidence.evidenceState
+                          : formatScore(evidence.score)}
+                      </strong>
+                      <small>Evidencia {Math.round(evidence.evidenceCoveragePct)}%</small>
                     </div>
                     <div className="percentile-track" aria-hidden="true">
-                      <span style={{ width: `${Math.round(value)}%` }} />
+                      <span style={{ width: `${Math.round(evidence.score ?? 0)}%` }} />
                     </div>
                   </div>
                 ))}

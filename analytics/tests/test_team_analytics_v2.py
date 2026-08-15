@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from football_intelligence.team_analytics.engine_v2 import (
+    calculate_team_analytics_v2,
     classify_chance_quality_allowed,
     extract_team_issue_signals,
 )
-from football_intelligence.team_analytics.models import TeamScore
+from football_intelligence.team_analytics.models import TeamObservation, TeamScore
 
 _NOW = datetime(2026, 8, 14, tzinfo=UTC)
 
@@ -126,3 +127,56 @@ def test_chance_quality_allowed_insufficient_data_when_no_strong_pattern() -> No
         shots_on_target_against_percentile=50.0,
     )
     assert signal == "insufficient_data"
+
+
+def _team_observation(team_id: int, stats: dict[str, float | None]) -> TeamObservation:
+    return TeamObservation(
+        competition_id=1,
+        competition_code="ENG_PL",
+        competition_name="Premier League",
+        season_id=1,
+        season_label="2025/26",
+        team_id=team_id,
+        team_name=f"Team {team_id}",
+        opponent_team_id=3 - team_id,
+        match_id=team_id,
+        kickoff_at=_NOW,
+        is_home=team_id == 1,
+        goals_for=1,
+        goals_against=0,
+        stats=stats,
+    )
+
+
+def test_team_pressing_and_transition_require_their_own_evidence() -> None:
+    observations = [
+        _team_observation(1, {"possession_pct": 70.0, "passes_total": 700.0}),
+        _team_observation(2, {"possession_pct": 30.0, "passes_total": 300.0}),
+    ]
+    result = calculate_team_analytics_v2(observations, scope_key="competition:test")
+    for score in result.scores:
+        assert score.dimension_evidence["pressing"].evidence_state == "insufficient_data"
+        assert score.dimension_evidence["offensive_transition"].evidence_state == (
+            "insufficient_data"
+        )
+
+
+def test_team_creation_becomes_ready_from_actual_creation_metrics() -> None:
+    observations = [
+        _team_observation(
+            team_id,
+            {
+                "xg": multiplier * 1.5,
+                "big_chances": multiplier * 2.0,
+                "box_entries": multiplier * 12.0,
+                "deep_completions": multiplier * 4.0,
+            },
+        )
+        for team_id, multiplier in ((1, 1.0), (2, 2.0))
+    ]
+    result = calculate_team_analytics_v2(observations, scope_key="competition:test")
+    score = next(item for item in result.scores if item.team_id == 2 and item.window == "season")
+    assert score.dimension_evidence["creation"].evidence_state == "ready"
+    assert score.dimension_scores["creation"] == 100.0
+    assert score.overall_score is not None
+    assert score.evidence_state == "partial"

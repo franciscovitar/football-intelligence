@@ -35,8 +35,9 @@ def test_unknown_token_returns_none_never_guessed() -> None:
 def test_goalkeeper_profile_uses_goalkeeping_evidence_not_attacking_output() -> None:
     weights = POSITION_FAMILY_SCORE_WEIGHTS["goalkeeper"]
     metric_names = {name for name, _, _ in weights}
-    assert "saves" in metric_names
-    assert "xg_on_target_faced" in metric_names
+    assert {"save_pct", "goals_prevented"} <= metric_names
+    assert "shots_on_target_faced" not in metric_names
+    assert "xg_on_target_faced" not in metric_names
     assert not {"goals", "advanced.xg", "npxg"} & metric_names
 
 

@@ -65,7 +65,7 @@ FINE_POSITION_ALIASES: dict[str, PositionFamily] = {
 # string and get `None` back for any non-fine-family key -- never a type
 # mismatch on the lookup.
 _BASE_POSITION_FAMILY_SCORE_WEIGHTS: dict[str, tuple[tuple[str, float, int], ...]] = {
-    "goalkeeper": (("saves", 1.00, 1),),
+    "goalkeeper": (),
     "centre_back": (
         ("tackles", 0.22, 1),
         ("interceptions", 0.24, 1),
@@ -134,11 +134,11 @@ _BASE_POSITION_FAMILY_SCORE_WEIGHTS: dict[str, tuple[tuple[str, float, int], ...
 # catalog metric and is never fabricated when the source lacks it.
 _IDEAL_PROFILE_ADDITIONS: dict[str, tuple[tuple[str, float, int], ...]] = {
     "goalkeeper": (
-        ("shots_on_target_faced", 0.20, -1),
-        ("xg_on_target_faced", 0.15, -1),
-        ("crosses_stopped", 0.10, 1),
+        ("save_pct", 0.35, 1),
+        ("goals_prevented", 0.30, 1),
+        ("crosses_stopped", 0.15, 1),
         ("sweeper_actions", 0.10, 1),
-        ("distribution_accuracy_pct", 0.05, 1),
+        ("distribution_accuracy_pct", 0.10, 1),
     ),
     "centre_back": (
         ("aerial_duels_won", 0.14, 1),
@@ -190,7 +190,7 @@ POSITION_FAMILY_SCORE_WEIGHTS: dict[str, tuple[tuple[str, float, int], ...]] = {
 }
 
 POSITION_FAMILY_CORE_METRICS: dict[str, frozenset[str]] = {
-    "goalkeeper": frozenset({"saves"}),
+    "goalkeeper": frozenset({"save_pct", "goals_prevented"}),
     "centre_back": frozenset({"tackles", "interceptions", "duels_won"}),
     "fullback_wingback": frozenset({"tackles", "key_passes", "dribbles_successful"}),
     "defensive_midfielder": frozenset({"tackles", "interceptions", "duels_won"}),

@@ -7,12 +7,16 @@ from football_intelligence.player_analytics import engine as engine_v1
 from football_intelligence.player_analytics.engine_v2 import (
     MIN_RANKING_CONFIDENCE,
     MODEL_VERSION,
+    WeightedScoreEvidence,
+    _compose_overall,
     _weighted_percentile_score,
     calculate_player_analytics_v2,
+    calculate_player_analytics_v2_result,
     classify_results_vs_process,
     rank_by_confidence_gated_score,
 )
 from football_intelligence.player_analytics.models import PlayerFeature, PlayerObservation
+from football_intelligence.statistical_engine import derive_available_metrics
 
 _NOW = datetime(2026, 8, 14, tzinfo=UTC)
 
@@ -314,7 +318,7 @@ def test_v2_exposes_both_coarse_role_and_fine_position_family() -> None:
     assert season_scores[2].role == "midfielder"
     assert season_scores[2].position_family == "defensive_midfielder"
     assert season_scores[1].evidence_state == "partial"
-    assert 60.0 <= season_scores[1].evidence_coverage_pct < 100.0
+    assert 0.0 < season_scores[1].evidence_coverage_pct < 100.0
     assert season_scores[1].evidence_weight_available < season_scores[1].evidence_weight_required
     assert "key_passes" in season_scores[1].evidence_metrics_required
     assert season_scores[1].overall_score is None
@@ -397,3 +401,175 @@ def test_v2_reports_insufficient_data_when_only_the_coarse_broad_role_is_known()
         assert score.overall_score is None
         assert score.evidence_state == "insufficient_data"
         assert score.evidence_coverage_pct == 0.0
+
+
+def test_catalog_metric_outside_v1_flows_to_feature_and_percentile() -> None:
+    observations = [
+        _observation(
+            player_id=player_id,
+            player_name=f"Progressor {player_id}",
+            match_id=player_id,
+            minutes=90,
+            listed_position="CM",
+            stats={"progressive_passes": value},
+        )
+        for player_id, value in ((1, 3.0), (2, 9.0))
+    ]
+    result = calculate_player_analytics_v2_result(
+        observations, scope_key="core:test", calculated_at=_NOW
+    )
+    season = {
+        feature.player_id: feature
+        for feature in result.features
+        if feature.window == "season" and feature.metric_name == "progressive_passes"
+    }
+    assert set(season) == {1, 2}
+    assert season[1].per90_value == 3.0
+    assert season[2].percentile == 100.0
+    assert season[2].comparison_group.endswith(":central_midfielder")
+
+
+def test_catalog_dimensions_accept_xa_progression_and_aerial_inputs() -> None:
+    common = {
+        "xa": 0.4,
+        "key_passes": 2.0,
+        "shot_creating_actions": 3.0,
+        "passes_into_box": 2.0,
+        "expected_threat_created": 0.3,
+        "progressive_passes": 5.0,
+        "progressive_carries": 4.0,
+        "passes_into_final_third": 6.0,
+        "carries_into_final_third": 3.0,
+        "aerial_duels_won": 4.0,
+        "aerial_duels": 5.0,
+    }
+    observations = [
+        _observation(
+            player_id=player_id,
+            player_name=f"Complete {player_id}",
+            match_id=player_id,
+            minutes=90,
+            listed_position="CM",
+            stats={name: value * multiplier for name, value in common.items()},
+        )
+        for player_id, multiplier in ((1, 1.0), (2, 2.0))
+    ]
+    result = calculate_player_analytics_v2_result(
+        observations, scope_key="core:test", calculated_at=_NOW
+    )
+    score = next(item for item in result.scores if item.player_id == 2 and item.window == "season")
+    assert score.dimension_evidence["creation"].evidence_state == "ready"
+    assert score.dimension_evidence["creation"].score is not None
+    assert score.dimension_evidence["progression"].evidence_state == "ready"
+    assert score.dimension_evidence["aerial"].evidence_state == "ready"
+
+
+def test_derived_registry_is_safe_and_requires_all_inputs() -> None:
+    values, versions = derive_available_metrics({"goals": 8.0, "advanced.xg": 5.5})
+    assert values["goals_minus_xg"] == 2.5
+    assert versions["goals_minus_xg"] == "derived-v2.0"
+
+    zero, _ = derive_available_metrics(
+        {"advanced.xg": 1.0, "shots_total": 0.0, "passes_accurate": 0.0, "passes_total": 0.0}
+    )
+    assert "xg_per_shot" not in zero
+    assert "pass_completion_pct" not in zero
+
+    missing, _ = derive_available_metrics({"goals": 2.0})
+    assert "goals_minus_xg" not in missing
+
+
+def test_derived_feature_requires_aligned_observation_coverage() -> None:
+    observations = [
+        _observation(
+            player_id=1,
+            player_name="Incomplete Inputs",
+            match_id=1,
+            minutes=90,
+            listed_position="ST",
+            stats={"goals": 1.0, "xg": None},
+        ),
+        _observation(
+            player_id=1,
+            player_name="Incomplete Inputs",
+            match_id=2,
+            minutes=90,
+            listed_position="ST",
+            stats={"goals": None, "xg": 0.5},
+        ),
+    ]
+    result = calculate_player_analytics_v2_result(
+        observations, scope_key="core:test", calculated_at=_NOW
+    )
+    season_metrics = {
+        feature.metric_name for feature in result.features if feature.window == "season"
+    }
+    assert "goals_minus_xg" not in season_metrics
+
+
+def test_goalkeeper_workload_is_not_a_quality_metric_and_goals_prevented_is() -> None:
+    observations = [
+        _observation(
+            player_id=player_id,
+            player_name=f"Keeper {player_id}",
+            match_id=player_id,
+            minutes=90,
+            listed_position="GK",
+            stats={
+                "saves": saves,
+                "shots_on_target_faced": faced,
+                "psxg": psxg,
+                "goals_conceded": 2.0,
+                "crosses_stopped": 2.0,
+                "sweeper_actions": 2.0,
+                "distribution_accuracy_pct": 80.0,
+            },
+        )
+        for player_id, saves, faced, psxg in ((1, 5.0, 10.0, 2.0), (2, 10.0, 20.0, 4.0))
+    ]
+    result = calculate_player_analytics_v2_result(
+        observations, scope_key="core:test", calculated_at=_NOW
+    )
+    scores = {
+        item.player_id: item.dimension_evidence["goalkeeping"].score
+        for item in result.scores
+        if item.window == "season"
+    }
+    # Keeper 2 faces twice the workload at the same save rate; workload itself
+    # is absent from the profile, while the better goals-prevented result helps.
+    assert (
+        "shots_on_target_faced"
+        not in result.scores[0].dimension_evidence["goalkeeping"].evidence_metrics_expected
+    )
+    assert scores[2] is not None and scores[1] is not None
+    assert scores[2] > scores[1]
+
+
+def test_overall_is_composed_from_position_relevant_dimensions() -> None:
+    def ready(value: float) -> WeightedScoreEvidence:
+        return WeightedScoreEvidence(value, 1.0, 1.0, 100.0, "ready", (), (), (), ())
+
+    dimensions = {
+        name: ready(50.0)
+        for name in (
+            "performance",
+            "underlying_performance",
+            "finishing",
+            "shot_generation",
+            "creation",
+            "progression",
+            "passing",
+            "one_v_one",
+            "defence",
+            "ball_winning",
+            "aerial",
+            "goalkeeping",
+        )
+    }
+    dimensions["finishing"] = ready(100.0)
+    forward = _compose_overall(dimensions, "forward")
+    assert forward.score == 65.0
+
+    # Defence is not part of the forward Overall profile.
+    dimensions["defence"] = ready(0.0)
+    assert _compose_overall(dimensions, "forward").score == forward.score

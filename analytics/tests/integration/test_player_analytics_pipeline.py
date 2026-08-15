@@ -16,7 +16,7 @@ from football_intelligence.player_analytics.engine_v2 import (
     MODEL_VERSION as V2_MODEL_VERSION,
 )
 from football_intelligence.player_analytics.engine_v2 import (
-    calculate_player_analytics_v2,
+    calculate_player_analytics_v2_result,
 )
 
 
@@ -212,16 +212,16 @@ def test_player_analytics_pipeline_ranks_and_replaces_snapshots() -> None:
             )
             for observation in observations
         ]
-        v2_scores = calculate_player_analytics_v2(
+        v2_result = calculate_player_analytics_v2_result(
             fine_observations,
             scope_key=scope_key,
             calculated_at=datetime(2024, 6, 1, tzinfo=UTC),
         )
         repository.replace_snapshots(
-            result,
+            v2_result,
             scope_key=scope_key,
             model_version=V2_MODEL_VERSION,
-            v2_scores=v2_scores,
+            v2_scores=v2_result.scores,
             data_context="real",
         )
         ready_count = connection.execute(
@@ -233,6 +233,17 @@ def test_player_analytics_pipeline_ranks_and_replaces_snapshots() -> None:
             (scope_key, V2_MODEL_VERSION),
         ).fetchone()
         assert ready_count is not None
-        assert int(ready_count[0]) == sum(score.evidence_state == "ready" for score in v2_scores)
+        assert int(ready_count[0]) == sum(
+            score.evidence_state == "ready" for score in v2_result.scores
+        )
+        persisted_v2 = connection.execute(
+            """
+            select count(*), count(*) filter (where comparison_group is not null)
+            from analytics.player_feature_snapshots
+            where scope_key = %s and model_version = %s
+            """,
+            (scope_key, V2_MODEL_VERSION),
+        ).fetchone()
+        assert persisted_v2 == (len(v2_result.features), len(v2_result.features))
 
         connection.rollback()

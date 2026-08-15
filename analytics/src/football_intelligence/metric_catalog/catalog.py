@@ -13,9 +13,10 @@ transition, and advanced context.
 
 Declaring a metric here never implies a live data source exists for it yet;
 `coverage_lab` measures the real provider gap against this catalog (see
-`docs/ZERO_COST_COVERAGE.md`), and `player_analytics`/`team_analytics`
-scoring only ever use the subset backed by a real per-observation source
-today (`player_analytics.config.FEATURE_METRICS`).
+`docs/ZERO_COST_COVERAGE.md`). The V2 player/team engines can consume any
+numeric analytics-relevant catalog metric present in provider-independent
+observations. Missing provider coverage remains explicit evidence, not an
+engine ceiling.
 """
 
 from __future__ import annotations
