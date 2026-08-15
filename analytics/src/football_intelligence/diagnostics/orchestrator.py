@@ -49,6 +49,10 @@ class PlayerDiagnosticInputs:
     xg_percentile: float | None = None
     shots_percentile: float | None = None
     shot_accuracy_percentile: float | None = None
+    minutes: int | None = None
+    shots_total: float | None = None
+    non_penalty_goals: float | None = None
+    npxg: float | None = None
     meta_snapshot: PlayerMetaSnapshot | None = None
     rating_snapshot: PlayerRatingSnapshot | None = None
 
@@ -85,6 +89,10 @@ def evaluate_player_diagnostics(
             xg_percentile=inputs.xg_percentile,
             confidence=inputs.confidence,
             computed_at=computed_at,
+            minutes=inputs.minutes,
+            shots_total=inputs.shots_total,
+            non_penalty_goals=inputs.non_penalty_goals,
+            npxg=inputs.npxg,
         ),
         finishing_overperformance(
             player_id=inputs.player_id,
@@ -97,6 +105,10 @@ def evaluate_player_diagnostics(
             xg_percentile=inputs.xg_percentile,
             confidence=inputs.confidence,
             computed_at=computed_at,
+            minutes=inputs.minutes,
+            shots_total=inputs.shots_total,
+            non_penalty_goals=inputs.non_penalty_goals,
+            npxg=inputs.npxg,
         ),
         high_volume_low_quality_shooting(
             player_id=inputs.player_id,

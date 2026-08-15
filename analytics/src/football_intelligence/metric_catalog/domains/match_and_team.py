@@ -5,9 +5,8 @@ Covers `match_context`, `team_misc`, team-scoped `discipline`, and every
 / `team_transition` metric. The first block of entries in each family below
 reproduces the exact `(key, granularity)` identity `coverage_lab` already
 derives from `normalization.models.MatchRecord` / `TeamMatchStatsRecord` /
-`TeamLineupRecord` (collapsed from `team_match` to `team` -- see
-`metric_catalog.catalog._GRANULARITY_COLLAPSE`) -- never renamed, since
-existing coverage rows and tests key on those exact strings.
+`TeamLineupRecord` at its exact `team_match` grain -- never renamed, since
+coverage rows and provider capabilities key on `(metric, granularity)`.
 """
 
 from __future__ import annotations

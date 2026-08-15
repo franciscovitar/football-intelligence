@@ -33,8 +33,8 @@ begin
     values (
         player_id_value, season_id_value, 3120, 34, 18, 6,
         14.20, 4.10, 812.4, 210.5, 990.0, 209.9,
-        'fpl-official-api', 'https://fantasy.premierleague.com/api/element-summary/1/',
-        now(), 'fpl-official-api-v1'
+        'permitted-test-source', 'https://example.test/player-season/1',
+        now(), 'permitted-test-source-v1'
     );
 
     -- Idempotent upsert on the (player, season, source) natural key.
@@ -44,8 +44,8 @@ begin
     )
     values (
         player_id_value, season_id_value, 3120, 34, 19, 6,
-        'fpl-official-api', 'https://fantasy.premierleague.com/api/element-summary/1/',
-        now(), 'fpl-official-api-v1'
+        'permitted-test-source', 'https://example.test/player-season/1',
+        now(), 'permitted-test-source-v1'
     )
     on conflict (player_id, season_id, source)
     do update set goals = excluded.goals, updated_at = now();

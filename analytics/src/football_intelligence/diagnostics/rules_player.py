@@ -6,8 +6,8 @@ scores, meta/rating snapshots) -- never raw provider payloads -- and returns
 available or did not clear the rule's threshold; it is never fabricated.
 
 `finishing_underperformance`/`finishing_overperformance`/
-`high_volume_low_quality_shooting` are genuinely new computations built only
-from percentile-scale inputs. `breakout_signal`/`underrated`/`overrated`
+`high_volume_low_quality_shooting` are deterministic computations from direct
+residual and percentile evidence respectively. `breakout_signal`/`underrated`/`overrated`
 wrap an already-computed `meta_analytics`/`rating_intelligence` snapshot
 into the finding shape without recomputing anything -- those packages stay
 the single source of truth for their numbers.
@@ -27,6 +27,9 @@ DIAGNOSTIC_MODEL_VERSION = "diagnostic-v1.0"
 
 _SHOOTING_VOLUME_THRESHOLD = 65.0
 _SHOOTING_ACCURACY_THRESHOLD = 35.0
+_MIN_FINISHING_EXPECTED_OUTPUT = 5.0
+_MIN_FINISHING_MINUTES = 450
+_MIN_FINISHING_SHOTS = 10.0
 
 
 def finishing_underperformance(
@@ -41,33 +44,55 @@ def finishing_underperformance(
     xg_percentile: float | None,
     confidence: float,
     computed_at: datetime,
+    minutes: int | None = None,
+    shots_total: float | None = None,
+    non_penalty_goals: float | None = None,
+    npxg: float | None = None,
 ) -> DiagnosticFinding | None:
-    """Goals materially below xG (output percentile << expected-output percentile)."""
+    """Goals materially below xG using a direct residual and sample gates."""
 
-    if goals is None or goals_percentile is None or xg is None or xg_percentile is None:
+    evidence = _finishing_evidence(
+        goals=goals,
+        xg=xg,
+        confidence=confidence,
+        minutes=minutes,
+        shots_total=shots_total,
+        non_penalty_goals=non_penalty_goals,
+        npxg=npxg,
+    )
+    if evidence is None:
         return None
+    actual, expected, residual, evidence_confidence = evidence
     signal = classify_results_vs_process(
-        raw_output=goals,
+        raw_output=actual,
         output_percentile=goals_percentile,
-        expected_output=xg,
+        expected_output=expected,
         expected_output_percentile=xg_percentile,
     )
     if signal != "results_below_process":
         return None
 
-    gap = xg_percentile - goals_percentile
+    magnitude = abs(residual)
     return DiagnosticFinding(
         diagnostic_code="finishing_underperformance",
         entity_type="player",
         entity_id=player_id,
-        severity=severity_from_magnitude(gap, notable=12.0, high=25.0),
-        confidence=confidence,
+        severity=severity_from_magnitude(magnitude, notable=2.0, high=5.0),
+        confidence=evidence_confidence,
         supporting_metrics={
             "player_name": player_name,
             "goals": goals,
             "goals_percentile": goals_percentile,
             "xg": xg,
             "xg_percentile": xg_percentile,
+            "non_penalty_goals": non_penalty_goals,
+            "npxg": npxg,
+            "finishing_residual": residual,
+            "finishing_residual_per90": (
+                residual * 90.0 / minutes if minutes is not None and minutes > 0 else None
+            ),
+            "minutes": minutes,
+            "shots_total": shots_total,
         },
         comparison_group=comparison_group,
         window=window,
@@ -88,39 +113,92 @@ def finishing_overperformance(
     xg_percentile: float | None,
     confidence: float,
     computed_at: datetime,
+    minutes: int | None = None,
+    shots_total: float | None = None,
+    non_penalty_goals: float | None = None,
+    npxg: float | None = None,
 ) -> DiagnosticFinding | None:
-    """Goals materially above xG (output percentile >> expected-output percentile)."""
+    """Goals materially above xG using a direct residual and sample gates."""
 
-    if goals is None or goals_percentile is None or xg is None or xg_percentile is None:
+    evidence = _finishing_evidence(
+        goals=goals,
+        xg=xg,
+        confidence=confidence,
+        minutes=minutes,
+        shots_total=shots_total,
+        non_penalty_goals=non_penalty_goals,
+        npxg=npxg,
+    )
+    if evidence is None:
         return None
+    actual, expected, residual, evidence_confidence = evidence
     signal = classify_results_vs_process(
-        raw_output=goals,
+        raw_output=actual,
         output_percentile=goals_percentile,
-        expected_output=xg,
+        expected_output=expected,
         expected_output_percentile=xg_percentile,
     )
     if signal != "results_above_process":
         return None
 
-    gap = goals_percentile - xg_percentile
+    magnitude = abs(residual)
     return DiagnosticFinding(
         diagnostic_code="finishing_overperformance",
         entity_type="player",
         entity_id=player_id,
-        severity=severity_from_magnitude(gap, notable=12.0, high=25.0),
-        confidence=confidence,
+        severity=severity_from_magnitude(magnitude, notable=2.0, high=5.0),
+        confidence=evidence_confidence,
         supporting_metrics={
             "player_name": player_name,
             "goals": goals,
             "goals_percentile": goals_percentile,
             "xg": xg,
             "xg_percentile": xg_percentile,
+            "non_penalty_goals": non_penalty_goals,
+            "npxg": npxg,
+            "finishing_residual": residual,
+            "finishing_residual_per90": (
+                residual * 90.0 / minutes if minutes is not None and minutes > 0 else None
+            ),
+            "minutes": minutes,
+            "shots_total": shots_total,
         },
         comparison_group=comparison_group,
         window=window,
         model_version=DIAGNOSTIC_MODEL_VERSION,
         computed_at=computed_at,
     )
+
+
+def _finishing_evidence(
+    *,
+    goals: float | None,
+    xg: float | None,
+    confidence: float,
+    minutes: int | None,
+    shots_total: float | None,
+    non_penalty_goals: float | None,
+    npxg: float | None,
+) -> tuple[float, float, float, float] | None:
+    if goals is None or xg is None:
+        return None
+    actual = non_penalty_goals if non_penalty_goals is not None and npxg is not None else goals
+    expected = npxg if non_penalty_goals is not None and npxg is not None else xg
+    if expected < _MIN_FINISHING_EXPECTED_OUTPUT:
+        return None
+    if minutes is not None and minutes < _MIN_FINISHING_MINUTES:
+        return None
+    if shots_total is not None and shots_total < _MIN_FINISHING_SHOTS:
+        return None
+
+    opportunity_confidence = expected / (expected + _MIN_FINISHING_EXPECTED_OUTPUT)
+    if minutes is not None:
+        opportunity_confidence = min(
+            opportunity_confidence,
+            minutes / (minutes + _MIN_FINISHING_MINUTES),
+        )
+    evidence_confidence = max(0.0, min(1.0, min(confidence, opportunity_confidence)))
+    return actual, expected, actual - expected, evidence_confidence
 
 
 def high_volume_low_quality_shooting(

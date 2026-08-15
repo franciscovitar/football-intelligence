@@ -5,13 +5,15 @@ begin;
 do $$
 declare
     player_id_value bigint;
+    context_value text;
 begin
     if to_regnamespace('analytics') is null then
         raise exception 'analytics schema is missing';
     end if;
 
     if to_regclass('analytics.player_feature_snapshots') is null
-       or to_regclass('analytics.player_score_snapshots') is null then
+       or to_regclass('analytics.player_score_snapshots') is null
+       or to_regclass('analytics.product_player_score_snapshots') is null then
         raise exception 'player analytics tables are missing';
     end if;
 
@@ -80,6 +82,66 @@ begin
         'player-v1.0',
         now()
     );
+
+    select data_context
+    into context_value
+    from analytics.player_score_snapshots
+    where player_id = player_id_value and scope_key = 'contract:2024';
+
+    if context_value <> 'real' then
+        raise exception 'player score default context must be real';
+    end if;
+
+    if exists (
+        select 1 from analytics.product_player_score_snapshots
+        where scope_key = 'contract:2024'
+    ) then
+        raise exception 'product score view exposed legacy V1 data';
+    end if;
+
+    insert into analytics.player_score_snapshots (
+        player_id, scope_key, window_key, role, role_confidence,
+        minutes, appearances, overall_score, confidence, dimension_scores,
+        reference_sample_size, model_version, calculated_at, data_context
+    ) values (
+        player_id_value, 'contract:smoke', 'season', 'forward', 1,
+        900, 10, 99, 1, '{}'::jsonb,
+        20, 'player-v2.0', now(), 'test_smoke'
+    );
+
+    if exists (
+        select 1 from analytics.product_player_score_snapshots
+        where scope_key = 'contract:smoke'
+    ) then
+        raise exception 'product score view exposed smoke data';
+    end if;
+
+    insert into analytics.player_score_snapshots (
+        player_id, scope_key, window_key, role, role_confidence,
+        minutes, appearances, overall_score, confidence, dimension_scores,
+        reference_sample_size, model_version, calculated_at, evidence_state
+    ) values (
+        player_id_value, 'contract:partial', 'season', 'forward', 1,
+        900, 10, null, 0.6, '{}'::jsonb,
+        20, 'player-v2.0', now(), 'partial'
+    );
+
+    if exists (
+        select 1 from analytics.product_player_score_snapshots
+        where scope_key = 'contract:partial'
+    ) then
+        raise exception 'product score view exposed partial evidence';
+    end if;
+
+    begin
+        update analytics.player_score_snapshots
+        set data_context = 'synthetic'
+        where player_id = player_id_value and scope_key = 'contract:2024';
+        raise exception 'expected invalid data context to be rejected';
+    exception
+        when check_violation then
+            null;
+    end;
 
     begin
         insert into analytics.player_score_snapshots (

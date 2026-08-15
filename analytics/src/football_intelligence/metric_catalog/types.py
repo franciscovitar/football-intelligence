@@ -14,12 +14,10 @@ CATALOG_V2_VERSION = "metric-catalog-v2.0"
 
 # Closed, small set of comparison/storage grains a metric can be measured at.
 # "team_match" is a team's own stats within one specific match (distinct from
-# "team", which existing coverage_lab convention already uses for the same
-# concept -- see `metric_catalog.catalog` for the collapse mapping applied
-# when metrics are exposed through `coverage_lab.target_metrics`).
+# "team", which is season/team identity context rather than one team's facts
+# within a specific match). Coverage Lab preserves this distinction exactly.
 # "player_season" / "goalkeeper_season" are season-aggregate grains that do
-# not decompose into individual match observations (e.g. FPL's
-# `history_past`), distinct from the match-level "player_match" /
+# not decompose into individual match observations, distinct from the match-level "player_match" /
 # "goalkeeper_match" grains.
 MetricGranularity = Literal[
     "competition",

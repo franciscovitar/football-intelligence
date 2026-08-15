@@ -9,12 +9,9 @@ falls back to the coarse broad role whenever a `listed_position` token isn't
 one of the fine tokens below, so nothing V1 could already classify becomes
 unclassified in V2.
 
-Weight profiles only use metrics already wired into scoring today
-(`player_analytics.config.FEATURE_METRICS`) -- Metric Catalog V2 declares
-many more metrics (crosses, progressive carries, aerial duels, ...) that a
-fullback or winger profile would ideally weight, but none of those have a
-real per-match observation source yet (`PlayerObservation.stats` cannot
-carry them), so they are deliberately not wired into any weight profile.
+Profiles describe the intended product, including catalog metrics that are
+not available from today's providers. The scoring engine reports the exact
+weight coverage and never renormalizes a partial profile to 100% evidence.
 """
 
 from __future__ import annotations
@@ -57,9 +54,9 @@ FINE_POSITION_ALIASES: dict[str, PositionFamily] = {
 }
 
 # (metric_name, weight, direction) tuples, in the same shape as
-# `player_analytics.config.ROLE_SCORE_WEIGHTS`. Every metric_name here must
-# be a member of `player_analytics.config.FEATURE_METRICS` -- there is no
-# real per-match observation for anything richer yet.
+# `player_analytics.config.ROLE_SCORE_WEIGHTS`. The base profiles use today's
+# computed features; the ideal additions below intentionally retain metrics
+# that are absent until a permitted rich source can provide them.
 #
 # Keyed by plain `str`, not `PositionFamily`: `classify_position_family`
 # returns a broader `str | None` (it can also return one of the coarse
@@ -67,7 +64,7 @@ FINE_POSITION_ALIASES: dict[str, PositionFamily] = {
 # fine family / not a key here), so callers look this table up with a plain
 # string and get `None` back for any non-fine-family key -- never a type
 # mismatch on the lookup.
-POSITION_FAMILY_SCORE_WEIGHTS: dict[str, tuple[tuple[str, float, int], ...]] = {
+_BASE_POSITION_FAMILY_SCORE_WEIGHTS: dict[str, tuple[tuple[str, float, int], ...]] = {
     "goalkeeper": (("saves", 1.00, 1),),
     "centre_back": (
         ("tackles", 0.22, 1),
@@ -132,3 +129,75 @@ POSITION_FAMILY_SCORE_WEIGHTS: dict[str, tuple[tuple[str, float, int], ...]] = {
         ("fouls_drawn", 0.05, 1),
     ),
 }
+
+# Missing metrics remain in the intended denominator. Each addition is a
+# catalog metric and is never fabricated when the source lacks it.
+_IDEAL_PROFILE_ADDITIONS: dict[str, tuple[tuple[str, float, int], ...]] = {
+    "goalkeeper": (
+        ("shots_on_target_faced", 0.20, -1),
+        ("xg_on_target_faced", 0.15, -1),
+        ("crosses_stopped", 0.10, 1),
+        ("sweeper_actions", 0.10, 1),
+        ("distribution_accuracy_pct", 0.05, 1),
+    ),
+    "centre_back": (
+        ("aerial_duels_won", 0.14, 1),
+        ("pass_blocks", 0.08, 1),
+        ("progressive_pass_distance", 0.10, 1),
+        ("errors_leading_to_shot", 0.08, -1),
+    ),
+    "fullback_wingback": (
+        ("progressive_carries", 0.10, 1),
+        ("passes_into_final_third", 0.10, 1),
+        ("crosses", 0.10, 1),
+        ("touches_final_third", 0.10, 1),
+    ),
+    "defensive_midfielder": (
+        ("successful_pressures", 0.10, 1),
+        ("progressive_passes", 0.10, 1),
+        ("passes_under_pressure", 0.08, 1),
+        ("turnovers", 0.12, -1),
+    ),
+    "central_midfielder": (
+        ("progressive_passes", 0.10, 1),
+        ("passes_into_final_third", 0.10, 1),
+        ("progressive_carries", 0.08, 1),
+        ("shot_creating_actions", 0.12, 1),
+    ),
+    "attacking_midfielder": (
+        ("xa", 0.10, 1),
+        ("shot_creating_actions", 0.10, 1),
+        ("touches_in_box", 0.08, 1),
+        ("expected_threat_created", 0.12, 1),
+    ),
+    "winger": (
+        ("progressive_carries", 0.10, 1),
+        ("take_on_success_pct", 0.10, 1),
+        ("touches_in_box", 0.08, 1),
+        ("expected_assists_open_play", 0.12, 1),
+    ),
+    "forward": (
+        ("npxg", 0.12, 1),
+        ("touches_in_box", 0.08, 1),
+        ("big_chances", 0.08, 1),
+        ("goals_per_shot", 0.12, 1),
+    ),
+}
+
+POSITION_FAMILY_SCORE_WEIGHTS: dict[str, tuple[tuple[str, float, int], ...]] = {
+    family: weights + _IDEAL_PROFILE_ADDITIONS.get(family, ())
+    for family, weights in _BASE_POSITION_FAMILY_SCORE_WEIGHTS.items()
+}
+
+POSITION_FAMILY_CORE_METRICS: dict[str, frozenset[str]] = {
+    "goalkeeper": frozenset({"saves"}),
+    "centre_back": frozenset({"tackles", "interceptions", "duels_won"}),
+    "fullback_wingback": frozenset({"tackles", "key_passes", "dribbles_successful"}),
+    "defensive_midfielder": frozenset({"tackles", "interceptions", "duels_won"}),
+    "central_midfielder": frozenset({"key_passes", "tackles"}),
+    "attacking_midfielder": frozenset({"key_passes", "goals"}),
+    "winger": frozenset({"dribbles_successful", "key_passes"}),
+    "forward": frozenset({"goals", "shots_total"}),
+}
+
+MIN_PROFILE_EVIDENCE_COVERAGE = 0.60

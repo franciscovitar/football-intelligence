@@ -26,7 +26,7 @@ export default async function HomePage() {
     <main className="page-shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">FOOTBALL INTELLIGENCE · PLAYER V1</p>
+          <p className="eyebrow">FOOTBALL INTELLIGENCE · PLAYER V2</p>
           <h1>Qué está pasando de verdad.</h1>
           <p className="hero-copy">
             Rankings por rol, Forma reciente, Performance estabilizada y evidencia visible detrás
@@ -56,8 +56,8 @@ export default async function HomePage() {
         />
       ) : result.data.context === null ? (
         <DataNotice
-          title="Todavía no hay snapshots"
-          message="El read model está conectado, pero Player Analytics todavía no persistió rankings para este entorno."
+          title="Datos reales insuficientes"
+          message="No hay scores reales con cobertura de evidencia suficiente. Los snapshots smoke/test nunca se usan como ranking activo."
         />
       ) : (
         <>

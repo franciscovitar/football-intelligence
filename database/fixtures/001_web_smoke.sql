@@ -129,6 +129,10 @@ begin
             20, 'player-v1.0', now() - interval '1 year'
         );
 
+    update analytics.player_score_snapshots
+    set data_context = 'test_smoke'
+    where scope_key like 'core:web-smoke%';
+
     insert into analytics.player_feature_snapshots (
         player_id,
         scope_key,

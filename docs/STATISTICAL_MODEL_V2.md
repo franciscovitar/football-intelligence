@@ -11,8 +11,8 @@ on top of rather than replaces.
 
 ## Metric Catalog V2
 
-`analytics/src/football_intelligence/metric_catalog/` declares **130**
-metrics (up from the pre-Block-16 catalog of 48), each a `MetricDefinition`:
+`analytics/src/football_intelligence/metric_catalog/` declares the complete
+versioned product registry (with no arbitrary maximum), each a `MetricDefinition`:
 key, display name, granularity, category, unit, `raw`/`derived`, per90
 eligibility, percentile eligibility, preferred direction, a minimum-sample
 policy note, and a semantic version. It spans participation, output,
@@ -23,10 +23,9 @@ transition), plus a small advanced/contextual namespace.
 
 Declaring a metric here **never implies a live data source exists for it
 yet**. Missing is not the same as removed: `coverage_lab` measures the real
-provider gap against this catalog (see `docs/ZERO_COST_COVERAGE.md`, whose
-denominator grew from 48x10=480 to 127x10=1270 in lockstep -- 127 is the
-count of catalog entries collapsed onto Coverage Lab's five-grain identity
-space, not a second, drifting catalog). `player_analytics`/`team_analytics`
+provider gap against this catalog (see `docs/ZERO_COST_COVERAGE.md`). Its
+denominator is always `len(unique catalog identities) * 10 competitions` and
+preserves all nine grains; no grain is collapsed. `player_analytics`/`team_analytics`
 scoring only ever use the subset backed by a real per-observation source
 today; everything else is honestly reported as not available (see "Missing
 data" below), never silently dropped from the catalog or fabricated as zero.
@@ -65,20 +64,24 @@ within an explicit **comparison group**, never a single universal pool:
 classification on top of V1's four broad roles: goalkeeper, centre_back,
 fullback_wingback, defensive_midfielder, central_midfielder,
 attacking_midfielder, winger, forward. `classify_position_family` maps common
-`listed_position` tokens to a family and falls back to V1's broad role when
-no fine-grained token is available (so nothing V1 could already classify
-becomes unclassified under V2). Per-family score weight profiles
+`listed_position` tokens to a family and records insufficient V2 evidence
+when no fine-grained token is available. Per-family score weight profiles
 (`POSITION_FAMILY_SCORE_WEIGHTS`) exist only where a materially different
 weighting is defensible -- a centre-back is not scored on shot/xG weights the
 way a forward is, and a fullback's profile weights progression/crossing
-higher than a centre-back's. V2 (`player_analytics/engine_v2.py`, model
-version `player-v2.0`) layers this on top of V1's already-computed
+higher than a centre-back's. Intended profiles retain catalog metrics even
+when the current provider cannot supply them. V2 exposes available/required
+weight, coverage percentage, core metrics and a `ready`/`partial`/
+`insufficient_data` state. Missing weight is never renormalized or treated as
+zero: a numeric score is published only when the complete intended profile
+is present. V2 (`player_analytics/engine_v2.py`, model version `player-v2.0`)
+layers this on top of V1's already-computed
 percentiles rather than recomputing them from scratch: recomputing
 percentiles within a materially smaller fine-family population would often
 be less reliable than V1's existing role-scoped populations, not more. When a
 player's position doesn't resolve to a fine family, or that family's
-weighted metrics have no computed feature, V2 falls back to the player's V1
-score rather than fabricating one from an empty weight set.
+weighted metrics are incomplete, V2 stores no numeric score rather than
+substituting V1 or fabricating one from incomplete evidence.
 
 ## Confidence and ranking eligibility
 
@@ -97,13 +100,14 @@ ahead of Player B (score 98, confidence 31%, minutes 238).
 `player_analytics.engine_v2.classify_results_vs_process` and
 `team_analytics.engine_v2`'s equivalent classify raw output against
 expected/underlying-process output into `results_above_process` /
-`results_below_process` / `aligned` / `insufficient_data`, using the same
-+-12-percentile-point threshold pattern `team_analytics.engine` already used
-for `results_process_delta` before Block 16. It requires both the raw
-expected-output value and its percentile; when xG (or another required
-expected-output metric) is absent for the entity, the result is always
-`insufficient_data` -- **never a fabricated verdict from a missing input
-treated as zero.**
+`results_below_process` / `aligned` / `insufficient_data`. Player finishing
+uses the direct residual `goals - xG`, preferring `non_penalty_goals - npxG`
+when both non-penalty inputs exist, with an optional per-90 view. It never
+subtracts two percentiles. Findings require meaningful expected-output
+opportunity and residual magnitude, plus minutes/shots gates when those
+inputs are available; confidence is capped by opportunity. A 1-goal result
+on 0.5 xG cannot become a high-confidence regression signal, while +7 on
+15 xG with a mature sample can. Missing xG always yields `insufficient_data`.
 
 ## Diagnostic rule engine
 
@@ -161,39 +165,19 @@ zero (see `docs/WEB.md` for the UI convention).
 
 ## Real season snapshot: ENG_PL 2025/26
 
-Primary, non-synthetic real snapshot (see `data/real/2025-26/README.md` for
-the full detail): the completed 2025/26 Premier League season, loaded from
-two sources chosen after research beyond the already-certified Block 13-15
-zero-cost adapters (none of which expose player-level detail for any
-domestic league):
+The primary non-synthetic snapshot is the completed ENG_PL 2025/26 season:
+380 Football-Data.co.uk matches with selected team-level observations. Its
+redistribution permission is recorded as unknown, so it is not described as
+certified. The former automated FPL collector/client and derived player files
+were removed because FPL's terms prohibit automated extraction.
 
-- **Official Fantasy Premier League API** (`fantasy.premierleague.com/api/`,
-  public, unauthenticated) -- 459 real player-season aggregate records
-  (minutes, goals, assists, cards, saves, bonus/ICT, partial defensive
-  counts, and real xG/xA/xGI/xGC -- no existing zero-cost adapter had ever
-  supplied player xG/xA before this).
-- **Football-Data.co.uk** (already Block-15-certified) -- the full 380-match
-  2025/26 season: results plus team-level shots/shots-on-target/fouls/
-  corners/cards.
-
-Loaded via `football-intelligence-load-real-snapshot` into
-`football.player_season_stats` (new) and the existing `football.matches`/
-`football.team_match_stats` tables. Scored via
-`football-intelligence-score-real-snapshot`, which bridges the
-season-aggregate table into the same `classify_results_vs_process` +
-diagnostic-rule machinery the rest of the product uses (season-aggregate
-data has no match-by-match rows, so V1's per-match feature engine cannot
-consume it directly for this snapshot; only a `season` window is valid here,
-never a manufactured `last_5`/`last_10`).
-
-Real result from this run, against 316 players with >=450 minutes: 60
-`finishing_underperformance` and 55 `finishing_overperformance` findings,
-average confidence ~0.77-0.78. Spot-checked examples are football-plausible
-(e.g. injury-affected/struggling forwards underperforming a healthy xG
-total; a deep-lying midfielder and a set-piece-threat centre-back
-overperforming a low xG total) -- no nonsense pattern (a goalkeeper as a top
-finisher, a starter ranked on nearly-zero confidence, a centre-back punished
-for low xG) was observed.
+`football-intelligence-load-real-snapshot` loads only match/team evidence.
+`football-intelligence-score-real-snapshot` reports `insufficient_data`, zero
+player scores and zero finishing findings because no permitted rich domestic
+player source is present. This is the truthful real validation result, not a
+target count. If permitted player-match observations become available, the
+normal player analytics job persists V2 scores to the same real snapshots
+read by Home, Rankings and Player pages.
 
 ### Secondary validation dataset: WC2022 (not the product snapshot)
 
@@ -211,17 +195,11 @@ data.
 
 ## Known limitations (Block 16)
 
-- No passing/defensive/carrying/dribbling granularity for any domestic
-  league in the primary real snapshot -- no zero-cost current source
-  provides it (see `data/real/2025-26/README.md`).
+- No permitted player-level data of any kind is present in the primary real
+  domestic snapshot; league-wide player rankings are unavailable.
 - No team-level xG/xGA for ENG_PL 2025/26 -- team diagnostics that require it
   (`sterile_possession`, `few_but_high_quality_chances_allowed`) correctly
   return no finding for this snapshot rather than a fabricated one.
-- FPL-sourced team labels reflect the *current* (2026/27) squad, not
-  necessarily 2025/26 (season totals themselves remain correctly scoped).
-- The real-snapshot population is current-FPL-roster-scoped: a 2025/26
-  player who left the Premier League entirely is absent, not silently
-  zeroed.
 - No cross-league strength calibration (unchanged V1 limitation).
 - No daily automation -- this is a one-off, manually-run curated snapshot,
   per explicit Block 16 scope (see `AI/prompts` Block 16 brief SS26).

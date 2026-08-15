@@ -153,8 +153,8 @@ export default async function RankingsPage({
         />
       ) : result.data.context === null ? (
         <DataNotice
-          title="Sin rankings todavía"
-          message="No hay snapshots de Player Analytics en PostgreSQL para mostrar."
+          title="Datos reales insuficientes"
+          message="No hay scores reales con evidencia suficiente para un ranking. Los snapshots smoke/test están excluidos."
         />
       ) : result.data.players.length === 0 ? (
         <DataNotice

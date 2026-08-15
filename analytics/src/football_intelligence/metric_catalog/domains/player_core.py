@@ -15,7 +15,7 @@ from football_intelligence.metric_catalog.types import CATALOG_V2_VERSION, Metri
 
 _APPEARANCE_SAMPLE = "identity/context field observed once per appearance; never compared as a rate"
 _PLAYER_MATCH_SAMPLE = "min 450 minutes for percentile eligibility (player-v1.0 shrinkage prior)"
-_PLAYER_SEASON_SAMPLE = "season-aggregate only (e.g. FPL history_past); no per-match denominator"
+_PLAYER_SEASON_SAMPLE = "season-aggregate only; no per-match denominator"
 
 PLAYER_CORE_METRICS: tuple[MetricDefinition, ...] = (
     # -- participation (baseline: PlayerAppearanceRecord) ---------------------

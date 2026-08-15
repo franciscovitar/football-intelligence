@@ -4,7 +4,7 @@ begin;
 
 -- Block 16: a season-aggregate observation table, distinct from
 -- football.player_match_stats (per-match). Some real sources (e.g. the
--- official FPL API's `history_past`) only ever publish a season rollup, with
+-- permitted season-summary sources may only publish a season rollup, with
 -- no match-by-match breakdown -- last-3/last-5/last-10 form windows cannot
 -- be derived from this table, only a `season` window.
 --

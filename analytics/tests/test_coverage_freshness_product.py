@@ -97,8 +97,8 @@ def test_previous_season_evidence_remains_visible_in_recent_season_coverage() ->
 
 def test_denominator_is_unaffected_by_previous_season_state() -> None:
     # Adding the `previous_season` state must never change the fixed
-    # target-catalog denominator (127 metrics x 10 competitions in the real
-    # catalog since Block 16's Metric Catalog V2, was 48 x 10 before; 1 x 1
+    # target-catalog denominator (all unique identities x 10 competitions in
+    # the real catalog; 1 x 1
     # here) for either the current or recent-season view.
     for is_current_period in (True, False):
         coverage = _coverage(is_current_period=is_current_period)

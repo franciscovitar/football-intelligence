@@ -113586,9 +113586,12 @@
     }
   ],
   "provenance": {
+    "automated_collection": "yes",
+    "certification_state": "validation_only",
     "competition_name": "FIFA World Cup",
     "expected_full_tournament_matches": 64,
     "retrieved_at": "2026-08-15T00:33:06.084352+00:00",
+    "redistribution_permission": "unknown",
     "sampled_match_ids": [
       3857254,
       3857260,

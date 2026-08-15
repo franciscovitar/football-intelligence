@@ -126,6 +126,9 @@ def main() -> None:
         ),
         "provenance": {
             "source": "statsbomb-open",
+            "automated_collection": "yes",
+            "redistribution_permission": "unknown",
+            "certification_state": "validation_only",
             "source_url": (
                 "https://github.com/statsbomb/open-data/blob/master/data/"
                 f"matches/{competition_id}/{season_id}.json"

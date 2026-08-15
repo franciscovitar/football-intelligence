@@ -120,7 +120,7 @@ class NormalizedFixtureBatch:
 class PlayerSeasonStatsRecord:
     """A season-aggregate player record (Block 16), distinct from the
     per-match `PlayerMatchStatsRecord` above -- some sources (e.g. the
-    official FPL API's `history_past`) only ever publish a season rollup,
+    permitted season-summary sources may only publish a season rollup,
     with no match-by-match breakdown to derive last-3/last-5/last-10 form
     windows from. Missing fields stay `None`; a real `0` (e.g. a striker who
     genuinely scored zero goals) is preserved as `0`, never conflated with

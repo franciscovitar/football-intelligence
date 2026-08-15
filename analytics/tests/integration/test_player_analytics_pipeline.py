@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import os
 from datetime import UTC, datetime, timedelta
 
@@ -10,6 +11,12 @@ from football_intelligence.db.provider_repository import connect
 from football_intelligence.player_analytics.engine import (
     MODEL_VERSION,
     calculate_player_analytics,
+)
+from football_intelligence.player_analytics.engine_v2 import (
+    MODEL_VERSION as V2_MODEL_VERSION,
+)
+from football_intelligence.player_analytics.engine_v2 import (
+    calculate_player_analytics_v2,
 )
 
 
@@ -197,5 +204,35 @@ def test_player_analytics_pipeline_ranks_and_replaces_snapshots() -> None:
         assert first_counts == second_counts
         assert first_counts["scores"] == len(result.scores)
         assert first_counts["features"] == len(result.features)
+
+        fine_observations = [
+            dataclasses.replace(
+                observation,
+                listed_position="ST" if observation.listed_position == "F" else "CB",
+            )
+            for observation in observations
+        ]
+        v2_scores = calculate_player_analytics_v2(
+            fine_observations,
+            scope_key=scope_key,
+            calculated_at=datetime(2024, 6, 1, tzinfo=UTC),
+        )
+        repository.replace_snapshots(
+            result,
+            scope_key=scope_key,
+            model_version=V2_MODEL_VERSION,
+            v2_scores=v2_scores,
+            data_context="real",
+        )
+        ready_count = connection.execute(
+            """
+            select count(*)
+            from analytics.product_player_score_snapshots
+            where scope_key = %s and model_version = %s
+            """,
+            (scope_key, V2_MODEL_VERSION),
+        ).fetchone()
+        assert ready_count is not None
+        assert int(ready_count[0]) == sum(score.evidence_state == "ready" for score in v2_scores)
 
         connection.rollback()

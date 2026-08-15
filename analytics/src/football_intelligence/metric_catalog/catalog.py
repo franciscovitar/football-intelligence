@@ -29,6 +29,7 @@ from football_intelligence.metric_catalog.domains.player_core import PLAYER_CORE
 from football_intelligence.metric_catalog.domains.player_technical import (
     PLAYER_TECHNICAL_METRICS,
 )
+from football_intelligence.metric_catalog.domains.product_gaps import PRODUCT_GAP_METRICS
 from football_intelligence.metric_catalog.types import (
     CATALOG_V2_VERSION,
     MetricCategory,
@@ -51,6 +52,7 @@ METRIC_CATALOG_V2: tuple[MetricDefinition, ...] = (
     + PLAYER_TECHNICAL_METRICS
     + GOALKEEPING_METRICS
     + CONTEXT_METRICS
+    + PRODUCT_GAP_METRICS
 )
 
 

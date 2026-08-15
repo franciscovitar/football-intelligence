@@ -107,7 +107,7 @@ export default async function PlayerPage({
   }
 
   const { player, scores, features, context } = result.data;
-  const hasV1Score = scores.length > 0;
+  const hasReadyScore = scores.length > 0;
   const seasonScore = scores.find((score) => score.window === "season") ?? scores[0];
   const primaryWindow: AnalyticsWindow = scores.some((score) => score.window === "last_5")
     ? "last_5"
@@ -130,30 +130,31 @@ export default async function PlayerPage({
 
       <section className="player-hero">
         <div>
-          <p className="eyebrow">{hasV1Score ? ROLE_LABELS_SINGULAR[seasonScore.role] : "JUGADOR"}</p>
+          <p className="eyebrow">{hasReadyScore ? ROLE_LABELS_SINGULAR[seasonScore.role] : "JUGADOR"}</p>
           <h1>{player.playerName}</h1>
           <div className="player-facts">
             {player.latestTeam ? <span>Último equipo registrado · {player.latestTeam}</span> : null}
             {player.nationalityCode ? <span>Nacionalidad · {player.nationalityCode}</span> : null}
             {player.dateOfBirth ? <span>Nacimiento · {player.dateOfBirth}</span> : null}
           </div>
-          {hasV1Score ? (
+          {hasReadyScore ? (
             <p className="player-context">
               {context.scopeKey} · {context.modelVersion} · {formatDateTime(context.calculatedAt)}
             </p>
           ) : (
             <p className="player-context">
-              Sin score V1 (sin partidos individuales en la fuente actual) · ver datos reales de
-              temporada y diagnósticos abajo.
+              Score real insuficiente: la evidencia disponible no alcanza el perfil mínimo. Los
+              datos smoke/test no se muestran como producto.
             </p>
           )}
         </div>
 
-        {hasV1Score ? (
+        {hasReadyScore ? (
           <div className="player-score-hero">
             <span>Performance</span>
             <strong>{formatScore(seasonScore.overallScore)}</strong>
             <small>Confianza {formatConfidence(seasonScore.confidence)}</small>
+            <small>Evidencia disponible {Math.round(seasonScore.evidenceCoveragePct)}%</small>
             <div className="confidence-track wide" aria-hidden="true">
               <span style={{ width: `${Math.round(seasonScore.confidence * 100)}%` }} />
             </div>
@@ -161,7 +162,7 @@ export default async function PlayerPage({
         ) : null}
       </section>
 
-      {hasV1Score ? (
+      {hasReadyScore ? (
         <section className="panel">
           <div className="section-heading">
             <div>
@@ -331,7 +332,7 @@ export default async function PlayerPage({
           </div>
         </section>
       ) : null}
-      {hasV1Score ? (
+      {hasReadyScore ? (
         <section className="player-analysis-grid">
           <div className="panel">
             <div className="section-heading">
@@ -427,7 +428,7 @@ export default async function PlayerPage({
         )}
       </section>
 
-      {hasV1Score ? (
+      {hasReadyScore ? (
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -461,7 +462,7 @@ export default async function PlayerPage({
       </section>
       ) : null}
 
-      {hasV1Score ? (
+      {hasReadyScore ? (
         <section className="panel">
           <div className="section-heading">
             <div>

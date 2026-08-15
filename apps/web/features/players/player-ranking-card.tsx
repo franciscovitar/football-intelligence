@@ -52,6 +52,7 @@ export function PlayerRankingCard({
         <div className="ranking-footer">
           <div className="confidence-line">
             <span>Confianza {formatConfidence(player.confidence)}</span>
+            <span>Evidencia {Math.round(player.evidenceCoveragePct)}%</span>
             <span className="confidence-track" aria-hidden="true">
               <span style={{ width: `${Math.round(player.confidence * 100)}%` }} />
             </span>

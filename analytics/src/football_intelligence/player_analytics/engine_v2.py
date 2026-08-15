@@ -16,11 +16,10 @@ computation instead of recomputing percentiles from scratch:
   POSITION_FAMILY_SCORE_WEIGHTS`) when the player's primary position family
   is classified; both the coarse V1 role and the fine V2 family are exposed
   on `PlayerScoreV2` (`role`, `position_family`), never just one.
-- When a player's primary listed position doesn't resolve to a fine family
-  (`classify_position_family` returns `None`) or none of that family's
-  weighted metrics have a computed feature, V2 falls back to the player's
-  already-computed V1 `overall_score`/`dimension_scores` rather than
-  fabricating a score from an empty weight set.
+- When a player's primary listed position doesn't resolve to a fine family,
+  or the complete intended evidence profile is unavailable, V2 exposes an
+  explicit evidence state and no numeric score. It never substitutes V1 or
+  renormalizes a partial metric set into an apparently complete V2 score.
 """
 
 from __future__ import annotations
@@ -30,10 +29,13 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Literal
 
 from football_intelligence.player_analytics.engine import calculate_player_analytics
 from football_intelligence.player_analytics.models import PlayerFeature, PlayerObservation
 from football_intelligence.position_profiles import (
+    MIN_PROFILE_EVIDENCE_COVERAGE,
+    POSITION_FAMILY_CORE_METRICS,
     POSITION_FAMILY_SCORE_WEIGHTS,
     classify_position_family,
 )
@@ -70,14 +72,25 @@ _FINE_FAMILY_TO_BROAD_TOKEN: dict[str, str] = {
 # on raw score alone -- see `rank_by_confidence_gated_score`.
 MIN_RANKING_CONFIDENCE = 0.40
 
-# Mirrors team_analytics.engine's results_process_delta +-12 point pattern
-# (0-100 percentile scale): a double-digit percentile gap between output and
-# expected-output is treated as a real signal, not measurement noise.
-RESULTS_PROCESS_THRESHOLD = 12.0
+# A two-goal direct residual is the minimum notable finishing magnitude;
+# diagnostics add opportunity/minutes/shots confidence gates around it.
+MIN_FINISHING_RESIDUAL = 2.0
 
 ResultsVsProcessSignal = (
     str  # "results_above_process" | "results_below_process" | "aligned" | "insufficient_data"
 )
+EvidenceState = Literal["ready", "partial", "insufficient_data"]
+
+
+@dataclass(frozen=True, slots=True)
+class WeightedScoreEvidence:
+    score: float | None
+    evidence_weight_available: float
+    evidence_weight_required: float
+    evidence_coverage_pct: float
+    evidence_state: EvidenceState
+    evidence_metrics_available: tuple[str, ...]
+    evidence_metrics_required: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,8 +104,14 @@ class PlayerScoreV2:
     role_confidence: float
     minutes: int
     appearances: int
-    overall_score: float
+    overall_score: float | None
     confidence: float
+    evidence_weight_available: float
+    evidence_weight_required: float
+    evidence_coverage_pct: float
+    evidence_state: EvidenceState
+    evidence_metrics_available: tuple[str, ...]
+    evidence_metrics_required: tuple[str, ...]
     dimension_scores: Mapping[str, float]
     reference_sample_size: int
     model_version: str
@@ -137,8 +156,24 @@ def calculate_player_analytics_v2(
         weights = POSITION_FAMILY_SCORE_WEIGHTS.get(family) if family is not None else None
         feature_map = features_by_player_window.get((v1_score.player_id, v1_score.window), {})
 
-        family_score = _weighted_percentile_score(feature_map, weights) if weights else None
-        overall_score = family_score if family_score is not None else v1_score.overall_score
+        evidence = (
+            _weighted_percentile_score(
+                feature_map,
+                weights,
+                core_metrics=POSITION_FAMILY_CORE_METRICS.get(family or "", frozenset()),
+            )
+            if weights
+            else WeightedScoreEvidence(
+                score=None,
+                evidence_weight_available=0.0,
+                evidence_weight_required=0.0,
+                evidence_coverage_pct=0.0,
+                evidence_state="insufficient_data",
+                evidence_metrics_available=(),
+                evidence_metrics_required=(),
+            )
+        )
+        overall_score = evidence.score
 
         scores.append(
             PlayerScoreV2(
@@ -151,8 +186,14 @@ def calculate_player_analytics_v2(
                 role_confidence=v1_score.role_confidence,
                 minutes=v1_score.minutes,
                 appearances=v1_score.appearances,
-                overall_score=round(overall_score, 2),
-                confidence=v1_score.confidence,
+                overall_score=None if overall_score is None else round(overall_score, 2),
+                confidence=round(v1_score.confidence * evidence.evidence_coverage_pct / 100.0, 5),
+                evidence_weight_available=evidence.evidence_weight_available,
+                evidence_weight_required=evidence.evidence_weight_required,
+                evidence_coverage_pct=evidence.evidence_coverage_pct,
+                evidence_state=evidence.evidence_state,
+                evidence_metrics_available=evidence.evidence_metrics_available,
+                evidence_metrics_required=evidence.evidence_metrics_required,
                 dimension_scores=v1_score.dimension_scores,
                 reference_sample_size=v1_score.reference_sample_size,
                 model_version=MODEL_VERSION,
@@ -207,19 +248,43 @@ def _primary_position_family(
 def _weighted_percentile_score(
     feature_map: Mapping[str, PlayerFeature],
     weights: tuple[tuple[str, float, int], ...],
-) -> float | None:
+    *,
+    core_metrics: frozenset[str] = frozenset(),
+) -> WeightedScoreEvidence:
     weighted_score = 0.0
-    weight_sum = 0.0
+    available_weight = 0.0
+    required_weight = sum(weight for _, weight, _ in weights)
+    available_metrics: list[str] = []
     for metric_name, weight, direction in weights:
         feature = feature_map.get(metric_name)
         if feature is None:
             continue
         percentile = feature.percentile if direction > 0 else 100.0 - feature.percentile
         weighted_score += weight * percentile
-        weight_sum += weight
-    if weight_sum <= 0:
-        return None
-    return weighted_score / weight_sum
+        available_weight += weight
+        available_metrics.append(metric_name)
+
+    coverage = available_weight / required_weight if required_weight > 0 else 0.0
+    missing_core = core_metrics - set(available_metrics)
+    if available_weight <= 0 or missing_core or coverage < MIN_PROFILE_EVIDENCE_COVERAGE:
+        state: EvidenceState = "insufficient_data"
+    elif coverage < 1.0:
+        state = "partial"
+    else:
+        state = "ready"
+
+    # A numeric profile score exists only when the complete intended weight is
+    # present. Missing evidence is neither renormalized nor treated as zero.
+    score = weighted_score / required_weight if state == "ready" else None
+    return WeightedScoreEvidence(
+        score=score,
+        evidence_weight_available=round(available_weight, 6),
+        evidence_weight_required=round(required_weight, 6),
+        evidence_coverage_pct=round(coverage * 100.0, 2),
+        evidence_state=state,
+        evidence_metrics_available=tuple(available_metrics),
+        evidence_metrics_required=tuple(sorted(core_metrics)),
+    )
 
 
 def rank_by_confidence_gated_score(
@@ -256,33 +321,24 @@ def classify_results_vs_process(
     expected_output: float | None,
     expected_output_percentile: float | None,
     shot_generation_percentile: float | None = None,
-    threshold: float = RESULTS_PROCESS_THRESHOLD,
+    threshold: float = MIN_FINISHING_RESIDUAL,
+    non_penalty_goals: float | None = None,
+    npxg: float | None = None,
 ) -> ResultsVsProcessSignal:
     """Classify raw output vs expected/underlying-process output.
 
-    Mirrors `team_analytics.engine`'s `results_process_delta` +-12 point
-    threshold pattern, but on a player's own output-percentile vs
-    expected-output-percentile gap rather than a team composite. Requires
-    both the raw expected-output value and its percentile to be present --
-    returns `"insufficient_data"` (never a fabricated verdict) whenever xG or
-    another expected-output metric is not available for the entity, which is
-    the common case wherever a current zero-cost provider doesn't supply it.
-
-    `raw_output`/`expected_output` are accepted for provenance/context (the
-    caller typically records them in `DiagnosticFinding.supporting_metrics`)
-    but the classification itself works on the percentile gap, matching the
-    0-100 scale team_analytics already uses for this exact pattern.
-    `shot_generation_percentile` (e.g. shots-on-target percentile) is
-    accepted as optional supporting context for the caller; it is not itself
-    part of the threshold decision, since shot volume without conversion
-    accuracy would need a distinct, undeclared threshold.
+    Uses the direct residual (`goals - xG`, or NPG - npxG when both are
+    available). Percentiles are accepted for backwards-compatible provenance
+    only; subtracting two population ranks is not a finishing residual.
     """
 
-    del raw_output, expected_output, shot_generation_percentile  # provenance only, not the decision
-    if output_percentile is None or expected_output_percentile is None:
+    del output_percentile, expected_output_percentile, shot_generation_percentile
+    actual = non_penalty_goals if non_penalty_goals is not None and npxg is not None else raw_output
+    expected = npxg if non_penalty_goals is not None and npxg is not None else expected_output
+    if expected is None:
         return "insufficient_data"
 
-    delta = output_percentile - expected_output_percentile
+    delta = actual - expected
     if delta >= threshold:
         return "results_above_process"
     if delta <= -threshold:

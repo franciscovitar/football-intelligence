@@ -9,6 +9,7 @@ from typing import Any
 
 from psycopg import Connection
 
+from football_intelligence.player_analytics.engine_v2 import PlayerScoreV2
 from football_intelligence.player_analytics.models import (
     PlayerAnalyticsResult,
     PlayerObservation,
@@ -127,6 +128,8 @@ class PlayerAnalyticsRepository:
         *,
         scope_key: str,
         model_version: str,
+        v2_scores: Sequence[PlayerScoreV2] | None = None,
+        data_context: str = "real",
     ) -> None:
         self._connection.execute(
             """
@@ -178,12 +181,29 @@ class PlayerAnalyticsRepository:
                     feature.adjusted_per90,
                     feature.percentile,
                     feature.reference_sample_size,
-                    feature.model_version,
+                    model_version,
                     feature.calculated_at,
                 ),
             )
 
-        for score in result.scores:
+        scores = v2_scores if v2_scores is not None else result.scores
+        for score in scores:
+            if isinstance(score, PlayerScoreV2):
+                position_family = score.position_family
+                evidence_weight_available = score.evidence_weight_available
+                evidence_weight_required = score.evidence_weight_required
+                evidence_coverage_pct = score.evidence_coverage_pct
+                evidence_state = score.evidence_state
+                evidence_metrics_available = list(score.evidence_metrics_available)
+                evidence_metrics_required = list(score.evidence_metrics_required)
+            else:
+                position_family = None
+                evidence_weight_available = 1.0
+                evidence_weight_required = 1.0
+                evidence_coverage_pct = 100.0
+                evidence_state = "ready"
+                evidence_metrics_available = []
+                evidence_metrics_required = []
             self._connection.execute(
                 """
                 insert into analytics.player_score_snapshots (
@@ -199,11 +219,20 @@ class PlayerAnalyticsRepository:
                     dimension_scores,
                     reference_sample_size,
                     model_version,
-                    calculated_at
+                    calculated_at,
+                    position_family,
+                    data_context,
+                    evidence_weight_available,
+                    evidence_weight_required,
+                    evidence_coverage_pct,
+                    evidence_state,
+                    evidence_metrics_available,
+                    evidence_metrics_required
                 )
                 values (
                     %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s::jsonb, %s, %s, %s
+                    %s, %s, %s::jsonb, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s
                 )
                 """,
                 (
@@ -218,8 +247,16 @@ class PlayerAnalyticsRepository:
                     score.confidence,
                     json.dumps(dict(score.dimension_scores), sort_keys=True),
                     score.reference_sample_size,
-                    score.model_version,
+                    model_version,
                     score.calculated_at,
+                    position_family,
+                    data_context,
+                    evidence_weight_available,
+                    evidence_weight_required,
+                    evidence_coverage_pct,
+                    evidence_state,
+                    evidence_metrics_available,
+                    evidence_metrics_required,
                 ),
             )
 

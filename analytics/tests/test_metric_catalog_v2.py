@@ -25,8 +25,88 @@ def _dto_field_names(dataclass_type: type) -> set[str]:
     return {field.name for field in dataclasses.fields(dataclass_type)} - _EXCLUDED
 
 
-def test_catalog_size_is_in_target_range() -> None:
-    assert 110 <= len(METRIC_CATALOG_V2) <= 130
+def test_catalog_has_no_arbitrary_upper_ceiling() -> None:
+    assert len(METRIC_CATALOG_V2) >= 110
+
+
+def test_catalog_contains_every_block_16_required_metric_at_its_product_grain() -> None:
+    identities = {(metric.key, metric.granularity) for metric in METRIC_CATALOG_V2}
+    player_metrics = {
+        "goals_per_shot",
+        "goals_per_shot_on_target",
+        "big_chances_missed",
+        "touches_in_box",
+        "headed_shots",
+        "shot_distance",
+        "non_penalty_goals_minus_npxg",
+        "passes_into_final_third",
+        "shot_creating_actions",
+        "goal_creating_actions",
+        "xa_per90",
+        "expected_threat_pass",
+        "expected_threat_created",
+        "expected_assists_open_play",
+        "short_passes_accurate",
+        "medium_passes_accurate",
+        "long_passes_accurate",
+        "progressive_pass_distance",
+        "switches",
+        "passes_under_pressure",
+        "passes_received",
+        "progressive_passes_received",
+        "progressive_carry_distance",
+        "carry_distance",
+        "carries_into_box",
+        "progressive_actions",
+        "ball_progressions",
+        "touches",
+        "touches_final_third",
+        "touches_box",
+        "players_beaten",
+        "take_on_success_pct",
+        "turnovers",
+        "receiving_errors",
+        "shot_blocks",
+        "pass_blocks",
+        "successful_pressures",
+        "pressure_success_pct",
+        "errors_leading_to_shot",
+        "errors_leading_to_goal",
+        "ground_duels",
+        "ground_duels_won",
+        "aerial_duels_won",
+        "aerial_duel_win_pct",
+    }
+    goalkeeper_metrics = {
+        "xg_on_target_faced",
+        "psxg",
+        "crosses_stopped",
+        "sweeper_actions",
+        "passes",
+        "long_passes",
+        "launches",
+        "average_distance_from_goal",
+    }
+    team_metrics = {
+        "npxg",
+        "npxga",
+        "shots_on_target_allowed",
+        "xga_per_shot",
+        "big_chances",
+        "big_chances_allowed",
+        "box_entries",
+        "touches_in_box",
+        "high_turnovers",
+        "successful_pressures",
+        "counter_attacks",
+        "counter_attack_shots",
+        "transition_xg",
+        "deep_completions",
+    }
+
+    assert {(key, "player_match") for key in player_metrics} <= identities
+    assert {(key, "goalkeeper_match") for key in goalkeeper_metrics} <= identities
+    assert {(key, "team_match") for key in team_metrics} <= identities
 
 
 def test_catalog_entries_are_unique_per_key_and_granularity() -> None:

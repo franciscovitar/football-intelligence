@@ -7,11 +7,12 @@ from football_intelligence.player_analytics import engine as engine_v1
 from football_intelligence.player_analytics.engine_v2 import (
     MIN_RANKING_CONFIDENCE,
     MODEL_VERSION,
+    _weighted_percentile_score,
     calculate_player_analytics_v2,
     classify_results_vs_process,
     rank_by_confidence_gated_score,
 )
-from football_intelligence.player_analytics.models import PlayerObservation
+from football_intelligence.player_analytics.models import PlayerFeature, PlayerObservation
 
 _NOW = datetime(2026, 8, 14, tzinfo=UTC)
 
@@ -68,16 +69,14 @@ def test_results_vs_process_returns_insufficient_data_without_expected_output() 
     assert signal == "insufficient_data"
 
 
-def test_results_vs_process_returns_insufficient_data_without_percentile() -> None:
-    # Even if a raw expected_output value exists, a missing percentile must
-    # still gate to insufficient_data -- never silently treated as 0.
+def test_results_vs_process_uses_direct_residual_without_percentiles() -> None:
     signal = classify_results_vs_process(
         raw_output=10.0,
         output_percentile=80.0,
         expected_output=6.0,
         expected_output_percentile=None,
     )
-    assert signal == "insufficient_data"
+    assert signal == "results_above_process"
 
 
 def test_results_above_process_when_output_percentile_far_exceeds_expected() -> None:
@@ -108,6 +107,96 @@ def test_results_aligned_within_threshold() -> None:
         expected_output_percentile=50.0,
     )
     assert signal == "aligned"
+
+
+def test_partial_weight_is_not_renormalized_to_a_full_profile_score() -> None:
+    feature = PlayerFeature(
+        player_id=1,
+        player_name="Evidence Player",
+        scope_key="core:test",
+        window="season",
+        role="forward",
+        metric_name="goals",
+        minutes=900,
+        appearances=10,
+        raw_per90=1.0,
+        adjusted_per90=1.0,
+        percentile=100.0,
+        reference_sample_size=20,
+        model_version="player-v1.0",
+        calculated_at=_NOW,
+    )
+    evidence = _weighted_percentile_score(
+        {"goals": feature},
+        (("goals", 0.25, 1), ("npxg", 0.75, 1)),
+        core_metrics=frozenset({"goals"}),
+    )
+    assert evidence.score is None
+    assert evidence.evidence_weight_available == 0.25
+    assert evidence.evidence_weight_required == 1.0
+    assert evidence.evidence_coverage_pct == 25.0
+    assert evidence.evidence_state == "insufficient_data"
+
+
+def test_missing_core_metric_is_insufficient_even_with_other_weight() -> None:
+    feature = PlayerFeature(
+        player_id=1,
+        player_name="Evidence Player",
+        scope_key="core:test",
+        window="season",
+        role="forward",
+        metric_name="goals",
+        minutes=900,
+        appearances=10,
+        raw_per90=1.0,
+        adjusted_per90=1.0,
+        percentile=90.0,
+        reference_sample_size=20,
+        model_version="player-v1.0",
+        calculated_at=_NOW,
+    )
+    evidence = _weighted_percentile_score(
+        {"goals": feature},
+        (("goals", 0.7, 1), ("npxg", 0.3, 1)),
+        core_metrics=frozenset({"goals", "npxg"}),
+    )
+    assert evidence.evidence_coverage_pct == 70.0
+    assert evidence.evidence_state == "insufficient_data"
+    assert evidence.score is None
+
+
+def test_complete_profile_is_ready_and_has_a_numeric_score() -> None:
+    goals = PlayerFeature(
+        player_id=1,
+        player_name="Evidence Player",
+        scope_key="core:test",
+        window="season",
+        role="forward",
+        metric_name="goals",
+        minutes=900,
+        appearances=10,
+        raw_per90=1.0,
+        adjusted_per90=1.0,
+        percentile=90.0,
+        reference_sample_size=20,
+        model_version="player-v1.0",
+        calculated_at=_NOW,
+    )
+    npxg = dataclasses.replace(
+        goals,
+        metric_name="npxg",
+        raw_per90=0.7,
+        adjusted_per90=0.7,
+        percentile=70.0,
+    )
+    evidence = _weighted_percentile_score(
+        {"goals": goals, "npxg": npxg},
+        (("goals", 0.25, 1), ("npxg", 0.75, 1)),
+        core_metrics=frozenset({"goals", "npxg"}),
+    )
+    assert evidence.evidence_coverage_pct == 100.0
+    assert evidence.evidence_state == "ready"
+    assert evidence.score == 75.0
 
 
 def _midfield_population() -> list[PlayerObservation]:
@@ -224,6 +313,11 @@ def test_v2_exposes_both_coarse_role_and_fine_position_family() -> None:
     assert season_scores[1].position_family == "attacking_midfielder"
     assert season_scores[2].role == "midfielder"
     assert season_scores[2].position_family == "defensive_midfielder"
+    assert season_scores[1].evidence_state == "partial"
+    assert 60.0 <= season_scores[1].evidence_coverage_pct < 100.0
+    assert season_scores[1].evidence_weight_available < season_scores[1].evidence_weight_required
+    assert "key_passes" in season_scores[1].evidence_metrics_required
+    assert season_scores[1].overall_score is None
 
 
 def test_v2_overall_score_differs_from_v1_when_family_weights_differ() -> None:
@@ -248,13 +342,15 @@ def test_v2_overall_score_differs_from_v1_when_family_weights_differ() -> None:
     v2_creator = next(
         score for score in v2_scores if score.player_id == 1 and score.window == "season"
     )
-    # attacking_midfielder weights differ materially from the coarse V1
-    # midfielder weights (more creation/goals weight, less defending), so the
-    # V2 recombination is expected to diverge from the V1 score.
-    assert v2_creator.overall_score != v1_creator.overall_score
+    # The current observation schema cannot supply the complete intended V2
+    # attacking-midfielder profile. V2 must not substitute the available V1
+    # score or publish a partial recombination as complete.
+    assert v2_creator.evidence_state == "partial"
+    assert v2_creator.overall_score is None
+    assert v1_creator.overall_score is not None
 
 
-def test_v2_falls_back_to_v1_score_when_only_the_coarse_broad_role_is_known() -> None:
+def test_v2_reports_insufficient_data_when_only_the_coarse_broad_role_is_known() -> None:
     # "D" is a bare broad-role token (the kind API-Football's fixture payload
     # actually exposes, per docs/PLAYER_ANALYTICS.md) -- V1 classifies it
     # fine (coarse "defender"), but it is not one of the 8 fine position
@@ -295,8 +391,9 @@ def test_v2_falls_back_to_v1_score_when_only_the_coarse_broad_role_is_known() ->
     assert v1_result.scores  # sanity: V1 did classify and score this player
     assert v2_scores
     assert all(score.position_family == "defender" for score in v2_scores)
-    # No fine weight profile applies to the broad "defender" fallback, so V2
-    # reuses V1's own overall_score exactly rather than fabricating one.
-    v1_by_window = {score.window: score.overall_score for score in v1_result.scores}
+    # No fine weight profile applies to the broad "defender" fallback. V2
+    # reports the gap explicitly and never substitutes the V1 score.
     for score in v2_scores:
-        assert score.overall_score == v1_by_window[score.window]
+        assert score.overall_score is None
+        assert score.evidence_state == "insufficient_data"
+        assert score.evidence_coverage_pct == 0.0

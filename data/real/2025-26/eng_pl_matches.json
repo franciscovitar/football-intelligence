@@ -1,10 +1,22 @@
 {
   "provenance": {
+    "automated_collection": "yes",
+    "certification_state": "not_certified",
     "record_count": 6460,
+    "redistribution_permission": "unknown",
     "retrieved_at": "2026-08-15T00:27:07.021474+00:00",
     "semantic_version": "football-data-uk-v1",
     "source": "football-data-uk",
     "source_url": "https://www.football-data.co.uk/mmz4281/2526/E0.csv"
+  },
+  "scope": {
+    "competition": "ENG_PL",
+    "entity_grains": [
+      "match",
+      "team_match"
+    ],
+    "player_coverage": "unavailable",
+    "season": "2025/26"
   },
   "records": [
     {

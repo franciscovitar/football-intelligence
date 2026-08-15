@@ -179,13 +179,72 @@ def test_finishing_overperformance_fires_on_real_gap() -> None:
         window="season",
         goals=10.0,
         goals_percentile=90.0,
-        xg=4.0,
+        xg=8.0,
         xg_percentile=40.0,
         confidence=0.7,
         computed_at=_NOW,
     )
     assert finding is not None
     assert finding.diagnostic_code == "finishing_overperformance"
+
+
+def test_tiny_finishing_residual_on_tiny_opportunity_never_fires() -> None:
+    finding = finishing_overperformance(
+        player_id=2,
+        player_name="Tiny Sample",
+        comparison_group="role:forward",
+        window="season",
+        goals=1.0,
+        goals_percentile=99.0,
+        xg=0.5,
+        xg_percentile=1.0,
+        confidence=0.99,
+        minutes=90,
+        shots_total=2.0,
+        computed_at=_NOW,
+    )
+    assert finding is None
+
+
+def test_large_direct_residual_with_mature_sample_can_be_high_confidence() -> None:
+    finding = finishing_overperformance(
+        player_id=2,
+        player_name="Mature Sample",
+        comparison_group="role:forward",
+        window="season",
+        goals=22.0,
+        goals_percentile=70.0,
+        xg=15.0,
+        xg_percentile=90.0,
+        confidence=0.9,
+        minutes=2700,
+        shots_total=80.0,
+        computed_at=_NOW,
+    )
+    assert finding is not None
+    assert finding.severity == "high"
+    assert finding.confidence >= 0.7
+    assert finding.supporting_metrics["finishing_residual"] == 7.0
+
+
+def test_non_penalty_residual_is_preferred_when_both_inputs_exist() -> None:
+    finding = finishing_overperformance(
+        player_id=2,
+        player_name="Penalty Context",
+        comparison_group="role:forward",
+        window="season",
+        goals=10.0,
+        goals_percentile=99.0,
+        xg=8.0,
+        xg_percentile=10.0,
+        non_penalty_goals=5.0,
+        npxg=6.0,
+        confidence=0.9,
+        minutes=1800,
+        shots_total=50.0,
+        computed_at=_NOW,
+    )
+    assert finding is None
 
 
 def test_finishing_overperformance_returns_none_when_aligned() -> None:

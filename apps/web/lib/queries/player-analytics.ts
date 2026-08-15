@@ -3,6 +3,7 @@ import { classifyPositionFamily, type PositionFamily } from "@/lib/position-fami
 
 export type AnalyticsWindow = "season" | "last_10" | "last_5" | "last_3";
 export type PlayerRole = "goalkeeper" | "defender" | "midfielder" | "forward";
+export type ScoreEvidenceState = "ready" | "partial" | "insufficient_data";
 
 export type DataResult<T> =
   | { status: "ready"; data: T }
@@ -24,6 +25,8 @@ export interface RankingPlayer {
   appearances: number;
   overallScore: number;
   confidence: number;
+  evidenceCoveragePct: number;
+  evidenceState: ScoreEvidenceState;
   dimensionScores: Record<string, number>;
 }
 
@@ -68,6 +71,8 @@ export interface PlayerWindowScore {
   appearances: number;
   overallScore: number;
   confidence: number;
+  evidenceCoveragePct: number;
+  evidenceState: ScoreEvidenceState;
   dimensionScores: Record<string, number>;
   calculatedAt: string;
 }
@@ -142,6 +147,8 @@ interface DbRankingRow {
   appearances: string | number;
   overall_score: string | number;
   confidence: string | number;
+  evidence_coverage_pct: string | number;
+  evidence_state: ScoreEvidenceState;
   dimension_scores: unknown;
 }
 
@@ -269,6 +276,8 @@ function mapRanking(row: DbRankingRow): RankingPlayer {
     appearances: numberValue(row.appearances),
     overallScore: numberValue(row.overall_score),
     confidence: numberValue(row.confidence),
+    evidenceCoveragePct: numberValue(row.evidence_coverage_pct),
+    evidenceState: row.evidence_state,
     dimensionScores: dimensionScores(row.dimension_scores),
   };
 }
@@ -281,7 +290,9 @@ async function latestContext(
       scope_key,
       model_version,
       max(calculated_at) as calculated_at
-    from analytics.player_score_snapshots
+    from analytics.product_player_score_snapshots
+    where data_context = 'real'
+      and evidence_state = 'ready'
     group by scope_key, model_version
     order by max(calculated_at) desc
     limit 1
@@ -300,6 +311,28 @@ async function latestContext(
   };
 }
 
+async function latestRealContext(
+  sql: NonNullable<ReturnType<typeof getDatabase>>,
+): Promise<SnapshotContext | null> {
+  const rows = await sql<DbContextRow[]>`
+    select scope_key, model_version, max(calculated_at) as calculated_at
+    from analytics.player_score_snapshots
+    where data_context = 'real'
+      and model_version = 'player-v2.0'
+    group by scope_key, model_version
+    order by max(calculated_at) desc
+    limit 1
+  `;
+  const row = rows[0];
+  return row
+    ? {
+        scopeKey: row.scope_key,
+        modelVersion: row.model_version,
+        calculatedAt: isoValue(row.calculated_at),
+      }
+    : null;
+}
+
 async function topPlayers(
   sql: NonNullable<ReturnType<typeof getDatabase>>,
   context: SnapshotContext,
@@ -316,13 +349,17 @@ async function topPlayers(
       s.appearances,
       s.overall_score,
       s.confidence,
+      s.evidence_coverage_pct,
+      s.evidence_state,
       s.dimension_scores
-    from analytics.player_score_snapshots as s
+    from analytics.product_player_score_snapshots as s
     join football.players as p
       on p.id = s.player_id
     where s.scope_key = ${context.scopeKey}
       and s.model_version = ${context.modelVersion}
       and s.window_key = ${window}
+      and s.data_context = 'real'
+      and s.evidence_state = 'ready'
       and s.confidence >= 0.25
     order by s.overall_score desc, s.confidence desc, p.display_name
     limit ${limit}
@@ -366,12 +403,14 @@ export async function getHomeDashboard(): Promise<DataResult<HomeDashboard>> {
           form.appearances,
           form.overall_score,
           form.confidence,
+          form.evidence_coverage_pct,
+          form.evidence_state,
           form.dimension_scores,
           season.overall_score as season_score,
           form.overall_score as form_score,
           form.overall_score - season.overall_score as delta
-        from analytics.player_score_snapshots as form
-        join analytics.player_score_snapshots as season
+        from analytics.product_player_score_snapshots as form
+        join analytics.product_player_score_snapshots as season
           on season.player_id = form.player_id
          and season.scope_key = form.scope_key
          and season.model_version = form.model_version
@@ -381,6 +420,10 @@ export async function getHomeDashboard(): Promise<DataResult<HomeDashboard>> {
         where form.scope_key = ${context.scopeKey}
           and form.model_version = ${context.modelVersion}
           and form.window_key = 'last_5'
+          and form.data_context = 'real'
+          and season.data_context = 'real'
+          and form.evidence_state = 'ready'
+          and season.evidence_state = 'ready'
           and form.confidence >= 0.25
           and season.confidence >= 0.25
         order by delta desc, form.overall_score desc
@@ -452,9 +495,11 @@ export async function getRankings(
         s.appearances,
         s.overall_score,
         s.confidence,
+        s.evidence_coverage_pct,
+        s.evidence_state,
         s.dimension_scores,
         latest_position.listed_position
-      from analytics.player_score_snapshots as s
+      from analytics.product_player_score_snapshots as s
       join football.players as p
         on p.id = s.player_id
       left join lateral (
@@ -470,6 +515,8 @@ export async function getRankings(
       where s.scope_key = ${context.scopeKey}
         and s.model_version = ${context.modelVersion}
         and s.window_key = ${filters.window}
+        and s.data_context = 'real'
+        and s.evidence_state = 'ready'
         and (${filters.role} = 'all' or s.role = ${filters.role})
         and s.confidence >= ${filters.minConfidence}
         and (${filters.search.trim()} = '' or p.display_name ilike ${searchPattern})
@@ -511,7 +558,7 @@ export async function getPlayerDetail(
   }
 
   try {
-    const context = await latestContext(sql);
+    const context = await latestRealContext(sql);
 
     if (!context) {
       return { status: "ready", data: null };
@@ -558,14 +605,18 @@ export async function getPlayerDetail(
           s.appearances,
           s.overall_score,
           s.confidence,
+          s.evidence_coverage_pct,
+          s.evidence_state,
           s.dimension_scores,
           s.calculated_at
-        from analytics.player_score_snapshots as s
+        from analytics.product_player_score_snapshots as s
         join football.players as p
           on p.id = s.player_id
         where s.player_id = ${playerId}
           and s.scope_key = ${context.scopeKey}
           and s.model_version = ${context.modelVersion}
+          and s.data_context = 'real'
+          and s.evidence_state = 'ready'
         order by case s.window_key
           when 'last_3' then 1
           when 'last_5' then 2
@@ -601,13 +652,9 @@ export async function getPlayerDetail(
       `,
     ]);
 
-    // A player can be real, identified, and have real evidence (Block 16
-    // season-aggregate stats, diagnostic findings) without ever having gone
-    // through the V1 per-match scoring pipeline -- e.g. every player in the
-    // real ENG_PL 2025/26 snapshot, which has no match-by-match rows for V1
-    // to aggregate. Only 404 when the player itself doesn't exist; an empty
-    // `scores`/`features` array is a valid, honest state the page must
-    // render around, never a reason to hide a real player entirely.
+    // A player can be real and identified without clearing the complete V2
+    // evidence gate. Only 404 when the player itself does not exist; empty
+    // `scores`/`features` arrays are an honest insufficient-data state.
 
     return {
       status: "ready",
@@ -628,6 +675,8 @@ export async function getPlayerDetail(
           appearances: numberValue(row.appearances),
           overallScore: numberValue(row.overall_score),
           confidence: numberValue(row.confidence),
+          evidenceCoveragePct: numberValue(row.evidence_coverage_pct),
+          evidenceState: row.evidence_state,
           dimensionScores: dimensionScores(row.dimension_scores),
           calculatedAt: isoValue(row.calculated_at),
         })),
@@ -666,7 +715,8 @@ export async function getLabData(): Promise<DataResult<LabData>> {
         max(calculated_at) as calculated_at,
         count(*) as score_rows,
         count(distinct player_id) as players
-      from analytics.player_score_snapshots
+      from analytics.product_player_score_snapshots
+      where data_context = 'real'
       group by scope_key, model_version
       order by max(calculated_at) desc
       limit 12
@@ -692,9 +742,11 @@ export async function getLabData(): Promise<DataResult<LabData>> {
           count(*) as players,
           avg(confidence) as average_confidence,
           avg(overall_score) as average_score
-        from analytics.player_score_snapshots
+        from analytics.product_player_score_snapshots
         where scope_key = ${activeContext.scopeKey}
           and model_version = ${activeContext.modelVersion}
+          and data_context = 'real'
+          and evidence_state = 'ready'
         group by window_key, role
         order by window_key, role
       `,

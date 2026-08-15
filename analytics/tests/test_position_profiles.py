@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from football_intelligence.player_analytics.config import FEATURE_METRICS
+from football_intelligence.metric_catalog import METRIC_CATALOG_V2
 from football_intelligence.position_profiles import (
+    POSITION_FAMILY_CORE_METRICS,
     POSITION_FAMILY_SCORE_WEIGHTS,
     classify_position_family,
 )
@@ -31,10 +32,12 @@ def test_unknown_token_returns_none_never_guessed() -> None:
     assert classify_position_family("   ") is None
 
 
-def test_goalkeeper_profile_never_includes_shot_or_xg_style_weights() -> None:
+def test_goalkeeper_profile_uses_goalkeeping_evidence_not_attacking_output() -> None:
     weights = POSITION_FAMILY_SCORE_WEIGHTS["goalkeeper"]
     metric_names = {name for name, _, _ in weights}
-    assert metric_names == {"saves"}
+    assert "saves" in metric_names
+    assert "xg_on_target_faced" in metric_names
+    assert not {"goals", "advanced.xg", "npxg"} & metric_names
 
 
 def test_centre_back_profile_is_not_dominated_by_shooting_metrics() -> None:
@@ -49,10 +52,13 @@ def test_centre_back_profile_is_not_dominated_by_shooting_metrics() -> None:
     assert not (shooting_metrics & centre_back_metric_names)
 
 
-def test_every_weight_profile_only_uses_wired_feature_metrics() -> None:
+def test_every_weight_profile_uses_catalog_metrics_and_declares_core_metrics() -> None:
+    catalog_names = {metric.key for metric in METRIC_CATALOG_V2}
     for family, weights in POSITION_FAMILY_SCORE_WEIGHTS.items():
+        weighted_names = {metric_name for metric_name, _, _ in weights}
+        assert POSITION_FAMILY_CORE_METRICS[family] <= weighted_names
         for metric_name, weight, direction in weights:
-            assert metric_name in FEATURE_METRICS, f"{family} uses un-scored metric {metric_name}"
+            assert metric_name in catalog_names, f"{family} uses unknown metric {metric_name}"
             assert weight > 0
             assert direction in (1, -1)
 

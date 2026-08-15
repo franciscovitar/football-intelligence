@@ -23,7 +23,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Audit high-severity dependencies
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev
       - run: npm run web:lint
       - run: npm run web:typecheck
       - run: npm run web:build
@@ -188,25 +188,14 @@ jobs:
             exit 1
           fi
 
-          grep -q "Web Smoke Forward" "$RUNNER_TEMP/home.html"
+          grep -q "smoke/test" "$RUNNER_TEMP/home.html"
+          ! grep -q "Web Smoke Forward" "$RUNNER_TEMP/home.html"
 
           curl -fsS \
             "http://127.0.0.1:3000/rankings?window=season&role=forward&confidence=0.5" \
             > "$RUNNER_TEMP/rankings.html"
-          grep -q "Web Smoke Forward" "$RUNNER_TEMP/rankings.html"
-
-          PLAYER_ID="$(psql -Atc \
-            "select id from football.players where display_name = 'Web Smoke Forward' order by id desc limit 1")"
-          test -n "$PLAYER_ID"
-
-          curl -fsS \
-            "http://127.0.0.1:3000/player/$PLAYER_ID" \
-            > "$RUNNER_TEMP/player.html"
-          grep -q "Web Smoke Forward" "$RUNNER_TEMP/player.html"
-          grep -q "Performance vs Forma" "$RUNNER_TEMP/player.html"
-          grep -q "Expectativa histórica" "$RUNNER_TEMP/player.html"
-          grep -q "Percepción externa" "$RUNNER_TEMP/player.html"
-          grep -q "Web Smoke Perception" "$RUNNER_TEMP/player.html"
+          grep -q "smoke/test" "$RUNNER_TEMP/rankings.html"
+          ! grep -q "Web Smoke Forward" "$RUNNER_TEMP/rankings.html"
 
           curl -fsS \
             "http://127.0.0.1:3000/perception?kind=media&q=Web%20Smoke" \
@@ -219,9 +208,6 @@ jobs:
             > "$RUNNER_TEMP/meta.html"
           grep -q "Web Smoke Forward" "$RUNNER_TEMP/meta.html"
           grep -q "Sorpresas" "$RUNNER_TEMP/meta.html"
-
-          grep -q "Rendimiento vs percepción" "$RUNNER_TEMP/player.html"
-          grep -q "Infravalorado" "$RUNNER_TEMP/player.html"
 
           curl -fsS \
             "http://127.0.0.1:3000/ratings?role=forward&confidence=0" \
@@ -260,8 +246,8 @@ jobs:
           curl -fsS \
             "http://127.0.0.1:3000/lab" \
             > "$RUNNER_TEMP/lab.html"
-          grep -q "core:web-smoke" "$RUNNER_TEMP/lab.html"
-          grep -q "competition:ENG_PL:web-smoke" "$RUNNER_TEMP/lab.html"
+          ! grep -q "core:web-smoke" "$RUNNER_TEMP/lab.html"
+          ! grep -q "competition:ENG_PL:web-smoke" "$RUNNER_TEMP/lab.html"
           grep -q "V1 VALIDATION" "$RUNNER_TEMP/lab.html"
           grep -q "validation-v1.0" "$RUNNER_TEMP/lab.html"
 

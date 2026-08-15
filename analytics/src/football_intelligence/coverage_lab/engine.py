@@ -226,9 +226,11 @@ def _entry(
 
 
 def _entity_type_for(granularity: str) -> str:
-    if granularity in ("player_appearance", "player_match"):
+    if granularity in ("player_appearance", "player_match", "player_season"):
         return "player"
-    if granularity in ("team",):
+    if granularity in ("goalkeeper_match", "goalkeeper_season"):
+        return "goalkeeper"
+    if granularity in ("team", "team_match"):
         return "team"
     if granularity == "match":
         return "match"

@@ -234,22 +234,25 @@ def test_historical_provider_is_never_affected_by_is_current_period() -> None:
 
 
 def test_metric_name_at_two_granularities_does_not_collide() -> None:
-    # "shots_total" legitimately exists at both "team" and "player_match"
+    # "shots_total" legitimately exists at both "team_match" and "player_match"
     # granularity. A provider that only supports the team-level one must
     # never be credited with the player-level one, and vice versa.
-    team_metric = TargetMetric("shots_total", "team", "team_stats", "test-v1")
+    team_metric = TargetMetric("shots_total", "team_match", "team_stats", "test-v1")
     player_metric = TargetMetric("shots_total", "player_match", "player_stats", "test-v1")
     provider = ProviderCapability(
         provider_code="thesportsdb",
         freshness_role="current",
         requires_token=False,
         token_env_var=None,
-        supported_metrics={("shots_total", "team"): "full"},
+        supported_metrics={("shots_total", "team_match"): "full"},
     )
     probe = ProbeResult(
         status="ok",
         sample_size=2,
-        metric_observed_counts={("shots_total", "team"): 2, ("shots_total", "player_match"): 2},
+        metric_observed_counts={
+            ("shots_total", "team_match"): 2,
+            ("shots_total", "player_match"): 2,
+        },
         source_reference="ref",
     )
     entries = compute_coverage(
@@ -261,7 +264,7 @@ def test_metric_name_at_two_granularities_does_not_collide() -> None:
         calculated_at=_NOW,
     )
     by_granularity = {entry.granularity: entry.state for entry in entries}
-    assert by_granularity["team"] == "current_available"
+    assert by_granularity["team_match"] == "current_available"
     assert by_granularity["player_match"] == "unsupported"
 
 
