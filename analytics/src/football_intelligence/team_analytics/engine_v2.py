@@ -157,21 +157,38 @@ def calculate_team_analytics_v2(
             for name, evidence in dimensions.items()
             if evidence.score is not None
         }
-        supported_weight = sum(TEAM_OVERALL_WEIGHTS[name] for name in ready)
-        overall = (
-            sum(TEAM_OVERALL_WEIGHTS[name] * value for name, value in ready.items())
-            / supported_weight
-            if supported_weight
-            else None
-        )
         coverage = sum(
             TEAM_OVERALL_WEIGHTS[name] * dimensions[name].evidence_coverage_pct / 100.0
             for name in TEAM_OVERALL_WEIGHTS
         )
+        # A dimension's own `evidence_state` is already the principled
+        # signal for "does real, core-satisfying evidence exist here" --
+        # "partial" and "ready" both mean genuine intended evidence was
+        # found, "insufficient_data" means it wasn't (a stray non-core
+        # metric alone never lifts a dimension out of insufficient_data,
+        # see `_weighted_percentile_score`). Overall must reflect that
+        # instead of only counting dimensions that happened to reach full
+        # 100% coverage -- a team with only `finishing`/`shot_generation`
+        # partially covered has real, reportable evidence and must not be
+        # indistinguishable from a team with zero evidence anywhere.
+        any_dimension_has_evidence = any(
+            evidence.evidence_state != "insufficient_data" for evidence in dimensions.values()
+        )
         state: EvidenceState = (
             "ready"
             if len(ready) == len(TEAM_OVERALL_WEIGHTS)
-            else ("partial" if supported_weight else "insufficient_data")
+            else ("partial" if any_dimension_has_evidence else "insufficient_data")
+        )
+        # Overall is never a renormalized recombination of whichever
+        # dimensions happen to be ready (that would silently rescale a
+        # partial subset up to look like a complete 0-100 score). It is only
+        # ever populated once every one of the fourteen intended dimensions
+        # individually reached "ready" -- mirrors
+        # `player_analytics.engine_v2._compose_overall`'s `all_ready` gate.
+        overall = (
+            sum(TEAM_OVERALL_WEIGHTS[name] * value for name, value in ready.items())
+            if state == "ready"
+            else None
         )
         reference = max((item.reference_sample_size for item in feature_map.values()), default=1)
         first = selected[0]

@@ -43,7 +43,10 @@ begin
         'finishing_underperformance', 'player', 101, 'high', 0.80000,
         '{"goals": 2, "xg": 9.0}'::jsonb, 'role:forward', 'season', 'diagnostic-v1.0', now()
     )
-    on conflict (entity_type, entity_id, diagnostic_code, comparison_group, window_key, model_version)
+    on conflict (
+        entity_type, entity_id, diagnostic_code, comparison_group, window_key,
+        model_version, data_context, source_model_version, scope_key
+    )
     do update set
         severity = excluded.severity,
         confidence = excluded.confidence,
@@ -229,6 +232,56 @@ begin
     exception
         when check_violation then null;
     end;
+
+    -- Block 19 correction: the widened primary key
+    -- (20260815140000_widen_diagnostic_findings_identity.sql) must let a
+    -- real and a test_smoke finding sharing the exact same original
+    -- 6-column natural key -- and the exact same scope_key string --
+    -- coexist as two distinct rows, never collapse into one via ON
+    -- CONFLICT.
+    insert into analytics.diagnostic_findings (
+        diagnostic_code, entity_type, entity_id, severity, confidence,
+        supporting_metrics, comparison_group, window_key, model_version, computed_at,
+        data_context, source_model_version, scope_key
+    )
+    values
+        (
+            'contract-context-coexistence', 'team', 55, 'notable', 0.60000,
+            '{}'::jsonb, 'competition:ENG_PL:2025/26', 'season', 'diagnostic-v1.0', now(),
+            'test_smoke', 'team-v2.0', 'competition:ENG_PL:2025/26'
+        ),
+        (
+            'contract-context-coexistence', 'team', 55, 'high', 0.70000,
+            '{}'::jsonb, 'competition:ENG_PL:2025/26', 'season', 'diagnostic-v1.0', now(),
+            'real', 'team-v2.0', 'competition:ENG_PL:2025/26'
+        );
+
+    select count(*) into row_count_after
+    from analytics.diagnostic_findings
+    where entity_type = 'team' and entity_id = 55
+      and diagnostic_code = 'contract-context-coexistence';
+    if row_count_after <> 2 then
+        raise exception
+            'expected a real and a test_smoke finding sharing the same natural key and '
+            'scope_key to coexist as 2 rows, got %', row_count_after;
+    end if;
+
+    if not exists (
+        select 1 from analytics.diagnostic_findings
+        where entity_type = 'team' and entity_id = 55
+          and diagnostic_code = 'contract-context-coexistence'
+          and data_context = 'test_smoke' and severity = 'notable'
+    ) then
+        raise exception 'expected the test_smoke row to remain untouched by the real insert';
+    end if;
+    if not exists (
+        select 1 from analytics.diagnostic_findings
+        where entity_type = 'team' and entity_id = 55
+          and diagnostic_code = 'contract-context-coexistence'
+          and data_context = 'real' and severity = 'high'
+    ) then
+        raise exception 'expected the real row to exist alongside the test_smoke row';
+    end if;
 end;
 $$;
 

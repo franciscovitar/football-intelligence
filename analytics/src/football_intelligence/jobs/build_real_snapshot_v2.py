@@ -64,7 +64,6 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
 
 from football_intelligence.coverage_lab.provider_capabilities import (
     PROVIDER_CAPABILITIES,
@@ -77,6 +76,7 @@ from football_intelligence.data_mesh.models import NormalizedObservation, Reconc
 from football_intelligence.data_mesh.pipeline import resolve_and_reconcile
 from football_intelligence.data_mesh.reconciliation import MODEL_VERSION
 from football_intelligence.db.data_mesh_repository import DataMeshRepository
+from football_intelligence.db.local_safety import validate_local_database_url
 from football_intelligence.db.provider_repository import connect
 from football_intelligence.jobs.collect_real_snapshot import fetch_football_data_uk_matches
 from football_intelligence.jobs.score_real_snapshot import assess_real_snapshot
@@ -112,9 +112,6 @@ DEFAULT_MANIFEST_PATH = _REPO_ROOT / "data" / "manifests" / "real" / "ENG_PL" / 
 
 SNAPSHOT_ID = "real-eng_pl-2025_26-v2"
 SOURCE_AUDIT_DOC = "docs/REAL_DATA_SOURCE_AUDIT_V2.md"
-
-_LOCAL_DATABASE_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
-_LOCAL_DATABASE_SCHEMES = frozenset({"postgresql", "postgres"})
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -229,35 +226,15 @@ def main() -> None:
     print(f"MANIFEST: {args.manifest_path}")
 
 
-def _validate_database_url(database_url: str | None) -> str | None:
-    """Reject anything that is not clearly a local PostgreSQL instance.
-
-    Called for BOTH the optional audit-persistence write path and the
-    optional canonical-state read path -- a surprising remote connection is
-    refused by default in either case, before any socket is opened. A
-    `DATABASE_URL` environment variable is never consulted here; only an
-    explicit `--database-url` CLI value reaches this function at all.
-    """
-
-    if database_url is None:
-        return None
-    parsed = urlsplit(database_url)
-    if parsed.scheme not in _LOCAL_DATABASE_SCHEMES:
-        raise SystemExit(
-            f"--database-url must be a postgresql:// URL; refusing ambiguous scheme "
-            f"{parsed.scheme!r}"
-        )
-    hostname = parsed.hostname
-    # No host component (e.g. `postgresql:///dbname`) resolves to a local
-    # Unix-domain socket via libpq -- never a remote connection.
-    if hostname is not None and hostname.lower() not in _LOCAL_DATABASE_HOSTS:
-        raise SystemExit(
-            f"--database-url host {hostname!r} is not a recognized local database "
-            "(localhost/127.0.0.1/::1). Refusing to connect to a remote/ambiguous "
-            "database -- a generic DATABASE_URL environment variable is never read "
-            "automatically by this job."
-        )
-    return database_url
+# Re-exported so existing imports (`from ...build_real_snapshot_v2 import
+# _validate_database_url`) keep working unchanged now that the check lives
+# in `db.local_safety`, shared with `jobs.execute_real_intelligence_v2`
+# (Block 19). Called for BOTH the optional audit-persistence write path and
+# the optional canonical-state read path -- a surprising remote connection
+# is refused by default in either case, before any socket is opened. A
+# `DATABASE_URL` environment variable is never consulted here; only an
+# explicit `--database-url` CLI value reaches this function at all.
+_validate_database_url = validate_local_database_url
 
 
 def _competition_external_id(source_code: str) -> str:

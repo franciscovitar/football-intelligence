@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
+from football_intelligence.team_analytics import engine_v2
 from football_intelligence.team_analytics.engine_v2 import (
     calculate_team_analytics_v2,
     classify_chance_quality_allowed,
     extract_team_issue_signals,
 )
 from football_intelligence.team_analytics.models import TeamObservation, TeamScore
+from football_intelligence.team_analytics.profiles_v2 import MetricWeight
 
 _NOW = datetime(2026, 8, 14, tzinfo=UTC)
 
@@ -166,7 +170,75 @@ def test_team_pressing_and_transition_require_their_own_evidence() -> None:
         )
 
 
-def test_team_creation_becomes_ready_from_actual_creation_metrics() -> None:
+def test_team_overall_insufficient_data_when_no_dimension_has_any_evidence() -> None:
+    """Zero intended evidence anywhere (only `goals_for`/`goals_against`,
+    which alone never satisfy any dimension's core requirement) must keep
+    the overall evidence_state `insufficient_data`, not `partial` -- a
+    dimension with a single incidental non-core metric present is still
+    correctly `insufficient_data` per-dimension (`_weighted_percentile_score`
+    gates on core metrics and a 60% coverage floor), and the overall state
+    must not treat that as "meaningful evidence" either.
+    """
+
+    observations = [
+        _team_observation(1, {}, match_id=1),
+        _team_observation(2, {}, match_id=2),
+    ]
+    result = calculate_team_analytics_v2(observations, scope_key="competition:test-empty")
+    score = next(item for item in result.scores if item.team_id == 1 and item.window == "season")
+
+    assert all(
+        evidence.evidence_state == "insufficient_data"
+        for evidence in score.dimension_evidence.values()
+    )
+    assert score.evidence_state == "insufficient_data"
+    assert score.overall_score is None
+
+
+def test_team_overall_partial_when_only_partial_dimension_evidence_exists() -> None:
+    """Regression for the Block 19 evidence-state correction: real
+    ENG_PL-2025/26-shaped evidence (goals, shots_total, shots_on_target --
+    no xG, no possession) leaves `finishing`/`shot_generation` genuinely
+    `partial` (core metrics present, but coverage below 100%) while every
+    other dimension is `insufficient_data`. Zero dimensions reach `ready`,
+    so the previous logic (which only counted fully-`ready` dimensions)
+    incorrectly reported `insufficient_data` for the whole team even though
+    real, reportable partial evidence exists. `overall_score` still must
+    stay `None`.
+    """
+
+    observations = [
+        _team_observation(
+            1,
+            {"shots_total": 12.0, "shots_on_target": 5.0},
+            match_id=1,
+        ),
+        _team_observation(
+            2,
+            {"shots_total": 6.0, "shots_on_target": 2.0},
+            match_id=2,
+        ),
+    ]
+    result = calculate_team_analytics_v2(observations, scope_key="competition:test-real-shaped")
+    score = next(item for item in result.scores if item.team_id == 1 and item.window == "season")
+
+    assert score.dimension_evidence["finishing"].evidence_state == "partial"
+    assert score.dimension_evidence["shot_generation"].evidence_state == "partial"
+    assert not any(
+        evidence.evidence_state == "ready" for evidence in score.dimension_evidence.values()
+    )
+    assert score.evidence_state == "partial"
+    assert score.overall_score is None
+
+
+def test_team_creation_becomes_ready_but_overall_stays_partial_and_unscored() -> None:
+    """One ready dimension with an otherwise incomplete profile must never
+    renormalize into a complete overall score -- mirrors Player V2's
+    `_compose_overall` guard (`player_analytics/engine_v2.py`):
+    `overall_score` is `None` unless every one of the fourteen intended
+    dimensions individually reached `ready`.
+    """
+
     observations = [
         _team_observation(
             team_id,
@@ -183,8 +255,136 @@ def test_team_creation_becomes_ready_from_actual_creation_metrics() -> None:
     score = next(item for item in result.scores if item.team_id == 2 and item.window == "season")
     assert score.dimension_evidence["creation"].evidence_state == "ready"
     assert score.dimension_scores["creation"] == 100.0
-    assert score.overall_score is not None
     assert score.evidence_state == "partial"
+    assert score.overall_score is None
+
+
+def _full_profile_stats(multiplier: float) -> dict[str, float | None]:
+    return {
+        "goals_for": multiplier * 2.0,
+        "xg": multiplier * 1.5,
+        "box_entries": multiplier * 12.0,
+        "goals_against": multiplier * 0.5,
+        "xga": multiplier * 0.8,
+        "shots_allowed": multiplier * 8.0,
+        "big_chances_allowed": multiplier * 1.0,
+        "big_chances": multiplier * 2.0,
+        "deep_completions": multiplier * 4.0,
+        "xg_per_shot": 0.12,
+        "shots_on_target": multiplier * 5.0,
+        "shots_total": multiplier * 10.0,
+        "shots_inside_box": multiplier * 6.0,
+        "possession_pct": 50.0 + multiplier,
+        "field_tilt": 50.0 + multiplier,
+        "recoveries": multiplier * 40.0,
+        "progressive_passes": multiplier * 30.0,
+        "final_third_entries": multiplier * 15.0,
+        "touches_in_box": multiplier * 20.0,
+        "pass_accuracy_pct": 80.0 + multiplier,
+        "successful_pressures": multiplier * 25.0,
+        "pressures": multiplier * 60.0,
+        "ppda": 10.0 - multiplier * 0.1,
+        "high_turnovers": multiplier * 5.0,
+        "counter_attacks": multiplier * 3.0,
+        "counter_attack_shots": multiplier * 2.0,
+        "transition_xg": multiplier * 0.5,
+        "set_piece_shots": multiplier * 3.0,
+        "set_piece_xg": multiplier * 0.4,
+        "corners": multiplier * 5.0,
+    }
+
+
+def test_team_overall_score_stays_unscored_even_with_near_complete_evidence() -> None:
+    """`defensive_transition`'s intended profile is deliberately empty today
+    (`profiles_v2.py`: "Catalog V2 currently has offensive transition
+    evidence only... rather than manufacturing defensive transition from
+    generic xGA/shot volume"), so it can never individually reach `ready`.
+    That means the overall composite correctly stays unscored even given
+    real evidence for every metric in every *other* dimension's profile --
+    a genuine, pre-existing structural gap this block must report honestly,
+    not paper over.
+    """
+
+    observations = [
+        _team_observation(team_id, _full_profile_stats(multiplier), match_id=match_id)
+        for match_id, (team_id, multiplier) in enumerate(
+            ((1, 1.0), (2, 1.2), (3, 0.9), (4, 1.1)), start=1
+        )
+    ]
+    result = calculate_team_analytics_v2(observations, scope_key="competition:test-full")
+    score = next(item for item in result.scores if item.team_id == 1 and item.window == "season")
+
+    ready_dimensions = {
+        name
+        for name, evidence in score.dimension_evidence.items()
+        if evidence.evidence_state == "ready"
+    }
+    assert ready_dimensions == set(score.dimension_scores) - {"defensive_transition"}
+    assert "defensive_transition" not in score.dimension_scores
+    assert score.overall_score is None
+    assert score.evidence_state == "partial"
+
+
+def test_team_overall_score_becomes_available_once_every_intended_dimension_is_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Isolates the positive "ready" path from the real catalog's permanent
+    `defensive_transition` gap above: with a reduced, fully-satisfiable
+    synthetic profile, `overall_score` becomes non-null exactly once every
+    intended dimension is `ready`, and is the true weighted average (not a
+    partial recombination) once it is.
+    """
+
+    # Keep the real 14 dimension keys (some engine code, e.g.
+    # `_team_v2_diagnostics`, indexes specific dimension names directly) but
+    # give every dimension a single trivially-satisfiable core metric
+    # (`goals_for`, always populated from `TeamObservation.goals_for`) so all
+    # fourteen can genuinely reach "ready" -- isolating the overall-gating
+    # logic from the real catalog's permanent `defensive_transition` gap.
+    synthetic_profiles = {
+        name: (MetricWeight("goals_for", 1.0, core=True),)
+        for name in engine_v2.TEAM_OVERALL_WEIGHTS
+    }
+    monkeypatch.setattr(engine_v2, "TEAM_DIMENSION_PROFILES", synthetic_profiles)
+
+    observations = [
+        _team_observation(team_id, {}, match_id=match_id)
+        for match_id, team_id in enumerate((1, 1, 2, 2), start=1)
+    ]
+    result = calculate_team_analytics_v2(observations, scope_key="competition:test-synthetic")
+    score = next(item for item in result.scores if item.team_id == 1 and item.window == "season")
+
+    assert all(evidence.evidence_state == "ready" for evidence in score.dimension_evidence.values())
+    assert score.evidence_state == "ready"
+    assert score.overall_score is not None
+    expected = sum(
+        engine_v2.TEAM_OVERALL_WEIGHTS[name] * value
+        for name, value in score.dimension_scores.items()
+    )
+    assert score.overall_score == pytest.approx(round(expected, 2))
+
+
+def test_team_overall_score_never_renormalizes_a_partial_subset() -> None:
+    """Regression guard for the Block 19 fix: even when several dimensions
+    are ready, `overall_score` must not become a weighted average scaled up
+    over only those dimensions' combined weight.
+    """
+
+    observations = [
+        _team_observation(team_id, _full_profile_stats(multiplier), match_id=match_id)
+        for match_id, (team_id, multiplier) in enumerate(
+            ((1, 1.0), (2, 1.2), (3, 0.9), (4, 1.1)), start=1
+        )
+    ]
+    result = calculate_team_analytics_v2(observations, scope_key="competition:test-partial")
+    score = next(item for item in result.scores if item.team_id == 1 and item.window == "season")
+
+    ready_count = sum(
+        1 for evidence in score.dimension_evidence.values() if evidence.evidence_state == "ready"
+    )
+    assert ready_count > 0
+    assert ready_count < 14
+    assert score.overall_score is None
 
 
 def test_team_window_averages_percentage_metrics_instead_of_summing_them() -> None:

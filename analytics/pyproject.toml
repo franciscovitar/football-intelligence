@@ -29,6 +29,7 @@ football-intelligence-load-real-snapshot = "football_intelligence.jobs.load_real
 football-intelligence-collect-validation-snapshot = "football_intelligence.jobs.collect_validation_snapshot:main"
 football-intelligence-score-real-snapshot = "football_intelligence.jobs.score_real_snapshot:main"
 football-intelligence-build-real-snapshot-v2 = "football_intelligence.jobs.build_real_snapshot_v2:main"
+football-intelligence-execute-real-intelligence-v2 = "football_intelligence.jobs.execute_real_intelligence_v2:main"
 
 [dependency-groups]
 dev = [

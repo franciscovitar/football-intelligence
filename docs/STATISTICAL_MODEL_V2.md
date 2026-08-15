@@ -95,6 +95,11 @@ Team V2 exposes Attack, Defence, Creation, Finishing, Chance Quality, Shot
 Generation, Control, Progression, Penetration, Build-up, Pressing, Offensive
 Transition, Defensive Transition and Set Pieces. It never manufactures
 pressing from possession, transition from goals, or build-up from pass volume.
+Its Overall score, like Player V2's, is composed only once every one of the
+fourteen intended dimensions individually reaches `ready`; partial dimension
+evidence is never renormalized into a complete Overall (Block 19 fixed an
+initial V2 implementation gap where it was -- see
+[`REAL_INTELLIGENCE_EXECUTION_V2.md`](REAL_INTELLIGENCE_EXECUTION_V2.md)).
 
 ## Statistical product chain and lifecycle
 
