@@ -1,0 +1,11 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { connection } from "next/server";
+
+import { EmptyState, Section } from "@/features/product/product-ui";
+import { humanMetric } from "@/lib/product-display";
+import { getResultsVsPerformance, type ProductDiagnostic } from "@/lib/queries/product-intelligence";
+
+export const metadata: Metadata = { title: "Resultados vs rendimiento" };
+function cards(items: ProductDiagnostic[]) { return <div className="diagnostic-product-grid">{items.map((item) => <Link href={`/${item.entityType}/${item.entityId}`} key={`${item.entityType}-${item.entityId}-${item.diagnosticCode}`}><span>{humanMetric(item.diagnosticCode)}</span><h3>{item.entityName}</h3><p>{item.diagnosticCode.includes("above") || item.diagnosticCode.includes("overperformance") ? "Resultados por encima del proceso subyacente." : "Los resultados están ocultando un proceso subyacente más fuerte."}</p><div className="evidence-chips">{Object.entries(item.supportingMetrics).slice(0, 4).map(([key, value]) => <span key={key}>{humanMetric(key)}: {String(value)}</span>)}</div><small>{item.window} · confianza {Math.round(item.confidence * 100)}%</small></Link>)}</div>; }
+export default async function ResultsPage() { await connection(); const result = await getResultsVsPerformance(); const data = result.status === "ready" ? result.data : null; return <main className="page-shell"><section className="page-heading"><div><p className="eyebrow">RESULTS VS PERFORMANCE</p><h1>Resultado no es proceso.</h1><p>Divergencias respaldadas por métricas observadas y esperadas. Describen la señal; no atribuyen causalidad.</p></div></section><Section eyebrow="PLAYERS" title="Definición y rendimiento subyacente">{data?.player.length ? cards(data.player) : <EmptyState title="Sin divergencias de jugador publicables" missing="No hay goles y output esperado comparables con evidencia real suficiente." unlock="Se habilita cuando ambos lados y la muestra superan los controles." compact />}</Section><Section eyebrow="TEAMS" title="Resultados y proceso de equipo">{data?.team.length ? cards(data.team) : <EmptyState title="Sin divergencias de equipo publicables" missing="No hay conclusiones V2 respaldadas sobre puntos/resultados y proceso." unlock="Se habilita al disponer de métricas comparables en la misma ventana." compact />}</Section></main>; }

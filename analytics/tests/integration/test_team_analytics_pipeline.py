@@ -134,6 +134,7 @@ def test_team_analytics_pipeline_calculates_and_replaces_snapshots() -> None:
             v2_result,
             scope_key=scope_key,
             season_id=season_id,
+            data_context="test_smoke",
         )
         v2_count = connection.execute(
             """
@@ -144,4 +145,20 @@ def test_team_analytics_pipeline_calculates_and_replaces_snapshots() -> None:
             (scope_key,),
         ).fetchone()
         assert v2_count == (len(v2_result.scores),)
+        persisted_context = connection.execute(
+            """
+            select
+                count(*) filter (where data_context = 'test_smoke'),
+                count(*) filter (
+                    where data_context = 'test_smoke'
+                      and team_id in (
+                        select team_id from analytics.product_team_detail_v2
+                      )
+                )
+            from analytics.team_score_snapshots
+            where scope_key = %s and model_version = 'team-v2.0'
+            """,
+            (scope_key,),
+        ).fetchone()
+        assert persisted_context == (len(v2_result.scores), 0)
         connection.rollback()

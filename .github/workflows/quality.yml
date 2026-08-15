@@ -188,13 +188,13 @@ jobs:
             exit 1
           fi
 
-          grep -q "smoke/test" "$RUNNER_TEMP/home.html"
+          grep -q "Cobertura real insuficiente" "$RUNNER_TEMP/home.html"
           ! grep -q "Web Smoke Forward" "$RUNNER_TEMP/home.html"
 
           curl -fsS \
-            "http://127.0.0.1:3000/rankings?window=season&role=forward&confidence=0.5" \
+            "http://127.0.0.1:3000/rankings?window=season&dimension=overall&confidence=0.5" \
             > "$RUNNER_TEMP/rankings.html"
-          grep -q "smoke/test" "$RUNNER_TEMP/rankings.html"
+          grep -q "Insufficient real data for this ranking" "$RUNNER_TEMP/rankings.html"
           ! grep -q "Web Smoke Forward" "$RUNNER_TEMP/rankings.html"
 
           curl -fsS \
@@ -214,22 +214,35 @@ jobs:
             > "$RUNNER_TEMP/ratings.html"
           grep -q "Web Smoke Forward" "$RUNNER_TEMP/ratings.html"
           grep -q "Infravalorados" "$RUNNER_TEMP/ratings.html"
-          curl -fsS \
+          curl -fsSL \
             "http://127.0.0.1:3000/teams?competition=ENG_PL&window=season&confidence=0" \
             > "$RUNNER_TEMP/teams.html"
-          grep -q "Web Smoke United" "$RUNNER_TEMP/teams.html"
+          grep -q "Ranking de equipos no disponible" "$RUNNER_TEMP/teams.html"
+          ! grep -q "Web Smoke United" "$RUNNER_TEMP/teams.html"
 
           TEAM_ID="$(psql -Atc \
             "select id from football.teams where name = 'Web Smoke City' order by id desc limit 1")"
           test -n "$TEAM_ID"
 
-          curl -fsS \
-            "http://127.0.0.1:3000/team/$TEAM_ID?competition=ENG_PL" \
-            > "$RUNNER_TEMP/team.html"
-          grep -q "Web Smoke City" "$RUNNER_TEMP/team.html"
-          grep -q "Resultados por encima del proceso" "$RUNNER_TEMP/team.html"
-          grep -q "TACTICAL INTELLIGENCE" "$RUNNER_TEMP/team.html"
-          grep -q "4-4-2" "$RUNNER_TEMP/team.html"
+          TEAM_STATUS="$(curl -sS -o "$RUNNER_TEMP/team.html" -w '%{http_code}' \
+            "http://127.0.0.1:3000/team/$TEAM_ID?competition=ENG_PL")"
+          test "$TEAM_STATUS" = "404"
+          ! grep -q "4-4-2" "$RUNNER_TEMP/team.html"
+
+          PLAYER_ID="$(psql -Atc \
+            "select id from football.players where display_name = 'Web Smoke Forward' order by id desc limit 1")"
+          PLAYER_STATUS="$(curl -sS -o "$RUNNER_TEMP/player.html" -w '%{http_code}' \
+            "http://127.0.0.1:3000/player/$PLAYER_ID")"
+          test "$PLAYER_STATUS" = "404"
+
+          for route in team-rankings compare results-vs-performance watchlist; do
+            curl -fsS "http://127.0.0.1:3000/$route" > "$RUNNER_TEMP/$route.html"
+            ! grep -q "Web Smoke Forward" "$RUNNER_TEMP/$route.html"
+            ! grep -q "Web Smoke City" "$RUNNER_TEMP/$route.html"
+          done
+          grep -q "RESULTS VS PERFORMANCE" "$RUNNER_TEMP/results-vs-performance.html"
+          grep -q "PERSISTENT WATCHLIST" "$RUNNER_TEMP/watchlist.html"
+          grep -q "COMPARE · V2" "$RUNNER_TEMP/compare.html"
 
           curl -fsS \
             "http://127.0.0.1:3000/tactics?competition=ENG_PL&confidence=0" \
@@ -242,6 +255,7 @@ jobs:
             > "$RUNNER_TEMP/radar.html"
           grep -q "Web Smoke Radar Forward" "$RUNNER_TEMP/radar.html"
           grep -q "World Radar V1 detecta" "$RUNNER_TEMP/radar.html"
+          grep -q "V2 no disponible" "$RUNNER_TEMP/radar.html"
 
           curl -fsS \
             "http://127.0.0.1:3000/lab" \
