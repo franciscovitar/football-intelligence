@@ -454,6 +454,8 @@ select {
 
 .ranking-footer {
   margin-top: 12px;
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 
 .confidence-line {
@@ -495,6 +497,46 @@ select {
   border-radius: 999px;
   color: var(--muted-strong);
   font-size: 0.62rem;
+}
+
+.diagnostic-card {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 16px;
+}
+
+.diagnostic-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.diagnostic-card p.team-copy {
+  margin: 0 0 12px;
+}
+
+.severity-badge {
+  display: inline-block;
+  flex: none;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted-strong);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.severity-badge--notable {
+  border-color: var(--line-strong);
+  color: var(--accent);
+}
+
+.severity-badge--high {
+  border-color: rgba(255, 159, 159, 0.35);
+  color: var(--negative);
 }
 
 .trend-panel {

@@ -1,46 +1,39 @@
 """Provider-independent target metric catalog for the Zero-Cost Coverage Lab.
 
-This is what Football Intelligence WANTS, derived from the existing
-statistical DTOs (`normalization.models`) rather than a hand-maintained
-duplicate list -- so the catalog can never silently drift from the real
-schema, and it never shrinks just because a free provider lacks a field.
+Block 16 changed the *source* of this catalog: it used to be derived purely
+from `dataclasses.fields()` on the statistical DTOs (`normalization.models`)
+plus a small hand-maintained `advanced.*` namespace. It is now sourced from
+`metric_catalog.METRIC_CATALOG_V2` -- the full declarative product
+specification (the complete versioned registry across the whole product, not just
+what today's normalization DTOs happen to carry). This is the whole point of
+Block 16: the target catalog grows to represent the full product Football
+Intelligence wants, never shrinking to fit what a free provider currently
+offers.
 
-Advanced metrics (the `advanced.*` namespace) do not yet have a DTO field
--- they are declared explicitly below. Adding one here never requires a
-database migration: coverage rows key on `metric_name` as free text.
+The original metrics keep their names, but the requirement identity is the
+catalog's full `(metric_name, granularity)` pair.  All nine catalog grains
+remain distinct here; provider support at one grain never satisfies another
+grain by accident. `_domain_for` maps
+`metric_catalog`'s 21 categories down onto this module's existing 6-value
+`MetricDomain`, reproducing the original per-DTO domain assignment exactly
+(e.g. `TeamLineupRecord` fields stayed `tactical`, `advanced.xg` stayed
+`advanced`).
 """
 
 from __future__ import annotations
 
-import dataclasses
 from dataclasses import dataclass
 from typing import Literal
 
-from football_intelligence.normalization.models import (
-    MatchRecord,
-    PlayerAppearanceRecord,
-    PlayerMatchStatsRecord,
-    TeamLineupRecord,
-    TeamMatchStatsRecord,
-)
+from football_intelligence.metric_catalog.catalog import METRIC_CATALOG_V2
+from football_intelligence.metric_catalog.types import MetricDefinition
+from football_intelligence.metric_catalog.types import MetricGranularity as CatalogGranularity
 
-MetricGranularity = Literal["competition", "team", "match", "player_appearance", "player_match"]
+MetricGranularity = CatalogGranularity
 MetricDomain = Literal["match", "team_stats", "tactical", "appearance", "player_stats", "advanced"]
 MetricImportance = Literal["critical", "standard", "advanced"]
 
-CATALOG_VERSION = "target-metric-catalog-v1"
-
-# Fields that identify/link a record rather than describe a metric value.
-_EXCLUDED_FIELDS = frozenset(
-    {
-        "external_id",
-        "match_external_id",
-        "team_external_id",
-        "player_external_id",
-        "home_team_external_id",
-        "away_team_external_id",
-    }
-)
+CATALOG_VERSION = "target-metric-catalog-v2"
 
 # A deliberately small set of metrics the product treats as critical for a
 # *current* competition -- used only for "missing critical current metrics"
@@ -69,56 +62,47 @@ class TargetMetric:
     importance: MetricImportance = "standard"
 
 
-# Metrics that do not exist as a field on any current DTO yet. Namespaced so
-# they can never collide with a core metric name.
-ADVANCED_METRICS: tuple[TargetMetric, ...] = (
-    TargetMetric(
-        metric_name="advanced.xg",
-        granularity="player_match",
-        domain="advanced",
-        semantic_version=CATALOG_VERSION,
-        importance="advanced",
-    ),
-)
+# Metrics whose (key, granularity) identity must resolve to the original
+# per-DTO domain, reproduced by construction below rather than duplicated as
+# a lookup table:
+#   - MatchRecord fields (granularity "match") -> "match"
+#   - PlayerAppearanceRecord fields (granularity "player_appearance") -> "appearance"
+#   - TeamLineupRecord fields (formation, coach_name) -> "tactical"
+#   - the expected_output family (advanced.xg and its siblings) -> "advanced"
+#   - every other team-scoped metric -> "team_stats" (TeamMatchStatsRecord)
+#   - everything else (player-scoped) -> "player_stats" (PlayerMatchStatsRecord)
+_TACTICAL_KEYS = frozenset({"formation", "coach_name"})
 
 
-def _fields_from(
-    dataclass_type: type,
-    *,
-    granularity: MetricGranularity,
-    domain: MetricDomain,
-) -> tuple[TargetMetric, ...]:
-    importance: MetricImportance
-    metrics: list[TargetMetric] = []
-    for field in dataclasses.fields(dataclass_type):
-        if field.name in _EXCLUDED_FIELDS:
-            continue
-        importance = "critical" if field.name in CRITICAL_METRIC_NAMES else "standard"
-        metrics.append(
-            TargetMetric(
-                metric_name=field.name,
-                granularity=granularity,
-                domain=domain,
-                semantic_version=CATALOG_VERSION,
-                importance=importance,
-            )
-        )
-    return tuple(metrics)
+def _domain_for(metric: MetricDefinition) -> MetricDomain:
+    if metric.granularity == "match":
+        return "match"
+    if metric.granularity == "player_appearance":
+        return "appearance"
+    if metric.category == "expected_output":
+        return "advanced"
+    if metric.category == "team_misc" and metric.key in _TACTICAL_KEYS:
+        return "tactical"
+    if metric.granularity in ("team", "team_match"):
+        return "team_stats"
+    return "player_stats"
+
+
+def _importance_for(metric_name: str) -> MetricImportance:
+    return "critical" if metric_name in CRITICAL_METRIC_NAMES else "standard"
 
 
 def build_target_metric_catalog() -> tuple[TargetMetric, ...]:
-    catalog: list[TargetMetric] = []
-    catalog.extend(_fields_from(MatchRecord, granularity="match", domain="match"))
-    catalog.extend(_fields_from(TeamMatchStatsRecord, granularity="team", domain="team_stats"))
-    catalog.extend(_fields_from(TeamLineupRecord, granularity="team", domain="tactical"))
-    catalog.extend(
-        _fields_from(PlayerAppearanceRecord, granularity="player_appearance", domain="appearance")
+    return tuple(
+        TargetMetric(
+            metric_name=metric.key,
+            granularity=metric.granularity,
+            domain=_domain_for(metric),
+            semantic_version=CATALOG_VERSION,
+            importance=_importance_for(metric.key),
+        )
+        for metric in METRIC_CATALOG_V2
     )
-    catalog.extend(
-        _fields_from(PlayerMatchStatsRecord, granularity="player_match", domain="player_stats")
-    )
-    catalog.extend(ADVANCED_METRICS)
-    return tuple(catalog)
 
 
 # entity_type -> granularity is ambiguous for "player" alone (it could mean
@@ -139,7 +123,11 @@ def build_metric_granularity_index() -> dict[tuple[str, str], MetricGranularity]
 _ENTITY_TYPE_BY_GRANULARITY: dict[MetricGranularity, str] = {
     "competition": "competition",
     "team": "team",
+    "team_match": "team",
     "match": "match",
     "player_appearance": "player",
     "player_match": "player",
+    "player_season": "player",
+    "goalkeeper_match": "goalkeeper",
+    "goalkeeper_season": "goalkeeper",
 }

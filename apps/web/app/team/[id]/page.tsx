@@ -3,8 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 
+import { DiagnosticFindingCard } from "@/features/diagnostics/finding-card";
 import { DataNotice } from "@/features/players/data-notice";
 import { formatConfidence, formatDateTime, formatScore } from "@/lib/player-display";
+import { getEntityDiagnostics } from "@/lib/queries/diagnostics";
 import {
   getTeamDetail,
   type TeamFeature,
@@ -61,9 +63,10 @@ export default async function TeamPage({
   const teamId = validId(id);
   if (teamId === null) notFound();
   const competitionCode = firstValue(query.competition).trim().slice(0, 32);
-  const [result, tacticalResult] = await Promise.all([
+  const [result, tacticalResult, diagnosticsResult] = await Promise.all([
     getTeamDetail(teamId, competitionCode),
     getTeamTactical(teamId, competitionCode),
+    getEntityDiagnostics("team", teamId),
   ]);
 
   if (result.status !== "ready") {
@@ -82,6 +85,7 @@ export default async function TeamPage({
   const primaryFeatures = featuresForWindow(features, primaryWindow);
   const signals = diagnosticSignals(seasonScore.diagnostics);
   const evidence = [...primaryFeatures].sort((a, b) => b.percentile - a.percentile);
+  const diagnostics = diagnosticsResult.status === "ready" ? diagnosticsResult.data : [];
 
   return (
     <main className="page-shell">
@@ -203,6 +207,32 @@ export default async function TeamPage({
             ))}
           </div>
         </div>
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">DIAGNOSTIC RULES</p>
+            <h2>Diagnósticos</h2>
+          </div>
+          <p>
+            Reglas deterministas sobre evidencia ya calculada. Todavía no tenemos xG de equipo
+            para esta liga, así que las lecturas basadas en xG (posesión estéril, calidad de las
+            ocasiones permitidas) no están disponibles hasta que esa fuente exista.
+          </p>
+        </div>
+        {diagnostics.length === 0 ? (
+          <p className="ranking-summary">Sin hallazgos relevantes en esta ventana.</p>
+        ) : (
+          <div className="ranking-list">
+            {diagnostics.map((finding) => (
+              <DiagnosticFindingCard
+                finding={finding}
+                key={`${finding.diagnosticCode}-${finding.comparisonGroup}-${finding.windowKey}`}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="panel">

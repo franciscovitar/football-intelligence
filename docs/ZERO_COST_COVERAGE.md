@@ -27,6 +27,17 @@ hand-maintained list that could silently drift or shrink. Adding a new
 `advanced.*` metric never requires a database migration: coverage rows key
 on `metric_name` as free text.
 
+**Block 16 update**: `target_metrics.build_target_metric_catalog()` is now
+sourced from `metric_catalog.METRIC_CATALOG_V2` (`analytics/.../metric_catalog/`)
+instead of deriving purely from the 5 normalization DTOs -- the target
+catalog grew beyond the original **48 metrics** to represent the full
+statistical product spec, not just
+what those 5 DTOs happen to carry. The original 48 keep the exact same
+`(metric_name, granularity)` identity (never renamed); every number below
+that still says "48" or "480" describes the pre-Block-16 catalog accurately
+as historical record of what Block 14/15 measured against at the time, not a
+live figure.
+
 ## Target competitions
 
 `analytics/.../coverage_lab/target_competitions.py` reuses `CORE_LEAGUES` (6)
@@ -84,13 +95,13 @@ free source of the relevant freshness role?" A requirement -- identified by
 `metric_name` alone, since the same name can exist at two granularities --
 is satisfied when AT LEAST ONE provider of that freshness role has a
 satisfying state for it. The denominator is always
-`target_metric_count x target_competition_count` (48 x 10 = 480),
+`len(unique catalog identities) x target_competition_count` (10 competitions),
 independent of how many providers exist. Adding a provider that supports
 nothing leaves this number exactly unchanged; adding a provider that covers
 something new can only ever raise it.
 
-The job report exposes three product-level fractions, all sharing the fixed
-480 denominator and never blended into each other: `product_current_coverage`
+The job report exposes three product-level fractions, all sharing the dynamic
+catalog-identity denominator and never blended into each other: `product_current_coverage`
 (true current-period evidence only), `product_recent_season_coverage`
 (`previous_season` evidence -- a `current`-role provider verified the latest
 *completed* season, real but never current), and
@@ -484,8 +495,8 @@ Block 14 measures and documents this contract; it does not enable it.
 ## Web
 
 `/sources` shows product-level coverage stats (current, previous-season, and
-historical/deep, each its own `numerator/denominator` against the fixed
-480-requirement target catalog, clearly separate from the raw provider-row
+historical/deep, each its own `numerator/denominator` against the dynamic
+catalog-identity target, clearly separate from the raw provider-row
 count) alongside a competition x
 provider coverage matrix. Each matrix cell shows every non-zero state it
 actually has (e.g. `2 ACTUAL · 1 PARCIAL · 45 NO SOPORTADO`), never a single

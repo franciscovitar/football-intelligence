@@ -1,20 +1,32 @@
 import Link from "next/link";
 import { connection } from "next/server";
 
+import { DiagnosticFindingCard } from "@/features/diagnostics/finding-card";
 import { DataNotice } from "@/features/players/data-notice";
 import { PlayerRankingCard } from "@/features/players/player-ranking-card";
 import { formatDateTime, formatScore, ROLE_LABELS_SINGULAR } from "@/lib/player-display";
 import { getHomeDashboard } from "@/lib/queries/player-analytics";
+import { getTopPlayerDiagnosticsByCode, type DiagnosticFinding } from "@/lib/queries/diagnostics";
+
+function entityName(finding: DiagnosticFinding): string {
+  const value = finding.supportingMetrics.player_name;
+  return typeof value === "string" ? value : `Jugador #${finding.entityId}`;
+}
 
 export default async function HomePage() {
   await connection();
-  const result = await getHomeDashboard();
+  const [result, breakoutResult, underratedResult, overratedResult] = await Promise.all([
+    getHomeDashboard(),
+    getTopPlayerDiagnosticsByCode("breakout_signal", 6),
+    getTopPlayerDiagnosticsByCode("underrated", 6),
+    getTopPlayerDiagnosticsByCode("overrated", 6),
+  ]);
 
   return (
     <main className="page-shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">FOOTBALL INTELLIGENCE · PLAYER V1</p>
+          <p className="eyebrow">FOOTBALL INTELLIGENCE · PLAYER V2</p>
           <h1>Qué está pasando de verdad.</h1>
           <p className="hero-copy">
             Rankings por rol, Forma reciente, Performance estabilizada y evidencia visible detrás
@@ -44,8 +56,8 @@ export default async function HomePage() {
         />
       ) : result.data.context === null ? (
         <DataNotice
-          title="Todavía no hay snapshots"
-          message="El read model está conectado, pero Player Analytics todavía no persistió rankings para este entorno."
+          title="Datos reales insuficientes"
+          message="No hay scores reales con cobertura de evidencia suficiente. Los snapshots smoke/test nunca se usan como ranking activo."
         />
       ) : (
         <>
@@ -123,6 +135,86 @@ export default async function HomePage() {
                 </Link>
               ))}
             </div>
+          </section>
+
+          {breakoutResult.status === "ready" ? (
+            <section className="panel">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">DIAGNOSTIC RULES</p>
+                  <h2>Sorpresas</h2>
+                </div>
+                <p>Señal de breakout: nivel estable en subida frente a la expectativa histórica.</p>
+              </div>
+              {breakoutResult.data.length === 0 ? (
+                <p className="ranking-summary">Sin señales de breakout en este cálculo.</p>
+              ) : (
+                <div className="ranking-list">
+                  {breakoutResult.data.map((finding) => (
+                    <DiagnosticFindingCard
+                      entityHref={`/player/${finding.entityId}`}
+                      entityName={entityName(finding)}
+                      finding={finding}
+                      key={`${finding.diagnosticCode}-${finding.entityId}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          <section className="dashboard-grid">
+            {underratedResult.status === "ready" ? (
+              <div className="panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">DIAGNOSTIC RULES</p>
+                    <h2>Infravalorados</h2>
+                  </div>
+                  <p>Rendimiento por encima de la percepción externa. No es valor de mercado.</p>
+                </div>
+                {underratedResult.data.length === 0 ? (
+                  <p className="ranking-summary">Sin hallazgos de infravaloración en este cálculo.</p>
+                ) : (
+                  <div className="ranking-list">
+                    {underratedResult.data.map((finding) => (
+                      <DiagnosticFindingCard
+                        entityHref={`/player/${finding.entityId}`}
+                        entityName={entityName(finding)}
+                        finding={finding}
+                        key={`${finding.diagnosticCode}-${finding.entityId}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {overratedResult.status === "ready" ? (
+              <div className="panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">DIAGNOSTIC RULES</p>
+                    <h2>Sobrevalorados</h2>
+                  </div>
+                  <p>Percepción externa por encima del rendimiento. No es valor de mercado.</p>
+                </div>
+                {overratedResult.data.length === 0 ? (
+                  <p className="ranking-summary">Sin hallazgos de sobrevaloración en este cálculo.</p>
+                ) : (
+                  <div className="ranking-list">
+                    {overratedResult.data.map((finding) => (
+                      <DiagnosticFindingCard
+                        entityHref={`/player/${finding.entityId}`}
+                        entityName={entityName(finding)}
+                        finding={finding}
+                        key={`${finding.diagnosticCode}-${finding.entityId}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </section>
         </>
       )}

@@ -1,7 +1,8 @@
-"""PostgreSQL inputs and persisted read model for Team Analytics V1."""
+"""PostgreSQL inputs and versioned Team Analytics snapshot persistence."""
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from collections.abc import Sequence
 from datetime import datetime
@@ -9,6 +10,7 @@ from typing import Any
 
 from psycopg import Connection
 
+from football_intelligence.team_analytics.engine_v2 import TeamAnalyticsResultV2
 from football_intelligence.team_analytics.models import (
     TeamAnalyticsResult,
     TeamObservation,
@@ -265,6 +267,98 @@ class TeamAnalyticsRepository:
                 raise RuntimeError(f"failed to count {table}")
             counts[key] = int(row[0])
         return counts
+
+    def replace_v2_snapshots(
+        self,
+        result: TeamAnalyticsResultV2,
+        *,
+        scope_key: str,
+        season_id: int,
+    ) -> None:
+        """Persist Team V2 without altering the established V1/Elo contract."""
+        model_version = "team-v2.0"
+        self._connection.execute(
+            "delete from analytics.team_feature_snapshots "
+            "where scope_key = %s and model_version = %s",
+            (scope_key, model_version),
+        )
+        self._connection.execute(
+            "delete from analytics.team_score_snapshots "
+            "where scope_key = %s and model_version = %s",
+            (scope_key, model_version),
+        )
+        for feature in result.features:
+            self._connection.execute(
+                """
+                insert into analytics.team_feature_snapshots (
+                    team_id, season_id, scope_key, window_key, metric_name,
+                    matches, observed_matches, raw_value, adjusted_value,
+                    percentile, reference_sample_size, model_version, calculated_at,
+                    value_basis, metric_kind, metric_unit, formula_version, comparison_group
+                ) values (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s
+                )
+                """,
+                (
+                    feature.team_id,
+                    season_id,
+                    scope_key,
+                    feature.window,
+                    feature.metric_name,
+                    feature.matches,
+                    feature.observed_matches,
+                    feature.raw_value,
+                    feature.adjusted_value,
+                    feature.percentile,
+                    feature.reference_sample_size,
+                    model_version,
+                    feature.calculated_at,
+                    feature.value_basis,
+                    feature.metric_kind,
+                    feature.metric_unit,
+                    feature.formula_version,
+                    feature.comparison_group,
+                ),
+            )
+        for score in result.scores:
+            evidence = {
+                name: dataclasses.asdict(item) for name, item in score.dimension_evidence.items()
+            }
+            self._connection.execute(
+                """
+                insert into analytics.team_score_snapshots (
+                    team_id, season_id, scope_key, window_key, matches,
+                    overall_score, confidence, dimension_scores,
+                    results_process_delta, results_process_signal, diagnostics,
+                    reference_sample_size, current_elo, elo_change_last_5,
+                    model_version, calculated_at, evidence_coverage_pct,
+                    evidence_state, dimension_evidence, profile_version
+                ) values (
+                    %s, %s, %s, %s, %s, %s, %s, %s::jsonb,
+                    null, null, %s::jsonb, %s, null, null,
+                    %s, %s, %s, %s, %s::jsonb, %s
+                )
+                """,
+                (
+                    score.team_id,
+                    season_id,
+                    scope_key,
+                    score.window,
+                    score.matches,
+                    score.overall_score,
+                    score.confidence,
+                    json.dumps(dict(score.dimension_scores), sort_keys=True),
+                    json.dumps({"signals": score.diagnostics}, sort_keys=True),
+                    score.reference_sample_size,
+                    model_version,
+                    score.calculated_at,
+                    score.evidence_coverage_pct,
+                    score.evidence_state,
+                    json.dumps(evidence, sort_keys=True),
+                    score.profile_version,
+                ),
+            )
 
 
 def _optional_float(value: Any) -> float | None:

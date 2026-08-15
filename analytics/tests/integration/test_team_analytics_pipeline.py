@@ -11,6 +11,7 @@ from football_intelligence.team_analytics.engine import (
     MODEL_VERSION,
     calculate_team_analytics,
 )
+from football_intelligence.team_analytics.engine_v2 import calculate_team_analytics_v2
 
 
 @pytest.mark.integration
@@ -123,4 +124,24 @@ def test_team_analytics_pipeline_calculates_and_replaces_snapshots() -> None:
         assert first["features"] == len(result.features)
         assert first["scores"] == len(result.scores)
         assert first["elo"] == 12
+
+        v2_result = calculate_team_analytics_v2(
+            observations,
+            scope_key=scope_key,
+            calculated_at=datetime(2024, 6, 1, tzinfo=UTC),
+        )
+        repository.replace_v2_snapshots(
+            v2_result,
+            scope_key=scope_key,
+            season_id=season_id,
+        )
+        v2_count = connection.execute(
+            """
+            select count(*)
+            from analytics.team_score_snapshots
+            where scope_key = %s and model_version = 'team-v2.0'
+            """,
+            (scope_key,),
+        ).fetchone()
+        assert v2_count == (len(v2_result.scores),)
         connection.rollback()

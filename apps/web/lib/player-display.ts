@@ -39,8 +39,18 @@ export const METRIC_LABELS: Record<string, string> = {
 };
 
 export const DIMENSION_LABELS: Record<string, string> = {
+  performance: "Rendimiento",
+  underlying_performance: "Rendimiento subyacente",
+  finishing: "Definición",
+  shot_generation: "Generación de tiros",
   scoring: "Definición",
   creation: "Creación",
+  progression: "Progresión",
+  passing: "Pase",
+  one_v_one: "1v1",
+  defence: "Defensa",
+  ball_winning: "Recuperación",
+  aerial: "Juego aéreo",
   carrying: "Conducción",
   defending: "Defensa",
   goalkeeping: "Arco",

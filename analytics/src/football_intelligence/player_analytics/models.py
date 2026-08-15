@@ -21,6 +21,35 @@ class PlayerObservation:
 
 
 @dataclass(frozen=True, slots=True)
+class PlayerSeasonObservation:
+    """Provider-supplied player-season evidence, never synthesized from matches."""
+
+    player_id: int
+    player_name: str
+    season_id: int
+    season_label: str
+    team_id: int | None
+    minutes: int
+    appearances: int
+    listed_position: str | None
+    stats: Mapping[str, float | None]
+
+
+@dataclass(frozen=True, slots=True)
+class GoalkeeperSeasonObservation:
+    """Provider-supplied goalkeeper-season evidence at its native grain."""
+
+    player_id: int
+    player_name: str
+    season_id: int
+    season_label: str
+    team_id: int | None
+    minutes: int
+    appearances: int
+    stats: Mapping[str, float | None]
+
+
+@dataclass(frozen=True, slots=True)
 class PlayerFeature:
     player_id: int
     player_name: str

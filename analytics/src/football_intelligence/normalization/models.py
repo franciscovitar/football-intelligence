@@ -114,3 +114,50 @@ class NormalizedFixtureBatch:
     appearances: tuple[PlayerAppearanceRecord, ...]
     player_match_stats: tuple[PlayerMatchStatsRecord, ...]
     team_lineups: tuple[TeamLineupRecord, ...] = ()
+
+
+@dataclass(frozen=True)
+class PlayerSeasonStatsRecord:
+    """A season-aggregate player record (Block 16), distinct from the
+    per-match `PlayerMatchStatsRecord` above -- some sources (e.g. the
+    permitted season-summary sources may only publish a season rollup,
+    with no match-by-match breakdown to derive last-3/last-5/last-10 form
+    windows from. Missing fields stay `None`; a real `0` (e.g. a striker who
+    genuinely scored zero goals) is preserved as `0`, never conflated with
+    "not reported".
+    """
+
+    player_external_id: str
+    competition_external_id: str
+    season_label: str
+    minutes: int | None
+    starts: int | None
+    appearances: int | None
+    goals: int | None
+    assists: int | None
+    clean_sheets: int | None
+    goals_conceded: int | None
+    own_goals: int | None
+    penalties_saved: int | None
+    penalties_missed: int | None
+    yellow_cards: int | None
+    red_cards: int | None
+    saves: int | None
+    bonus: int | None
+    bps: int | None
+    influence: float | None
+    creativity: float | None
+    threat: float | None
+    ict_index: float | None
+    tackles: int | None
+    recoveries: int | None
+    clearances_blocks_interceptions: int | None
+    defensive_contribution: int | None
+    expected_goals: float | None
+    expected_assists: float | None
+    expected_goal_involvements: float | None
+    expected_goals_conceded: float | None
+    source: str
+    source_url: str
+    retrieved_at: datetime
+    semantic_version: str

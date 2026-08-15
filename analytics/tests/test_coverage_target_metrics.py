@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 
 from football_intelligence.coverage_lab.target_metrics import build_target_metric_catalog
+from football_intelligence.metric_catalog import METRIC_CATALOG_V2
 from football_intelligence.normalization.models import (
     PlayerAppearanceRecord,
     PlayerMatchStatsRecord,
@@ -75,4 +76,24 @@ def test_same_metric_name_can_exist_at_different_granularities() -> None:
     shots_total_granularities = {
         metric.granularity for metric in catalog if metric.metric_name == "shots_total"
     }
-    assert {"team", "player_match"} <= shots_total_granularities
+    assert {"team_match", "player_match"} <= shots_total_granularities
+
+
+def test_coverage_catalog_preserves_every_catalog_identity_and_all_nine_grains() -> None:
+    coverage = build_target_metric_catalog()
+    expected = {(metric.key, metric.granularity) for metric in METRIC_CATALOG_V2}
+    actual = {(metric.metric_name, metric.granularity) for metric in coverage}
+
+    assert len(coverage) == len(METRIC_CATALOG_V2)
+    assert actual == expected
+    assert {metric.granularity for metric in coverage} == {
+        "competition",
+        "team",
+        "team_match",
+        "match",
+        "player_appearance",
+        "player_match",
+        "player_season",
+        "goalkeeper_match",
+        "goalkeeper_season",
+    }

@@ -1,7 +1,21 @@
 import { getDatabase } from "@/lib/db/postgres";
+import { classifyPositionFamily, type PositionFamily } from "@/lib/position-family";
 
 export type AnalyticsWindow = "season" | "last_10" | "last_5" | "last_3";
 export type PlayerRole = "goalkeeper" | "defender" | "midfielder" | "forward";
+export type ScoreEvidenceState = "ready" | "partial" | "insufficient_data";
+
+export interface DimensionEvidence {
+  score: number | null;
+  evidenceWeightAvailable: number;
+  evidenceWeightRequired: number;
+  evidenceCoveragePct: number;
+  evidenceState: ScoreEvidenceState;
+  evidenceMetricsExpected: string[];
+  evidenceCoreMetrics: string[];
+  evidenceMetricsAvailable: string[];
+  evidenceMetricsMissing: string[];
+}
 
 export type DataResult<T> =
   | { status: "ready"; data: T }
@@ -23,6 +37,8 @@ export interface RankingPlayer {
   appearances: number;
   overallScore: number;
   confidence: number;
+  evidenceCoveragePct: number;
+  evidenceState: ScoreEvidenceState;
   dimensionScores: Record<string, number>;
 }
 
@@ -45,12 +61,18 @@ export interface RankingsFilters {
   minConfidence: number;
   search: string;
   limit: number;
+  positionFamily: PositionFamily | "all";
+}
+
+export interface RankingPlayerWithPosition extends RankingPlayer {
+  listedPosition: string | null;
+  positionFamily: PositionFamily | null;
 }
 
 export interface RankingsData {
   context: SnapshotContext | null;
   filters: RankingsFilters;
-  players: RankingPlayer[];
+  players: RankingPlayerWithPosition[];
 }
 
 export interface PlayerWindowScore {
@@ -59,9 +81,12 @@ export interface PlayerWindowScore {
   roleConfidence: number;
   minutes: number;
   appearances: number;
-  overallScore: number;
+  overallScore: number | null;
   confidence: number;
+  evidenceCoveragePct: number;
+  evidenceState: ScoreEvidenceState;
   dimensionScores: Record<string, number>;
+  dimensionEvidence: Record<string, DimensionEvidence>;
   calculatedAt: string;
 }
 
@@ -133,9 +158,16 @@ interface DbRankingRow {
   role_confidence: string | number;
   minutes: string | number;
   appearances: string | number;
-  overall_score: string | number;
+  overall_score: string | number | null;
   confidence: string | number;
+  evidence_coverage_pct: string | number;
+  evidence_state: ScoreEvidenceState;
   dimension_scores: unknown;
+  dimension_evidence: unknown;
+}
+
+interface DbRankingRowWithPosition extends DbRankingRow {
+  listed_position: string | null;
 }
 
 interface DbTrendRow extends DbRankingRow {
@@ -205,7 +237,7 @@ function failed<T>(): DataResult<T> {
   };
 }
 
-function numberValue(value: string | number): number {
+function numberValue(value: string | number | null): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }
@@ -258,6 +290,8 @@ function mapRanking(row: DbRankingRow): RankingPlayer {
     appearances: numberValue(row.appearances),
     overallScore: numberValue(row.overall_score),
     confidence: numberValue(row.confidence),
+    evidenceCoveragePct: numberValue(row.evidence_coverage_pct),
+    evidenceState: row.evidence_state,
     dimensionScores: dimensionScores(row.dimension_scores),
   };
 }
@@ -270,7 +304,9 @@ async function latestContext(
       scope_key,
       model_version,
       max(calculated_at) as calculated_at
-    from analytics.player_score_snapshots
+    from analytics.product_player_score_snapshots
+    where data_context = 'real'
+      and evidence_state = 'ready'
     group by scope_key, model_version
     order by max(calculated_at) desc
     limit 1
@@ -289,6 +325,61 @@ async function latestContext(
   };
 }
 
+function nullableNumberValue(value: string | number | null): number | null {
+  if (value === null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function dimensionEvidence(value: unknown): Record<string, DimensionEvidence> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const result: Record<string, DimensionEvidence> = {};
+  for (const [name, raw] of Object.entries(value)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const item = raw as Record<string, unknown>;
+    const list = (key: string) =>
+      Array.isArray(item[key])
+        ? item[key].filter((entry): entry is string => typeof entry === "string")
+        : [];
+    const state = item.evidence_state;
+    if (state !== "ready" && state !== "partial" && state !== "insufficient_data") continue;
+    result[name] = {
+      score: nullableNumberValue(item.score as string | number | null),
+      evidenceWeightAvailable: Number(item.evidence_weight_available ?? 0),
+      evidenceWeightRequired: Number(item.evidence_weight_required ?? 0),
+      evidenceCoveragePct: Number(item.evidence_coverage_pct ?? 0),
+      evidenceState: state,
+      evidenceMetricsExpected: list("evidence_metrics_expected"),
+      evidenceCoreMetrics: list("evidence_core_metrics"),
+      evidenceMetricsAvailable: list("evidence_metrics_available"),
+      evidenceMetricsMissing: list("evidence_metrics_missing"),
+    };
+  }
+  return result;
+}
+
+async function latestRealContext(
+  sql: NonNullable<ReturnType<typeof getDatabase>>,
+): Promise<SnapshotContext | null> {
+  const rows = await sql<DbContextRow[]>`
+    select scope_key, model_version, max(calculated_at) as calculated_at
+    from analytics.player_score_snapshots
+    where data_context = 'real'
+      and model_version = 'player-v2.0'
+    group by scope_key, model_version
+    order by max(calculated_at) desc
+    limit 1
+  `;
+  const row = rows[0];
+  return row
+    ? {
+        scopeKey: row.scope_key,
+        modelVersion: row.model_version,
+        calculatedAt: isoValue(row.calculated_at),
+      }
+    : null;
+}
+
 async function topPlayers(
   sql: NonNullable<ReturnType<typeof getDatabase>>,
   context: SnapshotContext,
@@ -305,13 +396,17 @@ async function topPlayers(
       s.appearances,
       s.overall_score,
       s.confidence,
+      s.evidence_coverage_pct,
+      s.evidence_state,
       s.dimension_scores
-    from analytics.player_score_snapshots as s
+    from analytics.product_player_score_snapshots as s
     join football.players as p
       on p.id = s.player_id
     where s.scope_key = ${context.scopeKey}
       and s.model_version = ${context.modelVersion}
       and s.window_key = ${window}
+      and s.data_context = 'real'
+      and s.evidence_state = 'ready'
       and s.confidence >= 0.25
     order by s.overall_score desc, s.confidence desc, p.display_name
     limit ${limit}
@@ -355,12 +450,14 @@ export async function getHomeDashboard(): Promise<DataResult<HomeDashboard>> {
           form.appearances,
           form.overall_score,
           form.confidence,
+          form.evidence_coverage_pct,
+          form.evidence_state,
           form.dimension_scores,
           season.overall_score as season_score,
           form.overall_score as form_score,
           form.overall_score - season.overall_score as delta
-        from analytics.player_score_snapshots as form
-        join analytics.player_score_snapshots as season
+        from analytics.product_player_score_snapshots as form
+        join analytics.product_player_score_snapshots as season
           on season.player_id = form.player_id
          and season.scope_key = form.scope_key
          and season.model_version = form.model_version
@@ -370,6 +467,10 @@ export async function getHomeDashboard(): Promise<DataResult<HomeDashboard>> {
         where form.scope_key = ${context.scopeKey}
           and form.model_version = ${context.modelVersion}
           and form.window_key = 'last_5'
+          and form.data_context = 'real'
+          and season.data_context = 'real'
+          and form.evidence_state = 'ready'
+          and season.evidence_state = 'ready'
           and form.confidence >= 0.25
           and season.confidence >= 0.25
         order by delta desc, form.overall_score desc
@@ -421,7 +522,17 @@ export async function getRankings(
 
     const searchPattern = `%${filters.search.trim()}%`;
 
-    const rows = await sql<DbRankingRow[]>`
+    // `listed_position` -> position-family classification happens in JS
+    // (`classifyPositionFamily`), not SQL, to avoid duplicating the alias
+    // table as a CASE expression. Because the filter runs after the SQL
+    // LIMIT would otherwise apply, fetch a wider batch whenever a specific
+    // family is requested and slice down to `filters.limit` afterward --
+    // simpler than pushing the alias table into SQL, at the cost of not
+    // being a perfectly exhaustive scan for very narrow families.
+    const fetchLimit =
+      filters.positionFamily === "all" ? filters.limit : Math.min(filters.limit * 4, 400);
+
+    const rows = await sql<DbRankingRowWithPosition[]>`
       select
         p.id as player_id,
         p.display_name,
@@ -431,26 +542,52 @@ export async function getRankings(
         s.appearances,
         s.overall_score,
         s.confidence,
-        s.dimension_scores
-      from analytics.player_score_snapshots as s
+        s.evidence_coverage_pct,
+        s.evidence_state,
+        s.dimension_scores,
+        latest_position.listed_position
+      from analytics.product_player_score_snapshots as s
       join football.players as p
         on p.id = s.player_id
+      left join lateral (
+        select pa.listed_position
+        from football.player_appearances as pa
+        join football.matches as m
+          on m.id = pa.match_id
+        where pa.player_id = p.id
+          and pa.listed_position is not null
+        order by m.kickoff_at desc nulls last
+        limit 1
+      ) as latest_position on true
       where s.scope_key = ${context.scopeKey}
         and s.model_version = ${context.modelVersion}
         and s.window_key = ${filters.window}
+        and s.data_context = 'real'
+        and s.evidence_state = 'ready'
         and (${filters.role} = 'all' or s.role = ${filters.role})
         and s.confidence >= ${filters.minConfidence}
         and (${filters.search.trim()} = '' or p.display_name ilike ${searchPattern})
       order by s.overall_score desc, s.confidence desc, p.display_name
-      limit ${filters.limit}
+      limit ${fetchLimit}
     `;
+
+    const withPosition: RankingPlayerWithPosition[] = rows.map((row) => ({
+      ...mapRanking(row),
+      listedPosition: row.listed_position,
+      positionFamily: classifyPositionFamily(row.listed_position),
+    }));
+
+    const filtered =
+      filters.positionFamily === "all"
+        ? withPosition
+        : withPosition.filter((player) => player.positionFamily === filters.positionFamily);
 
     return {
       status: "ready",
       data: {
         context,
         filters,
-        players: rows.map(mapRanking),
+        players: filtered.slice(0, filters.limit),
       },
     };
   } catch {
@@ -468,7 +605,7 @@ export async function getPlayerDetail(
   }
 
   try {
-    const context = await latestContext(sql);
+    const context = await latestRealContext(sql);
 
     if (!context) {
       return { status: "ready", data: null };
@@ -515,7 +652,10 @@ export async function getPlayerDetail(
           s.appearances,
           s.overall_score,
           s.confidence,
+          s.evidence_coverage_pct,
+          s.evidence_state,
           s.dimension_scores,
+          s.dimension_evidence,
           s.calculated_at
         from analytics.player_score_snapshots as s
         join football.players as p
@@ -523,6 +663,7 @@ export async function getPlayerDetail(
         where s.player_id = ${playerId}
           and s.scope_key = ${context.scopeKey}
           and s.model_version = ${context.modelVersion}
+          and s.data_context = 'real'
         order by case s.window_key
           when 'last_3' then 1
           when 'last_5' then 2
@@ -546,6 +687,7 @@ export async function getPlayerDetail(
         where player_id = ${playerId}
           and scope_key = ${context.scopeKey}
           and model_version = ${context.modelVersion}
+          and percentile is not null
         order by case window_key
           when 'last_3' then 1
           when 'last_5' then 2
@@ -558,9 +700,9 @@ export async function getPlayerDetail(
       `,
     ]);
 
-    if (scoreRows.length === 0) {
-      return { status: "ready", data: null };
-    }
+    // A player can be real and identified without clearing the complete V2
+    // evidence gate. Only 404 when the player itself does not exist; empty
+    // `scores`/`features` arrays are an honest insufficient-data state.
 
     return {
       status: "ready",
@@ -579,9 +721,12 @@ export async function getPlayerDetail(
           roleConfidence: numberValue(row.role_confidence),
           minutes: numberValue(row.minutes),
           appearances: numberValue(row.appearances),
-          overallScore: numberValue(row.overall_score),
+          overallScore: nullableNumberValue(row.overall_score),
           confidence: numberValue(row.confidence),
+          evidenceCoveragePct: numberValue(row.evidence_coverage_pct),
+          evidenceState: row.evidence_state,
           dimensionScores: dimensionScores(row.dimension_scores),
+          dimensionEvidence: dimensionEvidence(row.dimension_evidence),
           calculatedAt: isoValue(row.calculated_at),
         })),
         features: featureRows.map((row) => ({
@@ -619,7 +764,8 @@ export async function getLabData(): Promise<DataResult<LabData>> {
         max(calculated_at) as calculated_at,
         count(*) as score_rows,
         count(distinct player_id) as players
-      from analytics.player_score_snapshots
+      from analytics.product_player_score_snapshots
+      where data_context = 'real'
       group by scope_key, model_version
       order by max(calculated_at) desc
       limit 12
@@ -645,9 +791,11 @@ export async function getLabData(): Promise<DataResult<LabData>> {
           count(*) as players,
           avg(confidence) as average_confidence,
           avg(overall_score) as average_score
-        from analytics.player_score_snapshots
+        from analytics.product_player_score_snapshots
         where scope_key = ${activeContext.scopeKey}
           and model_version = ${activeContext.modelVersion}
+          and data_context = 'real'
+          and evidence_state = 'ready'
         group by window_key, role
         order by window_key, role
       `,

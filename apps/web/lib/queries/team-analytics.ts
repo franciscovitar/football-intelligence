@@ -247,6 +247,7 @@ async function availableContexts(
     from analytics.team_score_snapshots as ts
     join football.seasons as s on s.id = ts.season_id
     join football.competitions as c on c.id = s.competition_id
+    where ts.model_version = 'team-v1.0'
     group by ts.scope_key, ts.model_version, c.code, c.name, s.label
     order by max(ts.calculated_at) desc, c.name
   `;

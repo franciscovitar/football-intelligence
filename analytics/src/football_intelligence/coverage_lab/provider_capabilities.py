@@ -63,10 +63,10 @@ _CURRENT_MATCH_RESULT_METRICS: Mapping[MetricKey, MetricReliability] = {
 # All 4 mapped fields are reliably present whenever the endpoint returns
 # data at all, so they are "full", not capped like the lineup below.
 _THESPORTSDB_EVENT_STATS_METRICS: Mapping[MetricKey, MetricReliability] = {
-    ("shots_on_target", "team"): "full",
-    ("shots_total", "team"): "full",
-    ("blocked_shots", "team"): "full",
-    ("shots_inside_box", "team"): "full",
+    ("shots_on_target", "team_match"): "full",
+    ("shots_total", "team_match"): "full",
+    ("blocked_shots", "team_match"): "full",
+    ("shots_inside_box", "team_match"): "full",
 }
 
 # `lookuplineup.php` returns at most 5 player rows per match (verified live:
@@ -94,15 +94,15 @@ _THESPORTSDB_METRICS: Mapping[MetricKey, MetricReliability] = {
 # rollup) and player_match (one player's own count) granularity from the same
 # verified event data -- both are listed explicitly, never inferred.
 _STATSBOMB_TEAM_ROLLUP_METRICS: Mapping[MetricKey, MetricReliability] = {
-    ("shots_total", "team"): "full",
-    ("shots_on_target", "team"): "full",
-    ("passes_total", "team"): "full",
-    ("passes_accurate", "team"): "full",
-    ("yellow_cards", "team"): "full",
-    ("red_cards", "team"): "full",
-    ("fouls", "team"): "full",
-    ("goalkeeper_saves", "team"): "full",
-    ("formation", "team"): "full",
+    ("shots_total", "team_match"): "full",
+    ("shots_on_target", "team_match"): "full",
+    ("passes_total", "team_match"): "full",
+    ("passes_accurate", "team_match"): "full",
+    ("yellow_cards", "team_match"): "full",
+    ("red_cards", "team_match"): "full",
+    ("fouls", "team_match"): "full",
+    ("goalkeeper_saves", "team_match"): "full",
+    ("formation", "team_match"): "full",
 }
 _STATSBOMB_PLAYER_MATCH_METRICS: Mapping[MetricKey, MetricReliability] = {
     ("goals", "player_match"): "full",
@@ -167,12 +167,12 @@ _FOOTBALL_DATA_UK_METRICS: Mapping[MetricKey, MetricReliability] = {
     ("home_score", "match"): "full",
     ("away_score", "match"): "full",
     ("status", "match"): "full",
-    ("shots_total", "team"): "full",
-    ("shots_on_target", "team"): "full",
-    ("fouls", "team"): "full",
-    ("corners", "team"): "full",
-    ("yellow_cards", "team"): "full",
-    ("red_cards", "team"): "full",
+    ("shots_total", "team_match"): "full",
+    ("shots_on_target", "team_match"): "full",
+    ("fouls", "team_match"): "full",
+    ("corners", "team_match"): "full",
+    ("yellow_cards", "team_match"): "full",
+    ("red_cards", "team_match"): "full",
 }
 
 PROVIDER_CAPABILITIES: tuple[ProviderCapability, ...] = (

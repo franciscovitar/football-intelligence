@@ -231,6 +231,11 @@ export default async function SourcesPage() {
                 configurado, football-data.org se muestra como &ldquo;TOKEN&rdquo;, nunca como
                 error.
               </p>
+              <p>
+                El catálogo objetivo conserva las nueve granularidades. El denominador se calcula
+                desde las identidades únicas del catálogo por las 10 competiciones, sin un total
+                hardcodeado. Un porcentaje menor refleja una vara estadística más completa.
+              </p>
             </div>
             {coverageResult.status !== "ready" ? (
               <DataNotice title="Cobertura no disponible" message={coverageResult.message} />
