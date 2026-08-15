@@ -14,7 +14,11 @@ from datetime import UTC, datetime
 from math import isclose
 from typing import Literal, Protocol
 
-from football_intelligence.metric_catalog import METRIC_CATALOG_V2
+from football_intelligence.metric_catalog.types import MetricGranularity
+from football_intelligence.player_analytics.catalog_v2 import (
+    CATALOG_BY_IDENTITY,
+    match_catalog_for_role,
+)
 from football_intelligence.player_analytics.config import ROLE_ALIASES, WINDOWS
 from football_intelligence.player_analytics.models import PlayerObservation
 from football_intelligence.player_analytics.profiles_v2 import (
@@ -30,6 +34,12 @@ from football_intelligence.statistical_engine import derive_available_metrics
 MODEL_VERSION = "player-v2.0"
 MIN_RANKING_CONFIDENCE = 0.40
 MIN_FINISHING_RESIDUAL = 2.0
+PERCENTILE_MINUTES_BY_WINDOW: dict[str, int] = {
+    "last_3": 90,
+    "last_5": 180,
+    "last_10": 270,
+    "season": 450,
+}
 
 EvidenceState = Literal["ready", "partial", "insufficient_data"]
 ResultsVsProcessSignal = str
@@ -45,16 +55,6 @@ _FAMILY_TO_ROLE = {
     "forward": "forward",
     "defender": "defender",
     "midfielder": "midfielder",
-}
-_PLAYER_CATALOG = {
-    metric.key: metric
-    for metric in METRIC_CATALOG_V2
-    if metric.granularity in {"player_match", "player_season"}
-}
-_GOALKEEPER_CATALOG = {
-    metric.key: metric
-    for metric in METRIC_CATALOG_V2
-    if metric.granularity in {"goalkeeper_match", "goalkeeper_season"}
 }
 
 
@@ -72,6 +72,7 @@ class PlayerFeatureV2:
     role: str
     position_family: str | None
     metric_name: str
+    metric_granularity: MetricGranularity
     minutes: int
     appearances: int
     raw_value: float
@@ -82,6 +83,7 @@ class PlayerFeatureV2:
     metric_unit: str
     formula_version: str | None
     percentile: float | None
+    percentile_state: Literal["ready", "insufficient_sample", "not_applicable"]
     comparison_group: str
     reference_sample_size: int
     model_version: str
@@ -160,6 +162,8 @@ def calculate_player_analytics_v2_result(
 ) -> PlayerAnalyticsResultV2:
     if not scope_key.strip():
         raise ValueError("scope_key must not be blank")
+    if any(not isinstance(observation, PlayerObservation) for observation in observations):
+        raise TypeError("Player V2 match engine accepts only PlayerObservation")
     effective_at = calculated_at or datetime.now(UTC)
     families = _primary_position_family(observations)
     roles = _primary_role(observations, families)
@@ -269,9 +273,7 @@ def _build_window_features(
     position_family: str | None,
     calculated_at: datetime,
 ) -> list[PlayerFeatureV2]:
-    catalog = dict(_PLAYER_CATALOG)
-    if role == "goalkeeper":
-        catalog.update(_GOALKEEPER_CATALOG)
+    catalog = match_catalog_for_role(role)
     samples: dict[str, list[float]] = defaultdict(list)
     for observation in observations:
         for raw_name, raw_value in observation.stats.items():
@@ -280,7 +282,7 @@ def _build_window_features(
                 samples[metric_name].append(float(raw_value))
     totals: dict[str, float] = {}
     for metric_name, values in samples.items():
-        definition = catalog[metric_name]
+        _, definition = catalog[metric_name]
         totals[metric_name] = (
             sum(values)
             if definition.per90_eligible or definition.unit in {"count", "minutes"}
@@ -304,9 +306,10 @@ def _build_window_features(
     first = observations[0]
     result: list[PlayerFeatureV2] = []
     for metric_name, raw_value in derived.items():
-        catalog_definition = catalog.get(metric_name)
-        if catalog_definition is None or metric_name == "minutes":
+        catalog_entry = catalog.get(metric_name)
+        if catalog_entry is None or metric_name == "minutes":
             continue
+        metric_granularity, catalog_definition = catalog_entry
         per90 = (
             raw_value * 90.0 / minutes if catalog_definition.per90_eligible and minutes else None
         )
@@ -320,6 +323,7 @@ def _build_window_features(
                 role=role,
                 position_family=position_family,
                 metric_name=metric_name,
+                metric_granularity=metric_granularity,
                 minutes=minutes,
                 appearances=len(observations),
                 raw_value=round(raw_value, 6),
@@ -332,6 +336,11 @@ def _build_window_features(
                 metric_unit=catalog_definition.unit,
                 formula_version=versions.get(metric_name),
                 percentile=None,
+                percentile_state=(
+                    "insufficient_sample"
+                    if catalog_definition.percentile_eligible
+                    else "not_applicable"
+                ),
                 comparison_group=f"{scope_key}:{window}:{position_family or role}",
                 reference_sample_size=1,
                 model_version=MODEL_VERSION,
@@ -345,15 +354,16 @@ def _assign_percentiles(features: Sequence[PlayerFeatureV2]) -> list[PlayerFeatu
     groups: dict[tuple[str, str], list[PlayerFeatureV2]] = defaultdict(list)
     result: list[PlayerFeatureV2] = []
     for feature in features:
-        definition = _PLAYER_CATALOG.get(feature.metric_name) or _GOALKEEPER_CATALOG.get(
-            feature.metric_name
-        )
-        if definition is not None and definition.percentile_eligible:
+        definition = CATALOG_BY_IDENTITY[(feature.metric_granularity, feature.metric_name)]
+        if definition.percentile_eligible:
             groups[(feature.comparison_group, feature.metric_name)].append(feature)
         else:
-            result.append(feature)
+            result.append(replace(feature, reference_sample_size=0))
     for group in groups.values():
-        ordered = sorted(group, key=lambda item: item.adjusted_value)
+        eligible = [
+            item for item in group if item.minutes >= PERCENTILE_MINUTES_BY_WINDOW[item.window]
+        ]
+        ordered = sorted(eligible, key=lambda item: item.adjusted_value)
         size = len(ordered)
         for item in ordered:
             ranks = [
@@ -367,8 +377,24 @@ def _assign_percentiles(features: Sequence[PlayerFeatureV2]) -> list[PlayerFeatu
                 else sum(index / (size - 1) * 100.0 for index in ranks) / len(ranks)
             )
             result.append(
-                replace(item, percentile=round(percentile, 2), reference_sample_size=size)
+                replace(
+                    item,
+                    percentile=round(percentile, 2),
+                    percentile_state="ready",
+                    reference_sample_size=size,
+                )
             )
+        eligible_ids = {item.player_id for item in eligible}
+        result.extend(
+            replace(
+                item,
+                percentile=None,
+                percentile_state="insufficient_sample",
+                reference_sample_size=size,
+            )
+            for item in group
+            if item.player_id not in eligible_ids
+        )
     return sorted(result, key=lambda item: (item.player_id, item.window, item.metric_name))
 
 

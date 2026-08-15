@@ -54,10 +54,16 @@ within an explicit **comparison group**, never a single universal pool:
   falling back to V1's four broad roles (goalkeeper/defender/midfielder/
   forward) otherwise;
 - a minimum-minutes eligibility gate (V1 already shrinks toward the
-  population mean by playing time; V2's real-snapshot scoring job additionally
-  applies an explicit minimum-minutes filter -- 450 minutes -- before a
-  player enters a percentile population at all, per the product rule that a
-  window must never be manufactured from too small a sample).
+  population mean by playing time; V2 requires 450 minutes for `season` and
+  window-appropriate minimums of 90/180/270 minutes for
+  `last_3`/`last_5`/`last_10`). Below-threshold players retain raw, per-90 and
+  evidence values but have no percentile and never enter the reference pool.
+
+Team window counts are summed and exposed per match. Percentages and
+contextual rates are averaged over the matches where they were observed, with
+that observed-match count retained. Formula ratios such as pass accuracy and
+xG per shot use aggregate numerators and denominators when those inputs have
+complete coverage; they are never formed by averaging per-match ratios.
 
 ## Position families (V2)
 
@@ -69,6 +75,12 @@ attacking_midfielder, winger, forward. `classify_position_family` maps common
 when no fine-grained token is available. The V2 path is independent of V1's
 legacy `FEATURE_METRICS` ceiling. It computes catalog-backed feature values
 and fine-family comparison percentiles directly.
+
+`PlayerObservation` is match-level evidence and resolves only
+`player_match` definitions (plus `goalkeeper_match` for goalkeepers).
+Provider-native season aggregates use the separate `PlayerSeasonObservation`
+or `GoalkeeperSeasonObservation` contract, so equal metric keys at different
+grains keep distinct catalog and persistence identities.
 
 Player V2 scores twelve evidence-aware dimensions: Performance, Underlying
 Performance, Finishing, Shot Generation, Creation, Progression, Passing,

@@ -223,22 +223,36 @@ def _team_window_features(
             metric_name = aliases.get(raw_name, raw_name)
             if value is not None and metric_name in _TEAM_CATALOG:
                 samples[metric_name].append(float(value))
-    totals = {name: sum(values) for name, values in samples.items()}
+    aggregate_values: dict[str, float] = {}
+    formula_values: dict[str, float] = {}
+    for name, values in samples.items():
+        definition = _TEAM_CATALOG[name]
+        additive = definition.per90_eligible or definition.unit in {"count", "minutes"}
+        aggregate_values[name] = sum(values) if additive else sum(values) / len(values)
+        # Deterministic ratios use aggregate event numerators/denominators.
+        # Excluding their observed output lets complete formula inputs take
+        # precedence over an average of per-match percentages.
+        if definition.kind != "derived":
+            formula_values[name] = sum(values) if additive else aggregate_values[name]
     observed_counts = {name: len(values) for name, values in samples.items()}
     derived, versions = derive_available_metrics(
-        totals,
+        formula_values,
         team=True,
         observed_counts=observed_counts,
         required_observations=len(observations),
     )
     first = observations[0]
     result: list[TeamFeatureV2] = []
-    for name, raw_value in derived.items():
-        definition = _TEAM_CATALOG.get(name)
-        if definition is None:
+    feature_values = dict(aggregate_values)
+    feature_values.update({name: derived[name] for name in versions})
+    for name, raw_value in feature_values.items():
+        output_definition = _TEAM_CATALOG.get(name)
+        if output_definition is None:
             continue
-        observed = len(samples.get(name, observations if name in versions else ()))
-        adjusted = raw_value / observed if definition.per90_eligible and observed else raw_value
+        observed = len(observations) if name in versions else len(samples[name])
+        adjusted = (
+            raw_value / observed if output_definition.per90_eligible and observed else raw_value
+        )
         result.append(
             TeamFeatureV2(
                 team_id=first.team_id,
@@ -253,10 +267,10 @@ def _team_window_features(
                 raw_value=round(raw_value, 6),
                 adjusted_value=round(adjusted, 6),
                 value_basis="per_match"
-                if definition.per90_eligible
-                else ("derived_rate" if name in versions else "raw_rate"),
-                metric_kind="derived" if name in versions else definition.kind,
-                metric_unit=definition.unit,
+                if output_definition.per90_eligible
+                else ("derived_rate" if name in versions else "observed_average"),
+                metric_kind="derived" if name in versions else output_definition.kind,
+                metric_unit=output_definition.unit,
                 formula_version=versions.get(name),
                 percentile=None,
                 comparison_group=f"{scope_key}:{window}",

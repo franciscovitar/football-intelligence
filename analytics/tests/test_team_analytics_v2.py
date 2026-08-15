@@ -129,7 +129,12 @@ def test_chance_quality_allowed_insufficient_data_when_no_strong_pattern() -> No
     assert signal == "insufficient_data"
 
 
-def _team_observation(team_id: int, stats: dict[str, float | None]) -> TeamObservation:
+def _team_observation(
+    team_id: int,
+    stats: dict[str, float | None],
+    *,
+    match_id: int | None = None,
+) -> TeamObservation:
     return TeamObservation(
         competition_id=1,
         competition_code="ENG_PL",
@@ -139,7 +144,7 @@ def _team_observation(team_id: int, stats: dict[str, float | None]) -> TeamObser
         team_id=team_id,
         team_name=f"Team {team_id}",
         opponent_team_id=3 - team_id,
-        match_id=team_id,
+        match_id=team_id if match_id is None else match_id,
         kickoff_at=_NOW,
         is_home=team_id == 1,
         goals_for=1,
@@ -180,3 +185,72 @@ def test_team_creation_becomes_ready_from_actual_creation_metrics() -> None:
     assert score.dimension_scores["creation"] == 100.0
     assert score.overall_score is not None
     assert score.evidence_state == "partial"
+
+
+def test_team_window_averages_percentage_metrics_instead_of_summing_them() -> None:
+    observations = [
+        _team_observation(1, {"possession_pct": 60.0}, match_id=match_id)
+        for match_id in range(1, 6)
+    ]
+    result = calculate_team_analytics_v2(observations, scope_key="competition:test")
+
+    feature = next(
+        item
+        for item in result.features
+        if item.window == "season" and item.metric_name == "possession_pct"
+    )
+    assert feature.matches == 5
+    assert feature.observed_matches == 5
+    assert feature.raw_value == 60.0
+    assert feature.adjusted_value == 60.0
+    assert feature.value_basis == "observed_average"
+
+
+def test_team_window_exposes_incomplete_percentage_coverage_honestly() -> None:
+    observations = [
+        _team_observation(
+            1,
+            {"possession_pct": 60.0 if match_id <= 3 else None},
+            match_id=match_id,
+        )
+        for match_id in range(1, 6)
+    ]
+    result = calculate_team_analytics_v2(observations, scope_key="competition:test")
+
+    feature = next(
+        item
+        for item in result.features
+        if item.window == "season" and item.metric_name == "possession_pct"
+    )
+    assert feature.raw_value == 60.0
+    assert feature.matches == 5
+    assert feature.observed_matches == 3
+
+
+def test_team_pass_accuracy_uses_aggregate_numerator_and_denominator() -> None:
+    observations = [
+        _team_observation(
+            1,
+            {
+                "passes_total": total,
+                "passes_accurate": accurate,
+                "pass_accuracy_pct": reported_pct,
+            },
+            match_id=match_id,
+        )
+        for match_id, total, accurate, reported_pct in (
+            (1, 100.0, 50.0, 50.0),
+            (2, 300.0, 270.0, 90.0),
+        )
+    ]
+    result = calculate_team_analytics_v2(observations, scope_key="competition:test")
+
+    feature = next(
+        item
+        for item in result.features
+        if item.window == "season" and item.metric_name == "pass_accuracy_pct"
+    )
+    assert feature.raw_value == 80.0
+    assert feature.adjusted_value == 80.0
+    assert feature.formula_version == "derived-v2.0"
+    assert feature.value_basis == "derived_rate"

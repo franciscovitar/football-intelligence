@@ -3,10 +3,23 @@ from __future__ import annotations
 import dataclasses
 from datetime import UTC, datetime
 
+import pytest
+
+from football_intelligence.metric_catalog import METRIC_CATALOG_V2
 from football_intelligence.player_analytics import engine as engine_v1
+from football_intelligence.player_analytics.catalog_v2 import (
+    CATALOG_BY_IDENTITY,
+    GOALKEEPER_MATCH_CATALOG,
+    GOALKEEPER_SEASON_CATALOG,
+    PLAYER_MATCH_CATALOG,
+    PLAYER_SEASON_CATALOG,
+    index_catalog_by_identity,
+    season_catalog_for_observation,
+)
 from football_intelligence.player_analytics.engine_v2 import (
     MIN_RANKING_CONFIDENCE,
     MODEL_VERSION,
+    PERCENTILE_MINUTES_BY_WINDOW,
     WeightedScoreEvidence,
     _compose_overall,
     _weighted_percentile_score,
@@ -15,7 +28,12 @@ from football_intelligence.player_analytics.engine_v2 import (
     classify_results_vs_process,
     rank_by_confidence_gated_score,
 )
-from football_intelligence.player_analytics.models import PlayerFeature, PlayerObservation
+from football_intelligence.player_analytics.models import (
+    GoalkeeperSeasonObservation,
+    PlayerFeature,
+    PlayerObservation,
+    PlayerSeasonObservation,
+)
 from football_intelligence.statistical_engine import derive_available_metrics
 
 _NOW = datetime(2026, 8, 14, tzinfo=UTC)
@@ -408,12 +426,13 @@ def test_catalog_metric_outside_v1_flows_to_feature_and_percentile() -> None:
         _observation(
             player_id=player_id,
             player_name=f"Progressor {player_id}",
-            match_id=player_id,
+            match_id=match_id,
             minutes=90,
             listed_position="CM",
             stats={"progressive_passes": value},
         )
         for player_id, value in ((1, 3.0), (2, 9.0))
+        for match_id in range(1, 6)
     ]
     result = calculate_player_analytics_v2_result(
         observations, scope_key="core:test", calculated_at=_NOW
@@ -447,12 +466,13 @@ def test_catalog_dimensions_accept_xa_progression_and_aerial_inputs() -> None:
         _observation(
             player_id=player_id,
             player_name=f"Complete {player_id}",
-            match_id=player_id,
+            match_id=match_id,
             minutes=90,
             listed_position="CM",
             stats={name: value * multiplier for name, value in common.items()},
         )
         for player_id, multiplier in ((1, 1.0), (2, 2.0))
+        for match_id in range(1, 6)
     ]
     result = calculate_player_analytics_v2_result(
         observations, scope_key="core:test", calculated_at=_NOW
@@ -512,7 +532,7 @@ def test_goalkeeper_workload_is_not_a_quality_metric_and_goals_prevented_is() ->
         _observation(
             player_id=player_id,
             player_name=f"Keeper {player_id}",
-            match_id=player_id,
+            match_id=match_id,
             minutes=90,
             listed_position="GK",
             stats={
@@ -526,6 +546,7 @@ def test_goalkeeper_workload_is_not_a_quality_metric_and_goals_prevented_is() ->
             },
         )
         for player_id, saves, faced, psxg in ((1, 5.0, 10.0, 2.0), (2, 10.0, 20.0, 4.0))
+        for match_id in range(1, 6)
     ]
     result = calculate_player_analytics_v2_result(
         observations, scope_key="core:test", calculated_at=_NOW
@@ -573,3 +594,188 @@ def test_overall_is_composed_from_position_relevant_dimensions() -> None:
     # Defence is not part of the forward Overall profile.
     dimensions["defence"] = ready(0.0)
     assert _compose_overall(dimensions, "forward").score == forward.score
+
+
+def test_percentile_population_excludes_tiny_samples_without_dropping_values() -> None:
+    eligible_observations = [
+        _observation(
+            player_id=player_id,
+            player_name=f"Eligible {player_id}",
+            match_id=match_id,
+            minutes=90,
+            listed_position="CM",
+            stats={"progressive_passes": per_match},
+        )
+        for player_id, per_match in ((1, 2.0), (2, 4.0))
+        for match_id in range(1, 6)
+    ]
+    tiny_outlier = _observation(
+        player_id=3,
+        player_name="Tiny Outlier",
+        match_id=6,
+        minutes=20,
+        listed_position="CM",
+        stats={"progressive_passes": 100.0},
+    )
+
+    baseline = calculate_player_analytics_v2_result(
+        eligible_observations, scope_key="core:test", calculated_at=_NOW
+    )
+    result = calculate_player_analytics_v2_result(
+        [*eligible_observations, tiny_outlier],
+        scope_key="core:test",
+        calculated_at=_NOW,
+    )
+    baseline_season = {
+        feature.player_id: feature
+        for feature in baseline.features
+        if feature.window == "season" and feature.metric_name == "progressive_passes"
+    }
+    season = {
+        feature.player_id: feature
+        for feature in result.features
+        if feature.window == "season" and feature.metric_name == "progressive_passes"
+    }
+
+    assert PERCENTILE_MINUTES_BY_WINDOW == {
+        "last_3": 90,
+        "last_5": 180,
+        "last_10": 270,
+        "season": 450,
+    }
+    assert season[1].percentile == baseline_season[1].percentile == 0.0
+    assert season[2].percentile == baseline_season[2].percentile == 100.0
+    assert season[1].percentile_state == "ready"
+    assert season[1].reference_sample_size == 2
+    assert season[3].raw_value == 100.0
+    assert season[3].per90_value == 450.0
+    assert season[3].percentile is None
+    assert season[3].percentile_state == "insufficient_sample"
+    assert season[3].reference_sample_size == 2
+
+    eligible_score = next(
+        score for score in result.scores if score.player_id == 1 and score.window == "season"
+    )
+    assert eligible_score.confidence < 1.0
+    assert season[1].percentile_state == "ready"
+
+
+def test_short_window_uses_window_appropriate_percentile_minimum() -> None:
+    observations = [
+        _observation(
+            player_id=player_id,
+            player_name=f"Short Window {player_id}",
+            match_id=match_id,
+            minutes=30,
+            listed_position="CM",
+            stats={"progressive_passes": float(player_id)},
+        )
+        for player_id in (1, 2)
+        for match_id in range(1, 4)
+    ]
+    result = calculate_player_analytics_v2_result(
+        observations, scope_key="core:test", calculated_at=_NOW
+    )
+    features = [
+        feature
+        for feature in result.features
+        if feature.window == "last_3" and feature.metric_name == "progressive_passes"
+    ]
+    assert all(feature.minutes == 90 for feature in features)
+    assert all(feature.percentile_state == "ready" for feature in features)
+    assert all(feature.percentile is not None for feature in features)
+
+
+def test_catalog_identity_preserves_equal_keys_across_grains() -> None:
+    player_match = PLAYER_MATCH_CATALOG["goals"][1]
+    player_season = dataclasses.replace(player_match, granularity="player_season")
+    indexed = index_catalog_by_identity((player_match, player_season))
+
+    assert len(CATALOG_BY_IDENTITY) == len(METRIC_CATALOG_V2)
+    assert indexed[("player_match", "goals")].granularity == "player_match"
+    assert indexed[("player_season", "goals")].granularity == "player_season"
+
+
+def test_match_engine_rejects_season_observations_and_ignores_season_definitions() -> None:
+    match_observation = _observation(
+        player_id=1,
+        player_name="Match Only",
+        match_id=1,
+        minutes=90,
+        listed_position="CM",
+        stats={"appearances": 12.0, "starts": 10.0},
+    )
+    result = calculate_player_analytics_v2_result(
+        [match_observation], scope_key="core:test", calculated_at=_NOW
+    )
+    assert not {"appearances", "starts", "minutes_per_appearance"} & {
+        feature.metric_name for feature in result.features
+    }
+    assert "appearances" in PLAYER_SEASON_CATALOG
+    assert "appearances" not in PLAYER_MATCH_CATALOG
+
+    season_observation = PlayerSeasonObservation(
+        player_id=1,
+        player_name="Season Only",
+        season_id=1,
+        season_label="2025/26",
+        team_id=1,
+        minutes=900,
+        appearances=12,
+        listed_position="CM",
+        stats={"appearances": 12.0},
+    )
+    with pytest.raises(TypeError, match="only PlayerObservation"):
+        calculate_player_analytics_v2_result(  # type: ignore[arg-type]
+            [season_observation], scope_key="core:test", calculated_at=_NOW
+        )
+
+
+def test_goalkeeper_match_metadata_never_uses_goalkeeper_season_definition() -> None:
+    observation = _observation(
+        player_id=1,
+        player_name="Match Keeper",
+        match_id=1,
+        minutes=90,
+        listed_position="GK",
+        stats={"clean_sheets": 1.0},
+    )
+    result = calculate_player_analytics_v2_result(
+        [observation], scope_key="core:test", calculated_at=_NOW
+    )
+    feature = next(item for item in result.features if item.metric_name == "clean_sheets")
+
+    assert feature.metric_granularity == "goalkeeper_match"
+    assert feature.metric_unit == "boolean"
+    assert GOALKEEPER_MATCH_CATALOG["clean_sheets"][1].unit == "boolean"
+    assert GOALKEEPER_SEASON_CATALOG["clean_sheets"][1].unit == "count"
+
+
+def test_explicit_season_contract_keeps_player_and_goalkeeper_grains_separate() -> None:
+    player_season = PlayerSeasonObservation(
+        player_id=1,
+        player_name="Season Player",
+        season_id=1,
+        season_label="2025/26",
+        team_id=1,
+        minutes=900,
+        appearances=12,
+        listed_position="CM",
+        stats={"appearances": 12.0},
+    )
+    goalkeeper_season = GoalkeeperSeasonObservation(
+        player_id=2,
+        player_name="Season Keeper",
+        season_id=1,
+        season_label="2025/26",
+        team_id=1,
+        minutes=900,
+        appearances=10,
+        stats={"save_pct": 75.0},
+    )
+
+    player_catalog = season_catalog_for_observation(player_season)
+    goalkeeper_catalog = season_catalog_for_observation(goalkeeper_season)
+    assert player_catalog["appearances"][0] == "player_season"
+    assert goalkeeper_catalog["save_pct"][0] == "goalkeeper_season"
+    assert GOALKEEPER_MATCH_CATALOG["save_pct"][0] == "goalkeeper_match"

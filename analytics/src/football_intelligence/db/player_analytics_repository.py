@@ -173,12 +173,15 @@ class PlayerAnalyticsRepository:
                     metric_kind,
                     metric_unit,
                     formula_version,
-                    comparison_group
+                    comparison_group,
+                    metric_granularity,
+                    percentile_state
                 )
                 values (
                     %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s
                 )
                 """,
                 (
@@ -202,6 +205,8 @@ class PlayerAnalyticsRepository:
                     getattr(feature, "metric_unit", "per90"),
                     getattr(feature, "formula_version", None),
                     getattr(feature, "comparison_group", None),
+                    getattr(feature, "metric_granularity", "player_match"),
+                    getattr(feature, "percentile_state", "ready"),
                 ),
             )
 

@@ -238,12 +238,24 @@ def test_player_analytics_pipeline_ranks_and_replaces_snapshots() -> None:
         )
         persisted_v2 = connection.execute(
             """
-            select count(*), count(*) filter (where comparison_group is not null)
+            select
+                count(*),
+                count(*) filter (where comparison_group is not null),
+                count(*) filter (
+                    where metric_granularity not in ('player_match', 'goalkeeper_match')
+                ),
+                count(*) filter (
+                    where window_key = 'season'
+                      and percentile_state = 'insufficient_sample'
+                      and percentile is null
+                )
             from analytics.player_feature_snapshots
             where scope_key = %s and model_version = %s
             """,
             (scope_key, V2_MODEL_VERSION),
         ).fetchone()
-        assert persisted_v2 == (len(v2_result.features), len(v2_result.features))
+        assert persisted_v2 is not None
+        assert persisted_v2[:3] == (len(v2_result.features), len(v2_result.features), 0)
+        assert int(persisted_v2[3]) > 0
 
         connection.rollback()

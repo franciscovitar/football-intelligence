@@ -52,6 +52,49 @@ begin
         now()
     );
 
+    insert into analytics.player_feature_snapshots (
+        player_id,
+        scope_key,
+        window_key,
+        role,
+        metric_name,
+        minutes,
+        appearances,
+        raw_per90,
+        adjusted_per90,
+        percentile,
+        reference_sample_size,
+        model_version,
+        calculated_at,
+        metric_granularity
+    )
+    values (
+        player_id_value,
+        'contract:2024',
+        'season',
+        'forward',
+        'goals',
+        900,
+        10,
+        0.5,
+        0.45,
+        75.0,
+        20,
+        'player-v1.0',
+        now(),
+        'player_season'
+    );
+
+    if (
+        select count(*)
+        from analytics.player_feature_snapshots
+        where player_id = player_id_value
+          and scope_key = 'contract:2024'
+          and metric_name = 'goals'
+    ) <> 2 then
+        raise exception 'player feature grains collided on metric key';
+    end if;
+
     insert into analytics.player_score_snapshots (
         player_id,
         scope_key,
