@@ -16,7 +16,7 @@
     "implicit_database_url_used": false,
     "remote_db_accepted": false
   },
-  "executed_at": "2026-08-15T19:35:02.893451+00:00",
+  "executed_at": "2026-08-15T20:30:52.599179+00:00",
   "historical_deep_validation": {
     "capability_proven": "Real StatsBomb Open Data event JSON parses into provider-independent NormalizedObservations (match + event-derived families: shots, passes, dribbles, duels, fouls, goalkeeper actions) via the existing Data Mesh adapter. Never loaded into football.* and never executes team_analytics or player_analytics V2 engines -- that would require a new ingestion path (competition/team/player entity resolution + a football.* loader) that does not exist yet; see docs/REAL_INTELLIGENCE_EXECUTION_V2.md.",
     "dataset": "statsbomb-open:wc2022",
@@ -135,8 +135,8 @@
     },
     "dimensions_with_ready_rankings": [],
     "evidence_state_counts": {
-      "insufficient_data": 80,
-      "partial": 0,
+      "insufficient_data": 0,
+      "partial": 80,
       "ready": 0
     },
     "feature_rows": 560,

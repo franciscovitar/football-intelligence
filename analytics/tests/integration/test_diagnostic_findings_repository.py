@@ -166,6 +166,198 @@ def test_replace_scope_is_idempotent_and_isolated_from_other_scopes_and_contexts
 
 
 @pytest.mark.integration
+def test_real_and_smoke_findings_sharing_a_natural_key_and_scope_coexist() -> None:
+    """Blocker 1 regression: before
+    `20260815140000_widen_diagnostic_findings_identity.sql`, the table's
+    primary key was only (entity_type, entity_id, diagnostic_code,
+    comparison_group, window_key, model_version) -- a real and a
+    `test_smoke` finding sharing that natural key, even with the identical
+    `scope_key` string, could not coexist; inserting one would `ON
+    CONFLICT` overwrite the other's context. This proves both now coexist
+    as two distinct rows, that replacing the real scope never touches the
+    smoke row, and that the product-safe view still exposes only the real
+    one.
+    """
+
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        pytest.skip("DATABASE_URL not configured")
+
+    with connect(database_url) as connection:
+        team_row = connection.execute(
+            "insert into football.teams (name) values (%s) returning id",
+            ("Context Coexistence Team",),
+        ).fetchone()
+        assert team_row is not None
+        team_id = int(team_row[0])
+
+        # An active real Team V2 scope so `product_team_diagnostic_findings_v2`'s
+        # inner join to `product_active_team_scope_v2` has something to match.
+        competition_row = connection.execute(
+            "select id from football.competitions where code = 'ENG_PL'"
+        ).fetchone()
+        assert competition_row is not None
+        competition_id = int(competition_row[0])
+        season_row = connection.execute(
+            """
+            insert into football.seasons (competition_id, label)
+            values (%s, %s)
+            on conflict (competition_id, label) do update set updated_at = now()
+            returning id
+            """,
+            (competition_id, "diagnostic-findings-coexistence-integration"),
+        ).fetchone()
+        assert season_row is not None
+        season_id = int(season_row[0])
+        scope_key = "competition:ENG_PL:diagnostic-findings-coexistence-integration"
+        other_scope_key = "competition:ENG_PL:diagnostic-findings-coexistence-other"
+        connection.execute(
+            """
+            insert into analytics.team_score_snapshots (
+                team_id, season_id, scope_key, window_key, matches,
+                overall_score, confidence, dimension_scores,
+                results_process_delta, results_process_signal, diagnostics,
+                reference_sample_size, current_elo, elo_change_last_5,
+                model_version, calculated_at, evidence_coverage_pct,
+                evidence_state, dimension_evidence, profile_version, data_context
+            ) values (
+                %s, %s, %s, 'season', 1,
+                null, 0.5, '{}'::jsonb,
+                null, null, '{}'::jsonb, 1, null, null,
+                'team-v2.0', now(), 10.0,
+                'partial', '{}'::jsonb, 'team-dimensions-v2.0', 'real'
+            )
+            """,
+            (team_id, season_id, scope_key),
+        )
+
+        repository = DiagnosticFindingsRepository(connection)
+        diagnostic_code = "few_but_high_quality_chances_allowed"
+
+        # A finding in a different scope/source_model_version, to prove it
+        # stays untouched by everything below.
+        repository.replace_scope(
+            [
+                _finding(
+                    entity_id=team_id,
+                    diagnostic_code=diagnostic_code,
+                    comparison_group=other_scope_key,
+                )
+            ],
+            entity_type="team",
+            data_context="real",
+            source_model_version="team-v2.0",
+            scope_key=other_scope_key,
+        )
+
+        # The test_smoke finding: same natural key, same scope_key string.
+        repository.replace_scope(
+            [
+                _finding(
+                    entity_id=team_id, diagnostic_code=diagnostic_code, comparison_group=scope_key
+                )
+            ],
+            entity_type="team",
+            data_context="test_smoke",
+            source_model_version="team-v2.0",
+            scope_key=scope_key,
+        )
+        smoke_row_before = connection.execute(
+            """
+            select severity, confidence, supporting_metrics, computed_at
+            from analytics.diagnostic_findings
+            where entity_type = 'team' and entity_id = %s and diagnostic_code = %s
+              and comparison_group = %s and window_key = 'season'
+              and model_version = 'diagnostic-v1.0' and data_context = 'test_smoke'
+            """,
+            (team_id, diagnostic_code, scope_key),
+        ).fetchone()
+        assert smoke_row_before is not None
+
+        # The real finding: identical natural key and scope_key, distinct context.
+        repository.replace_scope(
+            [
+                _finding(
+                    entity_id=team_id, diagnostic_code=diagnostic_code, comparison_group=scope_key
+                )
+            ],
+            entity_type="team",
+            data_context="real",
+            source_model_version="team-v2.0",
+            scope_key=scope_key,
+        )
+
+        base_count = connection.execute(
+            """
+            select count(*) from analytics.diagnostic_findings
+            where entity_type = 'team' and entity_id = %s and diagnostic_code = %s
+              and comparison_group = %s and window_key = 'season'
+              and model_version = 'diagnostic-v1.0'
+            """,
+            (team_id, diagnostic_code, scope_key),
+        ).fetchone()
+        assert base_count == (2,)
+
+        # Rerun replace_scope for the real tuple again: idempotent, the
+        # smoke row must not move, and the base-table count stays 2.
+        repository.replace_scope(
+            [
+                _finding(
+                    entity_id=team_id, diagnostic_code=diagnostic_code, comparison_group=scope_key
+                )
+            ],
+            entity_type="team",
+            data_context="real",
+            source_model_version="team-v2.0",
+            scope_key=scope_key,
+        )
+        base_count_after_rerun = connection.execute(
+            """
+            select count(*) from analytics.diagnostic_findings
+            where entity_type = 'team' and entity_id = %s and diagnostic_code = %s
+              and comparison_group = %s and window_key = 'season'
+              and model_version = 'diagnostic-v1.0'
+            """,
+            (team_id, diagnostic_code, scope_key),
+        ).fetchone()
+        assert base_count_after_rerun == (2,)
+
+        smoke_row_after = connection.execute(
+            """
+            select severity, confidence, supporting_metrics, computed_at
+            from analytics.diagnostic_findings
+            where entity_type = 'team' and entity_id = %s and diagnostic_code = %s
+              and comparison_group = %s and window_key = 'season'
+              and model_version = 'diagnostic-v1.0' and data_context = 'test_smoke'
+            """,
+            (team_id, diagnostic_code, scope_key),
+        ).fetchone()
+        assert smoke_row_after == smoke_row_before
+
+        # Product-safe view exposes only the real row.
+        view_rows = connection.execute(
+            """
+            select data_context from analytics.product_team_diagnostic_findings_v2
+            where entity_id = %s and diagnostic_code = %s
+            """,
+            (team_id, diagnostic_code),
+        ).fetchall()
+        assert [row[0] for row in view_rows] == ["real"]
+
+        # The other scope/source_model_version pair is still untouched.
+        other_count = connection.execute(
+            """
+            select count(*) from analytics.diagnostic_findings
+            where scope_key = %s and data_context = 'real'
+            """,
+            (other_scope_key,),
+        ).fetchone()
+        assert other_count == (1,)
+
+        connection.rollback()
+
+
+@pytest.mark.integration
 def test_wrong_source_model_version_is_invisible_to_the_product_view() -> None:
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:

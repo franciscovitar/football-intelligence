@@ -11,6 +11,16 @@ matching the exact `(entity_type, data_context, source_model_version,
 scope_key)` tuple being replaced, so a rerun never touches another scope,
 another data_context (e.g. the deterministic `test_smoke` fixture), or
 another entity_type.
+
+`database/migrations/20260815140000_widen_diagnostic_findings_identity.sql`
+widened the table's primary key to include `data_context`,
+`source_model_version` and `scope_key` alongside the original natural key
+(`entity_type`, `entity_id`, `diagnostic_code`, `comparison_group`,
+`window_key`, `model_version`). Before that migration, a real and a
+`test_smoke` finding sharing the same natural key could not coexist -- the
+narrower original primary key made the insert below silently `ON CONFLICT
+... DO UPDATE` one context's row into the other's. The `ON CONFLICT` target
+here matches the widened key.
 """
 
 from __future__ import annotations
@@ -68,16 +78,14 @@ class DiagnosticFindingsRepository:
                 )
                 on conflict (
                     entity_type, entity_id, diagnostic_code, comparison_group,
-                    window_key, model_version
+                    window_key, model_version, data_context, source_model_version,
+                    scope_key
                 )
                 do update set
                     severity = excluded.severity,
                     confidence = excluded.confidence,
                     supporting_metrics = excluded.supporting_metrics,
-                    computed_at = excluded.computed_at,
-                    data_context = excluded.data_context,
-                    source_model_version = excluded.source_model_version,
-                    scope_key = excluded.scope_key
+                    computed_at = excluded.computed_at
                 """,
                 (
                     finding.diagnostic_code,

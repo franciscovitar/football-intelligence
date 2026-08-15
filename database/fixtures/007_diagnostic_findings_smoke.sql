@@ -36,14 +36,14 @@ begin
             'competition:ENG_PL:web-smoke', 'season', 'diagnostic-v1.0', now(),
             'test_smoke', 'team-v2.0', 'web-smoke'
         )
-    on conflict (entity_type, entity_id, diagnostic_code, comparison_group, window_key, model_version)
+    on conflict (
+        entity_type, entity_id, diagnostic_code, comparison_group, window_key,
+        model_version, data_context, source_model_version, scope_key
+    )
     do update set
         severity = excluded.severity,
         confidence = excluded.confidence,
         supporting_metrics = excluded.supporting_metrics,
-        computed_at = excluded.computed_at,
-        data_context = excluded.data_context,
-        source_model_version = excluded.source_model_version,
-        scope_key = excluded.scope_key;
+        computed_at = excluded.computed_at;
 end;
 $$;

@@ -20,22 +20,59 @@ Both commands require an explicit `--database-url` resolving to
 `localhost`/`127.0.0.1`/`::1` (or a host-less local-socket DSN); a bare
 `DATABASE_URL` environment variable is never read by either job.
 
-## A genuine bug found and fixed
+## Genuine bugs found and fixed
 
-While implementing this block, the Team V2 `overall_score` composition in
-`team_analytics/engine_v2.py` was found to renormalize across only the
-dimensions that happened to be `ready`, dividing by their combined weight
-instead of the full fourteen-dimension weight. That produced a non-null
-`overall_score` the moment a single dimension reached `ready`, while
-`evidence_state` simultaneously read `partial` -- exactly the "missing
-evidence renormalized into a full score" anti-pattern this product commits
-to avoiding, and inconsistent with Player V2's already-correct
-`_compose_overall` gate. This is now fixed: `overall_score` is `None`
-unless every one of the fourteen intended dimensions individually reached
-`ready`. See `analytics/tests/test_team_analytics_v2.py`'s
-`test_team_overall_score_never_renormalizes_a_partial_subset` and
-`test_team_overall_score_becomes_available_once_every_intended_dimension_is_ready`
-for the regression coverage.
+**Overall-score renormalization (initial Block 19 implementation).** The
+Team V2 `overall_score` composition in `team_analytics/engine_v2.py` was
+found to renormalize across only the dimensions that happened to be
+`ready`, dividing by their combined weight instead of the full
+fourteen-dimension weight. That produced a non-null `overall_score` the
+moment a single dimension reached `ready`, while `evidence_state`
+simultaneously read `partial` -- exactly the "missing evidence renormalized
+into a full score" anti-pattern this product commits to avoiding, and
+inconsistent with Player V2's already-correct `_compose_overall` gate. This
+is fixed: `overall_score` is `None` unless every one of the fourteen
+intended dimensions individually reached `ready`.
+
+**Overall evidence-state under-reporting (PR #15 correction).** A second,
+narrower defect in the same fix: the overall `evidence_state` only counted
+dimensions that individually reached full `ready` coverage when deciding
+between `partial` and `insufficient_data`. A dimension with real,
+core-satisfying, honest `partial` evidence (as `finishing`/`shot_generation`
+have for real ENG_PL 2025/26) was invisible to that check, so a team with
+real partial evidence in two dimensions and nothing else was reported
+`insufficient_data` overall -- indistinguishable from a team with zero
+evidence anywhere. The overall state now reads any dimension's own
+`evidence_state` (not just whether it fully completed): `ready` only when
+every dimension is `ready`; `partial` when at least one dimension carries
+real evidence (`ready` or `partial`) but not all are `ready`;
+`insufficient_data` only when every dimension is itself `insufficient_data`.
+`overall_score` still stays `None` for both `partial` and `insufficient_data`
+-- this only corrects which of those two labels is honest, never revives
+renormalization.
+
+See `analytics/tests/test_team_analytics_v2.py`'s
+`test_team_overall_score_never_renormalizes_a_partial_subset`,
+`test_team_overall_score_becomes_available_once_every_intended_dimension_is_ready`,
+`test_team_overall_insufficient_data_when_no_dimension_has_any_evidence` and
+`test_team_overall_partial_when_only_partial_dimension_evidence_exists` for
+the regression coverage.
+
+**Diagnostic-findings context identity (PR #15 correction).**
+`analytics.diagnostic_findings`' primary key predated the
+`data_context`/`source_model_version`/`scope_key` provenance columns, so a
+real and a `test_smoke` finding sharing the same underlying natural key
+(entity, diagnostic code, comparison group, window, model version) --
+including the same `scope_key` string -- could not coexist as two rows;
+inserting one would silently `ON CONFLICT` overwrite the other's context.
+`database/migrations/20260815140000_widen_diagnostic_findings_identity.sql`
+widens the primary key to include those three provenance columns (no data
+loss -- every existing row already satisfies the wider key), and
+`DiagnosticFindingsRepository`'s `ON CONFLICT` target was updated to match.
+See `analytics/tests/integration/test_diagnostic_findings_repository.py`'s
+`test_real_and_smoke_findings_sharing_a_natural_key_and_scope_coexist` and
+`database/tests/012_diagnostic_findings_contract.sql`'s equivalent
+DB-level check.
 
 ## What works with real ENG_PL 2025/26 data today
 
@@ -51,6 +88,13 @@ team per window):
   is only set once *that* dimension individually reaches full coverage),
   but their raw features and coverage percentage are real and visible on
   the team detail page.
+- **The overall evidence state correctly reads `partial` for all 80
+  team/window rows** (`evidence_state_counts: {"ready": 0, "partial": 80,
+  "insufficient_data": 0}`), reflecting that real, reportable evidence
+  exists (in `finishing`/`shot_generation`) even though no team reaches
+  full profile completeness. `overall_score` still stays `None` for every
+  row -- `partial` is an honest label for the evidence that exists, not a
+  numeric score.
 - **One real, evidence-based team diagnostic finding** fired on this run:
   `few_but_high_quality_chances_allowed` for Chelsea's `last_10` window
   (`shots_total_against_percentile = 78.95`, `shots_on_target_against_percentile
@@ -76,8 +120,10 @@ team per window):
   contain. This is unchanged from Block 16/18's finding, re-confirmed by
   actually running the engine rather than re-asserting it.
 - **Overall Team V2 score and overall ranking are unavailable for every
-  team** (`overall_score_available: false` for all 80 rows). This has two
-  independent causes, both worth stating precisely:
+  team** (`overall_score_available: false` for all 80 rows, even though
+  `evidence_state` is honestly `partial` rather than `insufficient_data` --
+  see above). This has two independent causes, both worth stating
+  precisely:
   1. Real evidence coverage: no team reaches all fourteen dimensions ready
      with today's data (see above).
   2. A structural gap independent of data volume: `defensive_transition`'s

@@ -170,11 +170,73 @@ def test_team_pressing_and_transition_require_their_own_evidence() -> None:
         )
 
 
+def test_team_overall_insufficient_data_when_no_dimension_has_any_evidence() -> None:
+    """Zero intended evidence anywhere (only `goals_for`/`goals_against`,
+    which alone never satisfy any dimension's core requirement) must keep
+    the overall evidence_state `insufficient_data`, not `partial` -- a
+    dimension with a single incidental non-core metric present is still
+    correctly `insufficient_data` per-dimension (`_weighted_percentile_score`
+    gates on core metrics and a 60% coverage floor), and the overall state
+    must not treat that as "meaningful evidence" either.
+    """
+
+    observations = [
+        _team_observation(1, {}, match_id=1),
+        _team_observation(2, {}, match_id=2),
+    ]
+    result = calculate_team_analytics_v2(observations, scope_key="competition:test-empty")
+    score = next(item for item in result.scores if item.team_id == 1 and item.window == "season")
+
+    assert all(
+        evidence.evidence_state == "insufficient_data"
+        for evidence in score.dimension_evidence.values()
+    )
+    assert score.evidence_state == "insufficient_data"
+    assert score.overall_score is None
+
+
+def test_team_overall_partial_when_only_partial_dimension_evidence_exists() -> None:
+    """Regression for the Block 19 evidence-state correction: real
+    ENG_PL-2025/26-shaped evidence (goals, shots_total, shots_on_target --
+    no xG, no possession) leaves `finishing`/`shot_generation` genuinely
+    `partial` (core metrics present, but coverage below 100%) while every
+    other dimension is `insufficient_data`. Zero dimensions reach `ready`,
+    so the previous logic (which only counted fully-`ready` dimensions)
+    incorrectly reported `insufficient_data` for the whole team even though
+    real, reportable partial evidence exists. `overall_score` still must
+    stay `None`.
+    """
+
+    observations = [
+        _team_observation(
+            1,
+            {"shots_total": 12.0, "shots_on_target": 5.0},
+            match_id=1,
+        ),
+        _team_observation(
+            2,
+            {"shots_total": 6.0, "shots_on_target": 2.0},
+            match_id=2,
+        ),
+    ]
+    result = calculate_team_analytics_v2(observations, scope_key="competition:test-real-shaped")
+    score = next(item for item in result.scores if item.team_id == 1 and item.window == "season")
+
+    assert score.dimension_evidence["finishing"].evidence_state == "partial"
+    assert score.dimension_evidence["shot_generation"].evidence_state == "partial"
+    assert not any(
+        evidence.evidence_state == "ready" for evidence in score.dimension_evidence.values()
+    )
+    assert score.evidence_state == "partial"
+    assert score.overall_score is None
+
+
 def test_team_creation_becomes_ready_but_overall_stays_partial_and_unscored() -> None:
-    """One dimension reaching full evidence must never renormalize into a
-    complete overall score -- mirrors Player V2's `_compose_overall` guard
-    (`player_analytics/engine_v2.py`): `overall_score` is `None` unless every
-    one of the fourteen intended dimensions individually reached `ready`.
+    """One ready dimension with an otherwise incomplete profile must never
+    renormalize into a complete overall score -- mirrors Player V2's
+    `_compose_overall` guard (`player_analytics/engine_v2.py`):
+    `overall_score` is `None` unless every one of the fourteen intended
+    dimensions individually reached `ready`.
     """
 
     observations = [
