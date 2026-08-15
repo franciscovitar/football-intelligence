@@ -229,7 +229,11 @@ token, current/live) and `statsbomb-open` (zero-auth, historical/deep).
 Block 15 followed it again to deepen `thesportsdb` (new event-stats/lineup
 adapter functions, same client) and add `football-data-uk` (structured CSV
 file ingestion, not scraping) -- see
-[`ZERO_COST_COVERAGE.md`](ZERO_COST_COVERAGE.md) for all four.
+[`ZERO_COST_COVERAGE.md`](ZERO_COST_COVERAGE.md) for all four. Block 18
+followed it again to add `openfootball` (public-domain/CC0 raw-JSON file
+ingestion, ENG_PL only) as a second real current source reconciled against
+`football-data-uk` for the canonical ENG_PL 2025/26 real snapshot -- see
+[`REAL_DATA_SNAPSHOT_V2.md`](REAL_DATA_SNAPSHOT_V2.md).
 
 The resolve-then-reconcile orchestration itself (`_resolve_logical_key` /
 `_build_match_date_clusters` / `_resolve_and_reconcile` from the original

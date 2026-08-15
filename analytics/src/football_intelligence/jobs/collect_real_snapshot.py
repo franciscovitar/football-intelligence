@@ -48,7 +48,7 @@ def main() -> None:
     collect_football_data_uk_matches(output_dir=args.output_dir)
 
 
-def collect_football_data_uk_matches(*, output_dir: Path) -> None:
+def collect_football_data_uk_matches(*, output_dir: Path) -> list[NormalizedObservation]:
     client = FootballDataUkClient()
     print(
         f"Football-Data.co.uk: fetching {FOOTBALL_DATA_UK_SEASON_CODE}/"
@@ -71,6 +71,7 @@ def collect_football_data_uk_matches(*, output_dir: Path) -> None:
     output = build_matches_output(observations=observations, retrieved_at=response.fetched_at)
     _write_json(output_dir / MATCHES_FILENAME, output)
     print(f"Football-Data.co.uk: {len(observations)} normalized observations")
+    return observations
 
 
 def build_matches_output(

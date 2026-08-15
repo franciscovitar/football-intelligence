@@ -200,6 +200,16 @@ redistribution permission is recorded as unknown, so it is not described as
 certified. The former automated FPL collector/client and derived player files
 were removed because FPL's terms prohibit automated extraction.
 
+**Block 18** adds a second, independent, public-domain (CC0) current source
+(OpenFootball) and reconciles it against Football-Data.co.uk through the
+existing Data Mesh pipeline: all 380 real matches agree on result/status
+between the two sources (1,140/1,140 agreed decisions, 0 conflicts on match
+facts). This validates the primary snapshot's correctness with real
+independent evidence; it does not change what `load_real_snapshot.py` loads.
+Full detail, reproduction steps and the resulting Metric Catalog V2 coverage
+report: [`REAL_DATA_SNAPSHOT_V2.md`](REAL_DATA_SNAPSHOT_V2.md) and
+[`REAL_DATA_SOURCE_AUDIT_V2.md`](REAL_DATA_SOURCE_AUDIT_V2.md).
+
 `football-intelligence-load-real-snapshot` loads only match/team evidence.
 `football-intelligence-score-real-snapshot` reports `insufficient_data`, zero
 player scores and zero finishing findings because no permitted rich domestic

@@ -1,0 +1,384 @@
+{
+  "audit_persistence": {
+    "mode": "not_requested"
+  },
+  "canonical_database_state": {
+    "mode": "not_requested"
+  },
+  "competition_code": "ENG_PL",
+  "conflicts": [
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Brighton",
+          "openfootball": "Brighton & Hove Albion FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:albion brighton hove",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Arsenal",
+          "openfootball": "Arsenal FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:arsenal",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Aston Villa",
+          "openfootball": "Aston Villa FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:aston villa",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Bournemouth",
+          "openfootball": "AFC Bournemouth"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:bournemouth",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Brentford",
+          "openfootball": "Brentford FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:brentford",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Burnley",
+          "openfootball": "Burnley FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:burnley",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Chelsea",
+          "openfootball": "Chelsea FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:chelsea",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Man City",
+          "openfootball": "Manchester City FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:city manchester",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Crystal Palace",
+          "openfootball": "Crystal Palace FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:crystal palace",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Everton",
+          "openfootball": "Everton FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:everton",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Nott'm Forest",
+          "openfootball": "Nottingham Forest FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:forest nottingham",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Fulham",
+          "openfootball": "Fulham FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:fulham",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "West Ham",
+          "openfootball": "West Ham United FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:ham united west",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Tottenham",
+          "openfootball": "Tottenham Hotspur FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:hotspur tottenham",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Leeds",
+          "openfootball": "Leeds United FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:leeds united",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Liverpool",
+          "openfootball": "Liverpool FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:liverpool",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Man United",
+          "openfootball": "Manchester United FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:manchester united",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Newcastle",
+          "openfootball": "Newcastle United FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:newcastle united",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Sunderland",
+          "openfootball": "Sunderland AFC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:sunderland",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    },
+    {
+      "evidence": {
+        "priority_rule_applied": false,
+        "values_by_source": {
+          "football-data-uk": "Wolves",
+          "openfootball": "Wolverhampton Wanderers FC"
+        }
+      },
+      "logical_entity_key": "team:ENG_PL:wanderers wolverhampton",
+      "metric_name": "name",
+      "participating_sources": [
+        "football-data-uk",
+        "openfootball"
+      ]
+    }
+  ],
+  "created_at": "2026-08-15T17:16:02.794015+00:00",
+  "data_context": "real",
+  "matches_resolved": 380,
+  "metric_coverage": {
+    "available_current_identities": [
+      "away_score@match",
+      "corners@team_match",
+      "fouls@team_match",
+      "home_score@match",
+      "red_cards@team_match",
+      "shots_on_target@team_match",
+      "shots_total@team_match",
+      "status@match",
+      "yellow_cards@team_match"
+    ],
+    "available_current_identity_count": 9,
+    "catalog_identity_count": 194,
+    "derived_identity_count": 40,
+    "historical_deep_only_identity_count": 22,
+    "note": "available_current/historical_deep_only/unavailable are never blended into one percentage -- see docs/ZERO_COST_COVERAGE.md's coverage-state discipline.",
+    "raw_identity_count": 154,
+    "unavailable_identity_count": 163
+  },
+  "observations_by_granularity": {
+    "match": 2280,
+    "team_identity": 1520,
+    "team_match": 4560
+  },
+  "player_data": {
+    "reason": "No compliant zero-cost source publishing ENG_PL 2025/26 player-match statistics was found in the Block 18 source audit; see docs/REAL_DATA_SOURCE_AUDIT_V2.md and docs/REAL_DATA_SNAPSHOT_V2.md.",
+    "rich_player_source_found": false
+  },
+  "players_resolved": 0,
+  "provenance_completeness": "full: every persisted observation carries source_code, source_reference, observed_at and semantic_version",
+  "providers_used": {
+    "football-data-uk": {
+      "observation_count": 6460,
+      "role": "primary_current_source_and_canonical_load_source",
+      "status": "ok"
+    },
+    "openfootball": {
+      "observation_count": 1900,
+      "role": "secondary_current_source_for_reconciliation_audit",
+      "status": "ok"
+    }
+  },
+  "reconciliation": {
+    "agreed_count": 1140,
+    "conflict_count": 20,
+    "overlap_count": 1160,
+    "single_source_count": 4560
+  },
+  "reconciliation_model_version": "data-mesh-reconciliation-v0.1",
+  "season_label": "2025/26",
+  "snapshot_id": "real-eng_pl-2025_26-v2",
+  "source_audit_reference": "docs/REAL_DATA_SOURCE_AUDIT_V2.md",
+  "source_files": [
+    {
+      "local_path": "data/real/2025-26/eng_pl_matches.json",
+      "provider": "football-data-uk",
+      "source_url": "https://www.football-data.co.uk/mmz4281/2526/E0.csv"
+    },
+    {
+      "local_path": "data/real/2025-26/eng_pl_matches_openfootball.json",
+      "provider": "openfootball",
+      "source_url": "https://raw.githubusercontent.com/openfootball/football.json/master/2025-26/en.1.json"
+    }
+  ],
+  "teams_resolved": 20,
+  "unresolved_entities": {
+    "count": 0,
+    "examples": []
+  }
+}
