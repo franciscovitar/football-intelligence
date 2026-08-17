@@ -26,6 +26,10 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Local acquisition caches (never commit downloaded provider datasets)
+data/cache/
+analytics/data/cache/
+
 # Misc
 *.log
 # TypeScript / Next.js generated

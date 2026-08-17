@@ -30,6 +30,9 @@ football-intelligence-collect-validation-snapshot = "football_intelligence.jobs.
 football-intelligence-score-real-snapshot = "football_intelligence.jobs.score_real_snapshot:main"
 football-intelligence-build-real-snapshot-v2 = "football_intelligence.jobs.build_real_snapshot_v2:main"
 football-intelligence-execute-real-intelligence-v2 = "football_intelligence.jobs.execute_real_intelligence_v2:main"
+football-intelligence-probe-wyscout-open = "football_intelligence.jobs.probe_wyscout_open:main"
+football-intelligence-audit-wyscout-mapping = "football_intelligence.jobs.audit_wyscout_metric_mapping:main"
+football-intelligence-audit-wyscout-adapter = "football_intelligence.jobs.audit_wyscout_adapter:main"
 
 [dependency-groups]
 dev = [
