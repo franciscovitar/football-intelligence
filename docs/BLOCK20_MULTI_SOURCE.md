@@ -332,8 +332,59 @@ See `docs/STATSBOMB_METRIC_MAPPING.md` for the full evidence trail. Summary:
 - `football-intelligence-audit-statsbomb-mapping` re-derives every
   regression count above from the real pinned cache and PASSES.
 
-**Next step: Block 20C.2b** will rewrite
-`data_mesh/adapters/statsbomb_open.py` scoped exactly to the 110-identity
-adapter-safe subset, using the lineup file as the participation and card
-source. No `NormalizedObservation` emission, database write, or
-user-facing exposure happened in Block 20C.1 or 20C.2a.
+No `NormalizedObservation` emission, database write, or user-facing
+exposure happened in Block 20C.1 or 20C.2a.
+
+### Block 20C.2b — certified StatsBomb Open adapter
+
+`data_mesh/adapters/statsbomb_open.py` was rewritten (same file, no
+parallel second adapter) to emit `NormalizedObservation` rows for exactly
+the 110 adapter-safe identities, using `adapter_safe_mappings()` as the
+sole emission allowlist (validated at import time and at every observation
+construction). It consumes already-loaded `MatchBundle`s (match summary +
+events + lineups) -- no HTTP, no filesystem access, no database.
+
+Every Block 20C.1/20C.2a semantic finding is now implemented: the lineup
+file is the authoritative participation universe (starters/used subs get
+real performance data including legitimate zeros; unused substitutes get
+only roster-membership facts, never a fabricated performance zero; players
+referenced only by an event and absent from the lineup get nothing at
+all); cards come exclusively from the lineup file's `cards` array; saves/
+goals_conceded use the full certified Goal Keeper type set;
+`pass.goal_assist` drives `assists`; own-goal events never touch a
+player's `goals`; team `goals_for`/`goals_against` always come from the
+native match score; `match_status`/`home_score`/`away_score`/etc. are read
+natively rather than synthesized; team/competition `name` facts moved into
+`entity_identity_hints`, no longer emitted as a metric with no catalog
+identity. `minutes`/`minutes_per_appearance` remain unimplemented, exactly
+as certified. `providers.statsbomb_open_policy.STATSBOMB_INTERNAL_ONLY` is
+asserted at the season entry point.
+
+**Legacy Coverage Lab compatibility**: `jobs/run_zero_cost_coverage.py`
+(Block 14/15, live generic probe against Bundesliga 2023/24) and
+`jobs/collect_validation_snapshot.py` (Block 16, FIFA World Cup 2022
+validation snapshot) both depend on the pre-existing adapter's generic,
+any-competition `find_competition_season`/`parse_match_list`/
+`parse_match_events` functions -- entirely outside Block 20C's certified
+Premier League 2015/16 scope. Rewriting their semantics was not part of
+this block's objective; those three functions are preserved byte-for-byte
+(internals renamed `_legacy_`/`_LEGACY_`-prefixed so they can never be
+accidentally reused by the certified path), in a clearly separated,
+documented section of the same module.
+
+**Real full-season audit** (`football-intelligence-audit-statsbomb-adapter
+--cache-dir data/cache/statsbomb-open`, zero network calls): 643,628
+observations across 380 matches / 20 teams; 110/110 adapter-safe
+identities produced real observations, 0 unexpected, 0 conflicting
+duplicates, 0 participation-universe violations. Every acceptance
+invariant passed: native score 988 (shooter) + 38 (own goals) = 1026 with
+zero residual; assists 669 exactly matching `pass.goal_assist`; cards
+1,203 (lineup-authoritative) vs. 1,015 the old Foul-Committed-only rule
+would have produced; saves 2,277 (full type set) vs. 2,194 the old
+`"Shot Saved"`-only rule would have produced.
+
+No canonical ingestion, entity resolution, or reconciliation exists yet.
+StatsBomb evidence remains `internal_only` until the commercial-use
+compliance question is explicitly resolved by a product/legal decision
+this repository does not make. See `docs/STATSBOMB_METRIC_MAPPING.md` for
+the full evidence trail.
