@@ -5,6 +5,16 @@ official repository of static JSON files published by StatsBomb for
 historical/deep event data research. This client only reads the raw files
 StatsBomb publishes for that purpose -- no scraping, no authentication, no
 hidden endpoints.
+
+The upstream repository is a live, mutable Git branch: `master` can and does
+change (new competitions/matches added, existing match files updated) --
+verified during the Block 20C.1 audit, where the observed HEAD moved
+substantially between inspections. To keep any Block 20C evidence
+reproducible, this client defaults to a **pinned commit SHA**
+(`DEFAULT_PINNED_REVISION`), never floating `master`. Callers may pass an
+explicit `ref` (a different commit SHA, or `"master"`) for tests or a
+deliberate future source-revision upgrade, but nothing in this module ever
+silently substitutes `master` for a pinned ref that fails to resolve.
 """
 
 from __future__ import annotations
@@ -18,6 +28,14 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 JsonValue = Any
+
+# Verified fetchable during the Block 20C.1 real-source audit (2026-08-17):
+# the observed HEAD of `statsbomb/open-data` at that time. This is the
+# default production-of-evidence revision for Block 20C -- see
+# `docs/STATSBOMB_METRIC_MAPPING.md`.
+DEFAULT_PINNED_REVISION = "b0bc9f22dd77c206ddedc1d742893b3bbe64baec"
+
+_RAW_CONTENT_HOST = "https://raw.githubusercontent.com/statsbomb/open-data"
 
 
 class StatsBombOpenDataError(RuntimeError):
@@ -37,24 +55,42 @@ class StatsBombOpenDataResponse:
     path: str
     status_code: int
     payload: JsonValue
+    raw_bytes: bytes
+    source_revision: str
     fetched_at: datetime
 
 
 class StatsBombOpenDataClient:
-    """Small synchronous client for the StatsBomb Open Data static JSON files."""
+    """Small synchronous client for the StatsBomb Open Data static JSON files.
+
+    Reads from `statsbomb/open-data/<ref>/data/...`. `ref` defaults to the
+    pinned `DEFAULT_PINNED_REVISION` commit SHA -- never the mutable
+    `master` branch -- so repeated runs against the same client instance
+    always see byte-identical upstream content. Pass `base_url` explicitly
+    only to point at a different host entirely (e.g. a test double); pass
+    `ref` to pin a different commit or, deliberately, `"master"`.
+    """
 
     def __init__(
         self,
         *,
-        base_url: str = "https://raw.githubusercontent.com/statsbomb/open-data/master/data",
+        ref: str = DEFAULT_PINNED_REVISION,
+        base_url: str | None = None,
         timeout_seconds: float = 20.0,
         max_attempts: int = 3,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be at least 1")
-        self._base_url = base_url.rstrip("/")
+        if not ref.strip():
+            raise ValueError("ref must not be blank")
+        self._ref = ref
+        self._base_url = (base_url or f"{_RAW_CONTENT_HOST}/{ref}/data").rstrip("/")
         self._timeout_seconds = timeout_seconds
         self._max_attempts = max_attempts
+
+    @property
+    def source_revision(self) -> str:
+        return self._ref
 
     def get(self, path: str) -> StatsBombOpenDataResponse:
         normalized_path = path.strip().strip("/")
@@ -73,6 +109,8 @@ class StatsBombOpenDataClient:
                     path=normalized_path,
                     status_code=status_code,
                     payload=payload,
+                    raw_bytes=body,
+                    source_revision=self._ref,
                     fetched_at=datetime.now(UTC),
                 )
             except HTTPError as exc:

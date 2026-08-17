@@ -33,6 +33,8 @@ football-intelligence-execute-real-intelligence-v2 = "football_intelligence.jobs
 football-intelligence-probe-wyscout-open = "football_intelligence.jobs.probe_wyscout_open:main"
 football-intelligence-audit-wyscout-mapping = "football_intelligence.jobs.audit_wyscout_metric_mapping:main"
 football-intelligence-audit-wyscout-adapter = "football_intelligence.jobs.audit_wyscout_adapter:main"
+football-intelligence-fetch-statsbomb-open = "football_intelligence.jobs.fetch_statsbomb_open:main"
+football-intelligence-audit-statsbomb-mapping = "football_intelligence.jobs.audit_statsbomb_mapping:main"
 
 [dependency-groups]
 dev = [
