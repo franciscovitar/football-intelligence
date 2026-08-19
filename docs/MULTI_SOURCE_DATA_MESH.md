@@ -54,13 +54,25 @@ source's fact claim about one entity/metric:
 source_code, source_type, entity_type, entity_source_id,
 entity_identity_hints, metric_name, value,
 observed_at, source_timestamp, source_reference,
-ingestion_run_id, semantic_version
+ingestion_run_id, semantic_version, metric_granularity
 ```
 
 `entity_type` supports `competition`, `team`, `match`, `player` at minimum.
 `metric_name` is an open string, not a fixed whitelist -- adding a future
 metric (xG, xA, progressive passes, ...) never requires a schema change,
 only a new adapter mapping.
+
+`metric_granularity` (added Block 20D.2, optional/`None` for pre-V2
+adapters) records which Metric Catalog V2 granularity a certified
+observation belongs to (`player_match` vs `goalkeeper_match`, `team` vs
+`team_match`, etc.). The Metric Catalog permits the same `metric_name` at
+more than one granularity -- `saves` exists at both `player_match` and
+`goalkeeper_match`, and both project to `entity_type == "player"` -- so
+without this field two genuinely different facts about the same match
+would be information-theoretically indistinguishable once resolved. See
+[`ENTITY_RESOLUTION_V2.md`](ENTITY_RESOLUTION_V2.md) for the full design
+and why this could not simply be reconstructed later from
+`entity_source_id`/`entity_type` alone.
 
 **Missing vs zero**: a source that does not report a metric produces no
 observation for it at all. A reported `0` is a real observation with
@@ -107,6 +119,17 @@ guessed link.
 Resolved logical keys (`team:...`, `match:...`) are PoC-scoped identifiers.
 They deliberately do not point at `football.teams`/`football.matches` rows
 -- V0 must not auto-link into the production canonical graph.
+
+**Entity Resolution V2 (Block 20D.2)** adds capabilities the certified
+Wyscout Open / StatsBomb Open adapters need that V0 above does not cover --
+team/match resolution that does not depend on a `team.name` observation
+(neither certified adapter emits one), a real Wyscout-source Unicode text
+repair, two additional Spanish-alias/stopword team-name fixes, a bounded
+match-date clustering fix, and a granularity-safe logical fact key helper
+plus a player-crosswalk **contract** (no auto-resolution). It is purely
+additive -- every V0 function above keeps its exact existing behavior, and
+this section's ENG_PL Bundesliga/PL PoC scope is untouched. Full detail:
+[`ENTITY_RESOLUTION_V2.md`](ENTITY_RESOLUTION_V2.md).
 
 ## Reconciliation policy
 

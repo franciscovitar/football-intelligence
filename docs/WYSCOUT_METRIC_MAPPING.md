@@ -357,7 +357,7 @@ Both gaps are now closed.
 | --- | --- | --- | --- |
 | home_score | match | D | `teamsData[<home teamId>].score` |
 | away_score | match | D | `teamsData[<away teamId>].score` |
-| home_away | match | D | `teamsData[*].side` (`"home"`/`"away"`) |
+| home_away | team_match (corrected Block 20D.2) | D | `teamsData[*].side` (`"home"`/`"away"`) |
 | status | match | D | native `status` field (verified always `"Played"`) |
 | kickoff_at | match | D | native `dateutc` field |
 | round_name | match | D | native `gameweek` field (1-38) |

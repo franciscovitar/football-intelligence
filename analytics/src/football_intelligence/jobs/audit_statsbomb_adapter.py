@@ -26,7 +26,6 @@ from typing import Any
 
 from football_intelligence.data_mesh.adapters.statsbomb_open import (
     _EMITTED_IDENTITIES,
-    _GRANULARITY_TO_ENTITY_TYPE,
     _SAFE_METRIC_ENTITY_PAIRS,
     COMPETITION_CODE,
     SEASON_LABEL,
@@ -36,7 +35,7 @@ from football_intelligence.data_mesh.adapters.statsbomb_open import (
     parse_lineups,
     parse_premier_league_season,
 )
-from football_intelligence.data_mesh.models import EntityType, NormalizedObservation
+from football_intelligence.data_mesh.models import NormalizedObservation
 from football_intelligence.providers.statsbomb_open import DEFAULT_PINNED_REVISION
 from football_intelligence.providers.statsbomb_open_mapping import adapter_safe_mappings
 from football_intelligence.providers.statsbomb_open_policy import STATSBOMB_INTERNAL_ONLY
@@ -57,8 +56,6 @@ _EXPECTED_LINEUP_SECOND_YELLOW = 25
 _EXPECTED_FOUL_COMMITTED_ONLY_YELLOW = 1015  # what the old, incomplete rule would total
 _EXPECTED_SAVES_FULL_TYPE_SET = 2277
 _EXPECTED_SAVES_OLD_RULE_ONLY = 2194  # "Shot Saved" only -- the old adapter's undercount
-
-_SEASON_SCOPED_GRANULARITIES = frozenset({"player_season", "goalkeeper_season"})
 
 
 class StatsBombAdapterAuditError(RuntimeError):
@@ -88,7 +85,16 @@ class AdapterAuditReport:
     implemented_identity_count: int
     identities_with_observations: int
     safe_identities_with_zero_observations: tuple[tuple[str, str], ...]
+    # (metric_name, entity_type) pairs outside `_SAFE_METRIC_ENTITY_PAIRS` --
+    # a coarser, defense-in-depth signal kept alongside
+    # `unexpected_exact_identities` below, never a substitute for it (an
+    # entity_type pair can be valid while the exact granularity is not,
+    # e.g. saves/player_season still has entity_type="player").
     unexpected_identities: tuple[tuple[str, str], ...]
+    # (metric_name, metric_granularity) pairs observed but absent from the
+    # real Metric Catalog adapter-safe set -- the authoritative unexpected-
+    # output check (Block 20D.2 review-fix pass).
+    unexpected_exact_identities: tuple[tuple[str, str], ...]
     checks: tuple[VerificationCheck, ...]
 
     @property
@@ -260,12 +266,6 @@ def _numeric_suffix(entity_source_id: str) -> str:
     return entity_source_id.rsplit(":", maxsplit=1)[-1]
 
 
-def _identity_expected_entity_type(granularity: str, key: str) -> EntityType:
-    if key == "home_away":
-        return "team"
-    return _GRANULARITY_TO_ENTITY_TYPE[granularity]
-
-
 def build_report(
     observations: list[NormalizedObservation], bundles: list[MatchBundle]
 ) -> AdapterAuditReport:
@@ -275,13 +275,17 @@ def build_report(
     teams_seen: set[str] = set()
     players_seen: set[str] = set()
 
-    seen_identity_values: dict[tuple[str, str, str, str], Any] = {}
+    # Block 20D.2 review-fix pass: identity keyed on the actual observation
+    # field (metric_granularity), never inferred from entity_type. The old
+    # (metric_name, entity_type) projection cannot distinguish
+    # saves/player_match from saves/goalkeeper_match -- both project to
+    # entity_type="player" -- so it could certify 110/110 coverage even if
+    # one of the two granularities was never actually emitted.
+    seen_identity_values: dict[tuple[str, str, str, str, str | None], Any] = {}
     duplicate_identical = 0
     duplicate_conflicts = 0
-
-    match_scoped_pairs: set[tuple[str, EntityType]] = set()
-    season_scoped_pairs: set[tuple[str, EntityType]] = set()
-    match_entity_pairs: set[tuple[str, EntityType]] = set()
+    observed_identities: set[tuple[str, str]] = set()
+    missing_granularity_count = 0
 
     unexpected: list[tuple[str, str]] = []
     competitions_seen: set[str] = set()
@@ -293,13 +297,25 @@ def build_report(
     total_player_assists = 0
     total_player_yellow_cards = 0
     total_player_red_cards = 0
+    # "saves" is now genuinely emitted at BOTH player_match and
+    # goalkeeper_match granularity (the same real per-save-event count,
+    # correctly dual-scoped) -- summing every "saves" observation
+    # regardless of granularity would silently double-count real saves.
+    # Restricted to player_match, matching the original independently
+    # recomputed `saves_full_type_set` event count below.
     total_player_saves = 0
 
     for obs in observations:
         by_entity_type[obs.entity_type] += 1
         by_metric_name[obs.metric_name] += 1
 
-        identity_key = (obs.source_code, obs.entity_type, obs.entity_source_id, obs.metric_name)
+        identity_key = (
+            obs.source_code,
+            obs.entity_type,
+            obs.entity_source_id,
+            obs.metric_name,
+            obs.metric_granularity,
+        )
         if identity_key in seen_identity_values:
             if seen_identity_values[identity_key] != obs.value:
                 duplicate_conflicts += 1
@@ -311,24 +327,26 @@ def build_report(
         if (obs.metric_name, obs.entity_type) not in _SAFE_METRIC_ENTITY_PAIRS:
             unexpected.append((obs.metric_name, obs.entity_type))
 
+        # The certified path (`parse_premier_league_season`) must always
+        # set `metric_granularity` explicitly -- a `None` here would mean a
+        # certified observation was silently built without it, never a
+        # case to project through entity_type instead.
+        if obs.metric_granularity is None:
+            missing_granularity_count += 1
+        else:
+            observed_identities.add((obs.metric_name, obs.metric_granularity))
+
         if obs.entity_type == "match":
             matches_seen.add(obs.entity_source_id)
-            match_entity_pairs.add((obs.metric_name, obs.entity_type))
             if obs.metric_name in ("home_score", "away_score"):
                 total_home_away_scores += int(obs.value)
         elif obs.entity_type == "team":
             teams_seen.add(_numeric_suffix(obs.entity_source_id))
-            if _entity_source_id_is_match_scoped(obs.entity_source_id):
-                match_scoped_pairs.add((obs.metric_name, obs.entity_type))
         elif obs.entity_type == "player":
             player_id = _numeric_suffix(obs.entity_source_id)
             players_seen.add(player_id)
             if player_id == "0" or not player_id.isdigit():
                 zero_or_malformed_player_ids += 1
-            if _entity_source_id_is_match_scoped(obs.entity_source_id):
-                match_scoped_pairs.add((obs.metric_name, obs.entity_type))
-            else:
-                season_scoped_pairs.add((obs.metric_name, obs.entity_type))
             if obs.metric_name == "goals":
                 total_player_goals += int(obs.value)
             elif obs.metric_name == "assists":
@@ -337,29 +355,21 @@ def build_report(
                 total_player_yellow_cards += int(obs.value)
             elif obs.metric_name == "red_cards":
                 total_player_red_cards += int(obs.value)
-            elif obs.metric_name == "saves":
+            elif obs.metric_name == "saves" and obs.metric_granularity == "player_match":
                 total_player_saves += int(obs.value)
 
         competitions_seen.add(obs.entity_identity_hints.get("competition_external_id", ""))
         seasons_seen.add(obs.entity_identity_hints.get("season_label", ""))
 
-    safe_pairs_with_observations: set[tuple[str, str]] = set()
-    for mapping in adapter_safe_mappings():
-        key, granularity = mapping.catalog_key, mapping.catalog_granularity
-        identity = (key, granularity)
-        entity_type = _identity_expected_entity_type(granularity, key)
-        pair = (key, entity_type)
-        if entity_type == "match":
-            has_obs = pair in match_entity_pairs
-        elif granularity in _SEASON_SCOPED_GRANULARITIES:
-            has_obs = pair in season_scoped_pairs
-        else:
-            has_obs = pair in match_scoped_pairs
-        if has_obs:
-            safe_pairs_with_observations.add(identity)
-
     safe_identities = {(m.catalog_key, m.catalog_granularity) for m in adapter_safe_mappings()}
+    safe_pairs_with_observations = safe_identities & observed_identities
     zero_observation_identities = tuple(sorted(safe_identities - safe_pairs_with_observations))
+    # The authoritative unexpected-output check: an observed
+    # (metric_name, metric_granularity) pair that is not adapter-safe.
+    # `saves/player_season` is unexpected even though `saves/player_match`
+    # is safe -- both project to entity_type="player", so the coarser
+    # `unexpected` (entity_type-keyed) list above cannot catch this case.
+    unexpected_exact_identities = tuple(sorted(observed_identities - safe_identities))
 
     # Participation universe cross-checks: every emitted player_match/
     # goalkeeper_match observation must be a confirmed participant (starter
@@ -418,8 +428,14 @@ def build_report(
     checks.append(
         _check(
             "competition_scope_is_eng_pl_only",
-            competitions_seen == {COMPETITION_CODE},
-            f"expected {{{COMPETITION_CODE!r}}}, got {competitions_seen}",
+            # Real provider-native competition_id (Block 20D.2 review-fix
+            # pass): `competition_external_id` is the source's own numeric
+            # id, verified against every real match record's own
+            # `competition.competition_id` field -- never the canonical
+            # "ENG_PL" code (see `statsbomb_open._scope_hints()`).
+            competitions_seen == {str(COMPETITION_ID)},
+            f"expected {{{str(COMPETITION_ID)!r}}} (real provider-native competition_id, "
+            f"not the canonical {COMPETITION_CODE!r} code), got {competitions_seen}",
         )
     )
     checks.append(
@@ -443,6 +459,33 @@ def build_report(
             not unexpected,
             f"found {len(unexpected)} unexpected (metric_name, entity_type) pairs: "
             f"{sorted(set(unexpected))[:10]}",
+        )
+    )
+    checks.append(
+        _check(
+            "no_unexpected_exact_identities_emitted",
+            not unexpected_exact_identities,
+            f"found {len(unexpected_exact_identities)} unexpected (metric_name, "
+            f"metric_granularity) pairs -- observed but not adapter-safe: "
+            f"{unexpected_exact_identities[:10]}",
+        )
+    )
+    checks.append(
+        _check(
+            "no_missing_metric_granularity",
+            missing_granularity_count == 0,
+            f"found {missing_granularity_count} certified-path observations with "
+            "metric_granularity=None -- every certified observation must declare its "
+            "granularity explicitly, never silently projected from entity_type",
+        )
+    )
+    checks.append(
+        _check(
+            "all_adapter_safe_identities_observed",
+            not zero_observation_identities,
+            f"found {len(zero_observation_identities)} adapter-safe (metric_name, "
+            f"metric_granularity) identities with zero real observations this run: "
+            f"{zero_observation_identities}",
         )
     )
     checks.append(
@@ -564,6 +607,7 @@ def build_report(
         identities_with_observations=len(safe_pairs_with_observations),
         safe_identities_with_zero_observations=zero_observation_identities,
         unexpected_identities=tuple(sorted(set(unexpected))),
+        unexpected_exact_identities=unexpected_exact_identities,
         checks=tuple(checks),
     )
 
@@ -596,8 +640,12 @@ def _print_report(report: AdapterAuditReport) -> None:
         f"{report.safe_identities_with_zero_observations}"
     )
     print(
-        f"unexpected identities emitted ({len(report.unexpected_identities)}): "
+        f"unexpected (metric_name, entity_type) pairs ({len(report.unexpected_identities)}): "
         f"{report.unexpected_identities}"
+    )
+    print(
+        f"unexpected exact (metric_name, metric_granularity) identities "
+        f"({len(report.unexpected_exact_identities)}): {report.unexpected_exact_identities}"
     )
 
     print()
@@ -637,6 +685,7 @@ def _report_to_dict(report: AdapterAuditReport) -> dict[str, Any]:
             report.safe_identities_with_zero_observations
         ),
         "unexpected_identities": list(report.unexpected_identities),
+        "unexpected_exact_identities": list(report.unexpected_exact_identities),
         "checks": [{"name": c.name, "passed": c.passed, "detail": c.detail} for c in report.checks],
         "all_checks_passed": report.all_passed,
     }

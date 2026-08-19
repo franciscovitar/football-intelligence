@@ -74,13 +74,24 @@ from datetime import UTC, datetime
 from typing import Any
 
 from football_intelligence.data_mesh.models import EntityType, NormalizedObservation, SourceType
+from football_intelligence.metric_catalog.types import MetricGranularity
 from football_intelligence.providers.statsbomb_open import DEFAULT_PINNED_REVISION
 from football_intelligence.providers.statsbomb_open_mapping import adapter_safe_mappings
 from football_intelligence.providers.statsbomb_open_policy import STATSBOMB_INTERNAL_ONLY
 
 SOURCE_CODE = "statsbomb-open"
 SOURCE_TYPE: SourceType = "objective_structured"
-SEMANTIC_VERSION = "statsbomb-open-v0.2"
+# Bumped from "statsbomb-open-v0.2" (Block 20C.2b's certified rewrite) in
+# Block 20D.2's review-fix pass: observable emission semantics changed
+# materially -- every observation now carries an explicit
+# `metric_granularity`, `goalkeeper_match`-granularity `saves` is now
+# genuinely emitted (previously declared but never produced), `home_away`
+# moved from catalog granularity "match" to "team_match", and identity
+# hints were materially enriched (explicit `team_external_id`/`team_name`,
+# `player_external_id`/`player_name`, `home_team_*`/`away_team_*`,
+# `kickoff_date`). Old and new observations must not share a provenance
+# version.
+SEMANTIC_VERSION = "statsbomb-open-v0.3"
 COMPETITION_CODE = "ENG_PL"
 SEASON_LABEL = "2015/16"
 
@@ -203,22 +214,15 @@ _ADAPTER_SAFE_IDENTITIES: frozenset[tuple[str, str]] = frozenset(
     (m.catalog_key, m.catalog_granularity) for m in adapter_safe_mappings()
 )
 
-# `home_away` is the one documented exception to the mechanical granularity
-# projection below, exactly mirroring `wyscout_open`'s identical reasoning:
-# its catalog granularity is "match", but its verified primitive
-# (home_team/away_team identity) is inherently a per-team-in-this-match
-# fact, so it is emitted with entity_type="team".
-_SAFE_METRIC_ENTITY_TYPE_OVERRIDES: frozenset[tuple[str, EntityType]] = frozenset(
-    {("home_away", "team")}
-)
-
-_SAFE_METRIC_ENTITY_PAIRS: frozenset[tuple[str, EntityType]] = (
-    frozenset(
-        (key, _GRANULARITY_TO_ENTITY_TYPE[granularity])
-        for key, granularity in _ADAPTER_SAFE_IDENTITIES
-        if key != "home_away"
-    )
-    | _SAFE_METRIC_ENTITY_TYPE_OVERRIDES
+# `home_away`'s catalog granularity was corrected from "match" to
+# "team_match" (Block 20D.2 review-fix pass, mirroring `wyscout_open`'s
+# identical fix): the primitive (home_team/away_team identity) is
+# inherently a per-team-in-this-match fact, and "team_match" already
+# projects to entity_type="team" mechanically below -- no special-case
+# override needed any more (an earlier pass carried one here specifically
+# because the catalog was misclassified).
+_SAFE_METRIC_ENTITY_PAIRS: frozenset[tuple[str, EntityType]] = frozenset(
+    (key, _GRANULARITY_TO_ENTITY_TYPE[granularity]) for key, granularity in _ADAPTER_SAFE_IDENTITIES
 )
 
 
@@ -240,7 +244,7 @@ _EMITTED_IDENTITIES: frozenset[tuple[str, str]] = frozenset(
     {
         ("home_score", "match"),
         ("away_score", "match"),
-        ("home_away", "match"),
+        ("home_away", "team_match"),
         ("status", "match"),
         ("kickoff_at", "match"),
         ("round_name", "match"),
@@ -392,6 +396,16 @@ class _MatchInfo:
     status: Any
     match_week: Any
     venue_name: Any
+    # Provider-native identifiers, read directly from this match's own
+    # `competition`/`season` blocks (`match_summary["competition"]
+    # ["competition_id"]` / `match_summary["season"]["season_id"]`) --
+    # verified real values for England 2015/16: competition_id=2,
+    # season_id=27. These are genuinely supplied per-observation, never the
+    # canonical "ENG_PL" code (Block 20D.2 completion pass correction: an
+    # earlier pass had put the canonical code itself into
+    # `competition_external_id`, which is not a provider-native identifier).
+    competition_external_id: str | None
+    season_external_id: str | None
 
 
 @dataclass
@@ -515,6 +529,10 @@ def parse_match(match_summary: dict[str, Any]) -> _MatchInfo | None:
     venue_name = stadium.get("name") if isinstance(stadium, dict) else None
     home_team_id = home_team.get("home_team_id")
     away_team_id = away_team.get("away_team_id")
+    competition = match_summary.get("competition")
+    season = match_summary.get("season")
+    competition_id = competition.get("competition_id") if isinstance(competition, dict) else None
+    season_id = season.get("season_id") if isinstance(season, dict) else None
     return _MatchInfo(
         match_id=match_id,
         kickoff_at=_parse_kickoff(match_summary),
@@ -527,6 +545,8 @@ def parse_match(match_summary: dict[str, Any]) -> _MatchInfo | None:
         status=match_summary.get("match_status"),
         match_week=match_summary.get("match_week"),
         venue_name=venue_name,
+        competition_external_id=str(competition_id) if isinstance(competition_id, int) else None,
+        season_external_id=str(season_id) if isinstance(season_id, int) else None,
     )
 
 
@@ -544,6 +564,12 @@ def _observation(
     observed_at: datetime,
     source_reference: str,
     ingestion_run_id: int | None,
+    # Optional here (unlike `_emit`, where it is required) so the legacy
+    # Coverage Lab compatibility functions below -- which predate Metric
+    # Catalog V2 and call `_observation()` directly, bypassing `_emit`/
+    # `_guard` entirely -- can keep constructing observations exactly as
+    # before, with `metric_granularity` correctly defaulting to `None`.
+    metric_granularity: MetricGranularity | None = None,
 ) -> NormalizedObservation:
     return NormalizedObservation(
         source_code=SOURCE_CODE,
@@ -558,10 +584,23 @@ def _observation(
         source_reference=source_reference,
         ingestion_run_id=ingestion_run_id,
         semantic_version=SEMANTIC_VERSION,
+        metric_granularity=metric_granularity,
     )
 
 
-def _guard(entity_type: EntityType, metric_name: str) -> None:
+def _guard(
+    entity_type: EntityType, metric_name: str, metric_granularity: MetricGranularity
+) -> None:
+    # The exact (catalog_key, catalog_granularity) check is authoritative --
+    # it is the only check that can distinguish e.g. `saves`/player_match
+    # from `saves`/goalkeeper_match, which the entity_type-only check below
+    # cannot (both project to entity_type "player"). The entity_type check
+    # stays as defense-in-depth against an internal wiring bug.
+    if (metric_name, metric_granularity) not in _ADAPTER_SAFE_IDENTITIES:
+        raise StatsBombObservationConflictError(
+            f"refusing to build a non-adapter-safe observation: "
+            f"metric_name={metric_name!r} metric_granularity={metric_granularity!r}"
+        )
     if (metric_name, entity_type) not in _SAFE_METRIC_ENTITY_PAIRS:
         raise StatsBombObservationConflictError(
             f"refusing to build a non-adapter-safe observation: "
@@ -571,7 +610,7 @@ def _guard(entity_type: EntityType, metric_name: str) -> None:
 
 def _emit(
     observations: list[NormalizedObservation],
-    seen: dict[tuple[str, EntityType, str, str], Any],
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any],
     *,
     entity_type: EntityType,
     entity_source_id: str,
@@ -581,9 +620,10 @@ def _emit(
     observed_at: datetime,
     source_reference: str,
     ingestion_run_id: int | None,
+    metric_granularity: MetricGranularity,
 ) -> None:
-    _guard(entity_type, metric_name)
-    identity = (SOURCE_CODE, entity_type, entity_source_id, metric_name)
+    _guard(entity_type, metric_name, metric_granularity)
+    identity = (SOURCE_CODE, entity_type, entity_source_id, metric_name, metric_granularity)
     if identity in seen:
         if seen[identity] != value:
             raise StatsBombObservationConflictError(
@@ -601,12 +641,115 @@ def _emit(
             observed_at=observed_at,
             source_reference=source_reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity=metric_granularity,
         )
     )
 
 
-def _scope_hints() -> dict[str, str]:
-    return {"competition_external_id": COMPETITION_CODE, "season_label": SEASON_LABEL}
+def _scope_hints(info: _MatchInfo | None = None) -> dict[str, str]:
+    """Provider-native competition identity + our own normalized season
+    label. `competition_external_id` is the source's own numeric
+    `competition_id` (verified: 2 for England 2015/16), never the canonical
+    "ENG_PL" code -- only populated when this specific match genuinely
+    carries it. `info=None` (season-aggregate call sites with no single
+    match in scope) omits `competition_external_id` rather than guessing."""
+
+    hints: dict[str, str] = {"season_label": SEASON_LABEL}
+    if info is not None and info.competition_external_id is not None:
+        hints["competition_external_id"] = info.competition_external_id
+    return hints
+
+
+def _match_hints(info: _MatchInfo) -> dict[str, str]:
+    """Identity hints for a match-granularity observation: provider-native
+    match id, home/away team ids and names when the source supplies them,
+    and the raw per-observation kickoff date.
+
+    `resolve_match()` (`data_mesh/entity_resolution.py`) is a pure function
+    of its exact inputs and performs no clustering of its own. The bounded
+    day-level tolerance that lets two providers converge on one logical
+    match identity despite reporting adjacent-but-not-identical dates
+    (`cluster_match_dates()`, applied via `build_match_date_clusters()` in
+    `data_mesh/pipeline.py`) is a separate step one layer up. Block
+    20D.2's V2 index builders
+    (`entity_resolution_v2.build_match_index_v2_from_observations()`) call
+    `resolve_match()` directly with each observation's raw `kickoff_date`
+    hint -- cross-source date-tolerance canonicalization for the certified
+    Wyscout/StatsBomb adapters is not yet wired into V2 and remains
+    explicitly deferred to Block 20D.4's pipeline/Reconciliation V2
+    wiring, not implemented a second time here."""
+
+    hints = _scope_hints(info)
+    hints["match_external_id"] = str(info.match_id)
+    if info.home_team_id is not None:
+        hints["home_team_external_id"] = str(info.home_team_id)
+    if info.home_team_name:
+        hints["home_team_name"] = info.home_team_name
+    if info.away_team_id is not None:
+        hints["away_team_external_id"] = str(info.away_team_id)
+    if info.away_team_name:
+        hints["away_team_name"] = info.away_team_name
+    if info.kickoff_at is not None:
+        hints["kickoff_date"] = info.kickoff_at.date().isoformat()
+    return hints
+
+
+def _team_scoped_hints(info: _MatchInfo, team_id: int) -> dict[str, str]:
+    """Identity hints for a team_match-granularity (or per-team `home_away`)
+    observation: the match it belongs to, plus this specific team's own
+    provider-native id and name (never the whole match's home/away pair --
+    that belongs on the match-granularity observation itself)."""
+
+    hints = _scope_hints(info)
+    hints["match_external_id"] = str(info.match_id)
+    hints["team_external_id"] = str(team_id)
+    name: str | None = None
+    if team_id == info.home_team_id:
+        name = info.home_team_name
+    elif team_id == info.away_team_id:
+        name = info.away_team_name
+    if name:
+        hints["team_name"] = name
+    return hints
+
+
+def _player_season_hints(
+    season_scope_hints: dict[str, str] | None,
+    player_name_by_id: dict[int, str],
+    player_id: int,
+) -> dict[str, str]:
+    """Identity hints for a player_season/goalkeeper_season observation:
+    competition/season scope (captured once from the first match seen, since
+    every match in one season-parsing call shares it) plus this player's own
+    provider-native id and name -- never a per-match team, since a season
+    fact is not scoped to one match."""
+
+    hints: dict[str, str] = (
+        dict(season_scope_hints) if season_scope_hints else {"season_label": SEASON_LABEL}
+    )
+    hints["player_external_id"] = str(player_id)
+    name = player_name_by_id.get(player_id)
+    if name:
+        hints["player_name"] = name
+    return hints
+
+
+def _player_scoped_hints(info: _MatchInfo, roster: _MatchRoster, player_id: int) -> dict[str, str]:
+    """Identity hints for a player_appearance/player_match/goalkeeper_match
+    observation: the match, this player's own provider-native id and name
+    (from the lineup file), and the team they played for in this match when
+    the roster resolves it."""
+
+    hints = _scope_hints(info)
+    hints["match_external_id"] = str(info.match_id)
+    hints["player_external_id"] = str(player_id)
+    name = roster.player_name.get(player_id)
+    if name:
+        hints["player_name"] = name
+    team_id = roster.team_of.get(player_id)
+    if team_id is not None:
+        hints["team_external_id"] = str(team_id)
+    return hints
 
 
 def _events_reference(match_id: int, source_revision: str) -> str:
@@ -622,7 +765,9 @@ def _matches_reference(source_revision: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Match-level observations (7 DIRECT `match`-granularity identities)
+# Match-level observations (6 DIRECT `match`-granularity identities, plus
+# `home_away` at `team_match`-granularity -- corrected Block 20D.2
+# review-fix pass)
 # ---------------------------------------------------------------------------
 
 
@@ -633,7 +778,7 @@ def parse_match_observations(
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
     observations: list[NormalizedObservation] = []
-    seen: dict[tuple[str, EntityType, str, str], Any] = {}
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
     reference = _matches_reference(source_revision)
 
     for bundle in bundles:
@@ -642,7 +787,7 @@ def parse_match_observations(
             continue
         observed_at = info.kickoff_at or _fallback_now()
         entity_source_id = str(info.match_id)
-        hints = _scope_hints()
+        hints = _match_hints(info)
 
         if info.home_score is not None:
             _emit(
@@ -656,6 +801,7 @@ def parse_match_observations(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="match",
             )
         if info.away_score is not None:
             _emit(
@@ -669,6 +815,7 @@ def parse_match_observations(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="match",
             )
         if isinstance(info.status, str) and info.status.strip():
             _emit(
@@ -682,6 +829,7 @@ def parse_match_observations(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="match",
             )
         if info.kickoff_at is not None:
             _emit(
@@ -695,6 +843,7 @@ def parse_match_observations(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="match",
             )
         if isinstance(info.match_week, int):
             _emit(
@@ -708,6 +857,7 @@ def parse_match_observations(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="match",
             )
         if isinstance(info.venue_name, str) and info.venue_name.strip():
             _emit(
@@ -721,8 +871,13 @@ def parse_match_observations(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="match",
             )
 
+        # `home_away` (catalog granularity "team_match", corrected Block
+        # 20D.2 review-fix pass) is inherently a per-team-in-this-match
+        # fact -- emitted per team, same team-match-scoped convention as
+        # every other team-match fact in this codebase.
         for team_id, side in ((info.home_team_id, "home"), (info.away_team_id, "away")):
             if team_id is None:
                 continue
@@ -731,12 +886,13 @@ def parse_match_observations(
                 seen,
                 entity_type="team",
                 entity_source_id=f"{info.match_id}:{team_id}",
-                entity_identity_hints={**hints, "match_external_id": str(info.match_id)},
+                entity_identity_hints=_team_scoped_hints(info, team_id),
                 metric_name="home_away",
                 value=side,
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="team_match",
             )
 
     return observations
@@ -749,13 +905,12 @@ def parse_match_observations(
 
 def _emit_squad_facts(
     observations: list[NormalizedObservation],
-    seen: dict[tuple[str, EntityType, str, str], Any],
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any],
     *,
     roster: _MatchRoster,
-    match_id: int,
+    info: _MatchInfo,
     observed_at: datetime,
     reference: str,
-    hints: dict[str, str],
     ingestion_run_id: int | None,
 ) -> None:
     """`started`/`shirt_number` for the full named squad (roster membership
@@ -763,8 +918,10 @@ def _emit_squad_facts(
     confirmed participants only (unused substitutes have no recorded
     position interval to read)."""
 
+    match_id = info.match_id
     for player_id in roster.squad_players():
         entity_source_id = f"{match_id}:{player_id}"
+        hints = _player_scoped_hints(info, roster, player_id)
         _emit(
             observations,
             seen,
@@ -776,6 +933,7 @@ def _emit_squad_facts(
             observed_at=observed_at,
             source_reference=reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity="player_appearance",
         )
         jersey = roster.jersey_number.get(player_id)
         if jersey is not None:
@@ -790,6 +948,7 @@ def _emit_squad_facts(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="player_appearance",
             )
         listed_position = roster.listed_position.get(player_id)
         if listed_position is not None:
@@ -804,6 +963,7 @@ def _emit_squad_facts(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="player_appearance",
             )
 
 
@@ -818,12 +978,14 @@ def parse_lineup_participation_observations(
     (player_season)."""
 
     observations: list[NormalizedObservation] = []
-    seen: dict[tuple[str, EntityType, str, str], Any] = {}
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
 
     season_matches: dict[int, int] = defaultdict(int)
     season_starts: dict[int, int] = defaultdict(int)
     season_appearances: dict[int, int] = defaultdict(int)
     latest_contributing_date: dict[int, datetime] = {}
+    player_name_by_id: dict[int, str] = {}
+    season_scope_hints: dict[str, str] | None = None
 
     for bundle in bundles:
         info = parse_match(bundle.match_summary)
@@ -832,18 +994,20 @@ def parse_lineup_participation_observations(
         roster = parse_lineups(bundle.lineups_payload)
         observed_at = info.kickoff_at or _fallback_now()
         reference = _lineups_reference(info.match_id, source_revision)
-        hints = {**_scope_hints(), "match_external_id": str(info.match_id)}
 
         _emit_squad_facts(
             observations,
             seen,
             roster=roster,
-            match_id=info.match_id,
+            info=info,
             observed_at=observed_at,
             reference=reference,
-            hints=hints,
             ingestion_run_id=ingestion_run_id,
         )
+        for player_id in roster.player_name:
+            player_name_by_id.setdefault(player_id, roster.player_name[player_id])
+        if season_scope_hints is None:
+            season_scope_hints = _scope_hints(info)
 
         for player_id in roster.squad_players():
             season_matches[player_id] += 1
@@ -861,17 +1025,19 @@ def parse_lineup_participation_observations(
     for player_id, matches_count in season_matches.items():
         entity_source_id = str(player_id)
         observed_at = latest_contributing_date.get(player_id, _fallback_now())
+        season_hints = _player_season_hints(season_scope_hints, player_name_by_id, player_id)
         _emit(
             observations,
             seen,
             entity_type="player",
             entity_source_id=entity_source_id,
-            entity_identity_hints=_scope_hints(),
+            entity_identity_hints=season_hints,
             metric_name="matches",
             value=matches_count,
             observed_at=observed_at,
             source_reference=season_reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity="player_season",
         )
         appearances_count = season_appearances.get(player_id, 0)
         starts_count = season_starts.get(player_id, 0)
@@ -880,36 +1046,39 @@ def parse_lineup_participation_observations(
             seen,
             entity_type="player",
             entity_source_id=entity_source_id,
-            entity_identity_hints=_scope_hints(),
+            entity_identity_hints=season_hints,
             metric_name="appearances",
             value=appearances_count,
             observed_at=observed_at,
             source_reference=season_reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity="player_season",
         )
         _emit(
             observations,
             seen,
             entity_type="player",
             entity_source_id=entity_source_id,
-            entity_identity_hints=_scope_hints(),
+            entity_identity_hints=season_hints,
             metric_name="starts",
             value=starts_count,
             observed_at=observed_at,
             source_reference=season_reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity="player_season",
         )
         _emit(
             observations,
             seen,
             entity_type="player",
             entity_source_id=entity_source_id,
-            entity_identity_hints=_scope_hints(),
+            entity_identity_hints=season_hints,
             metric_name="sub_appearances",
             value=appearances_count - starts_count,
             observed_at=observed_at,
             source_reference=season_reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity="player_season",
         )
 
     return observations
@@ -1140,7 +1309,7 @@ def _card_counts(cards: list[str]) -> tuple[int, int, int]:
 
 def _emit_cards(
     observations: list[NormalizedObservation],
-    seen: dict[tuple[str, EntityType, str, str], Any],
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any],
     *,
     entity_source_id: str,
     cards: list[str],
@@ -1166,12 +1335,13 @@ def _emit_cards(
             observed_at=observed_at,
             source_reference=reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity="player_match",
         )
 
 
 def _emit_player_match_metrics(
     observations: list[NormalizedObservation],
-    seen: dict[tuple[str, EntityType, str, str], Any],
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any],
     *,
     match_id: int,
     player_id: int,
@@ -1195,6 +1365,7 @@ def _emit_player_match_metrics(
             observed_at=observed_at,
             source_reference=reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity="player_match",
         )
 
     for metric_name in _PLAYER_MATCH_EMITTED_COUNT_METRICS:
@@ -1256,7 +1427,7 @@ def parse_player_match_observations(
     Cards come from the lineup file, never from event aggregation."""
 
     observations: list[NormalizedObservation] = []
-    seen: dict[tuple[str, EntityType, str, str], Any] = {}
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
 
     for bundle in bundles:
         info = parse_match(bundle.match_summary)
@@ -1267,11 +1438,11 @@ def parse_player_match_observations(
         observed_at = info.kickoff_at or _fallback_now()
         events_reference = _events_reference(info.match_id, source_revision)
         lineups_reference = _lineups_reference(info.match_id, source_revision)
-        hints = {**_scope_hints(), "match_external_id": str(info.match_id)}
 
         for player_id in roster.participating_players():
             counts = dict(accumulation.counts_by_player.get(player_id, _new_counts()))
             counts["passes_received"] = accumulation.passes_received_by_player.get(player_id, 0)
+            player_hints = _player_scoped_hints(info, roster, player_id)
             _emit_player_match_metrics(
                 observations,
                 seen,
@@ -1280,7 +1451,7 @@ def parse_player_match_observations(
                 counts=counts,
                 observed_at=observed_at,
                 reference=events_reference,
-                hints=hints,
+                hints=player_hints,
                 ingestion_run_id=ingestion_run_id,
             )
             _emit_cards(
@@ -1290,7 +1461,7 @@ def parse_player_match_observations(
                 cards=roster.cards.get(player_id, []),
                 observed_at=observed_at,
                 reference=lineups_reference,
-                hints=hints,
+                hints=player_hints,
                 ingestion_run_id=ingestion_run_id,
             )
 
@@ -1319,13 +1490,15 @@ def parse_goalkeeper_observations(
     the Wyscout adapter's equivalent)."""
 
     observations: list[NormalizedObservation] = []
-    seen: dict[tuple[str, EntityType, str, str], Any] = {}
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
 
     season_saves: dict[int, int] = defaultdict(int)
     season_shots_faced: dict[int, int] = defaultdict(int)
     season_clean_sheets: dict[int, int] = defaultdict(int)
     season_matches_resolved: dict[int, int] = defaultdict(int)
     latest_date: dict[int, datetime] = {}
+    player_name_by_id: dict[int, str] = {}
+    season_scope_hints: dict[str, str] | None = None
 
     for bundle in bundles:
         info = parse_match(bundle.match_summary)
@@ -1335,13 +1508,17 @@ def parse_goalkeeper_observations(
         accumulation = _accumulate_match_events(bundle.events_payload)
         observed_at = info.kickoff_at or _fallback_now()
         reference = _events_reference(info.match_id, source_revision)
-        hints = {**_scope_hints(), "match_external_id": str(info.match_id)}
         participating = roster.participating_players()
+        for player_id in roster.player_name:
+            player_name_by_id.setdefault(player_id, roster.player_name[player_id])
+        if season_scope_hints is None:
+            season_scope_hints = _scope_hints(info)
 
         for player_id in participating:
             if player_id not in roster.goalkeepers:
                 continue
             entity_source_id = f"{info.match_id}:{player_id}"
+            hints = _player_scoped_hints(info, roster, player_id)
             counts = accumulation.counts_by_player.get(player_id, _new_counts())
             saves = int(counts["saves"])
             goals_conceded = int(counts["goals_conceded"])
@@ -1369,8 +1546,16 @@ def parse_goalkeeper_observations(
                     observed_at=observed_at,
                     source_reference=reference,
                     ingestion_run_id=ingestion_run_id,
+                    metric_granularity="goalkeeper_match",
                 )
 
+            # Same real event-derived count `_emit_player_match_metrics` already
+            # emits at `player_match` granularity -- genuinely two distinct
+            # catalog identities (Block 20D.2's canonical example of why
+            # `metric_granularity` exists), not a duplicate. `_emit`'s
+            # (metric_name, metric_granularity)-inclusive dedup identity keeps
+            # these two facts from ever being treated as conflicting or merged.
+            emit("saves", saves)
             emit("goals_conceded", goals_conceded)
             emit("clean_sheets", goals_conceded == 0)
             emit("shots_on_target_faced", shots_on_target_faced)
@@ -1403,17 +1588,19 @@ def parse_goalkeeper_observations(
             continue
         observed_at = latest_date.get(player_id, _fallback_now())
         entity_source_id = str(player_id)
+        season_hints = _player_season_hints(season_scope_hints, player_name_by_id, player_id)
         _emit(
             observations,
             seen,
             entity_type="player",
             entity_source_id=entity_source_id,
-            entity_identity_hints=_scope_hints(),
+            entity_identity_hints=season_hints,
             metric_name="clean_sheets",
             value=season_clean_sheets.get(player_id, 0),
             observed_at=observed_at,
             source_reference=season_reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity="goalkeeper_season",
         )
         shots_faced_total = season_shots_faced.get(player_id, 0)
         if shots_faced_total > 0:
@@ -1422,12 +1609,13 @@ def parse_goalkeeper_observations(
                 seen,
                 entity_type="player",
                 entity_source_id=entity_source_id,
-                entity_identity_hints=_scope_hints(),
+                entity_identity_hints=season_hints,
                 metric_name="save_pct",
                 value=round(100.0 * season_saves.get(player_id, 0) / shots_faced_total, 4),
                 observed_at=observed_at,
                 source_reference=season_reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="goalkeeper_season",
             )
 
     return observations
@@ -1507,7 +1695,7 @@ def parse_team_match_observations(
     match score."""
 
     observations: list[NormalizedObservation] = []
-    seen: dict[tuple[str, EntityType, str, str], Any] = {}
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
 
     for bundle in bundles:
         info = parse_match(bundle.match_summary)
@@ -1518,7 +1706,6 @@ def parse_team_match_observations(
         team_counts = _accumulate_team_events(bundle.events_payload)
         observed_at = info.kickoff_at or _fallback_now()
         reference = _events_reference(info.match_id, source_revision)
-        hints = {**_scope_hints(), "match_external_id": str(info.match_id)}
         participating = roster.participating_players()
 
         team_yellow: dict[int, int] = defaultdict(int)
@@ -1541,6 +1728,7 @@ def parse_team_match_observations(
             (info.away_team_id, info.home_team_id, info.away_score, info.home_score),
         ):
             entity_source_id = f"{info.match_id}:{team_id}"
+            hints = _team_scoped_hints(info, team_id)
             stats = team_counts.get(team_id, _TeamMatchCounts())
             opp_stats = team_counts.get(opponent_id, _TeamMatchCounts())
 
@@ -1564,6 +1752,7 @@ def parse_team_match_observations(
                     observed_at=observed_at,
                     source_reference=reference,
                     ingestion_run_id=ingestion_run_id,
+                    metric_granularity="team_match",
                 )
 
             if own_score is not None:
@@ -1640,15 +1829,14 @@ def adapt_match_bundle(
     info = parse_match(bundle.match_summary)
     if info is not None:
         roster = parse_lineups(bundle.lineups_payload)
-        seen: dict[tuple[str, EntityType, str, str], Any] = {}
+        seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
         _emit_squad_facts(
             observations,
             seen,
             roster=roster,
-            match_id=info.match_id,
+            info=info,
             observed_at=info.kickoff_at or _fallback_now(),
             reference=_lineups_reference(info.match_id, source_revision),
-            hints={**_scope_hints(), "match_external_id": str(info.match_id)},
             ingestion_run_id=ingestion_run_id,
         )
 

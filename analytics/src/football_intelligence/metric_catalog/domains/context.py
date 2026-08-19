@@ -57,7 +57,17 @@ CONTEXT_METRICS: tuple[MetricDefinition, ...] = (
     MetricDefinition(
         key="home_away",
         display_name="Home / Away",
-        granularity="match",
+        # Block 20D.2 review-fix pass: corrected from "match" to
+        # "team_match". The primitive this describes (`teamsData[*].side`/
+        # `home_team`/`away_team` per real Wyscout/StatsBomb evidence) is
+        # inherently a per-team-in-this-match fact -- Arsenal is "home" and
+        # Chelsea is "away" in the SAME real match, two different facts, not
+        # one match-wide value. Classifying it as "match" forced both
+        # certified adapters to carry a special-case entity-type override
+        # (now removed) and would have made the two teams' home/away facts
+        # collapse onto one bare match-level logical key in Reconciliation
+        # V2's `logical_fact_key()`.
+        granularity="team_match",
         category="advanced_context",
         unit="label",
         kind="raw",

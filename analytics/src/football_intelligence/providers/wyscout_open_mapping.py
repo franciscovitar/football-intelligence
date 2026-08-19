@@ -266,10 +266,12 @@ _MATCH_MAPPINGS: tuple[WyscoutMetricMapping, ...] = (
     ),
     _mapping(
         "home_away",
-        "match",
+        "team_match",
         "DIRECT",
         "teamsData[*].side",
-        "Verified observed values: 'home', 'away'.",
+        "Verified observed values: 'home', 'away'. Catalog granularity corrected to "
+        "team_match (Block 20D.2 review-fix pass) -- the primitive is per-team-in-"
+        "this-match, not a single match-wide value.",
     ),
     _mapping(
         "status",

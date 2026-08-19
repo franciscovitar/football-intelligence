@@ -10,7 +10,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-CATALOG_V2_VERSION = "metric-catalog-v2.0"
+# Bumped from "metric-catalog-v2.0" in Block 20D.2's final micro-audit
+# pass: `home_away`'s real catalog identity changed from `(key="home_away",
+# granularity="match")` to `(key="home_away", granularity="team_match")` --
+# a genuine identity change (the true identity is `(key, granularity)`, per
+# this catalog's own design), not merely a description edit. The catalog is
+# versioned as one release, not per-metric, so a changed identity anywhere
+# in it means the release version must not stay attached to the old
+# identity set.
+CATALOG_V2_VERSION = "metric-catalog-v2.1"
 
 # Closed, small set of comparison/storage grains a metric can be measured at.
 # "team_match" is a team's own stats within one specific match (distinct from

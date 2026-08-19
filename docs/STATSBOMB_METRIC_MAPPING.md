@@ -218,9 +218,12 @@ invented here.
 
 ### The 110-identity adapter-safe subset (Block 20C.2b scope)
 
-7 match, 3 player_appearance, 4 player_season, 58 player_match, 10
-goalkeeper_match, 2 goalkeeper_season, 26 team_match. Full list is
-reproducible via `adapter_safe_mappings()`; see
+6 match, 3 player_appearance, 4 player_season, 58 player_match, 10
+goalkeeper_match, 2 goalkeeper_season, 27 team_match (`home_away`'s catalog
+granularity was corrected from "match" to "team_match" in Block 20D.2's
+review-fix pass -- the primitive is inherently per-team-in-this-match, not
+a single match-wide value). Full list is reproducible via
+`adapter_safe_mappings()`; see
 `analytics/src/football_intelligence/providers/statsbomb_open_mapping.py`
 for the exact per-identity source primitive and evidence.
 
@@ -303,6 +306,39 @@ calls). Every check **PASSED**:
 
 Distinct squad players (incl. unused subs): 13,678. Distinct participating
 player-match instances: 10,469. Distinct goalkeepers: 49.
+
+**FULL REAL-CACHE CERTIFICATION VERIFIED** at the time of Block 20C.2b,
+under that block's original emission contract (no explicit
+`metric_granularity` field existed yet, and `goalkeeper_match` `saves` was
+not a distinct emitted identity).
+
+### Re-verification under Block 20D.2's review-fix pass
+
+Block 20D.2 corrected a real gap the old `(metric_name, entity_type)`
+audit projection could not see: `goalkeeper_match`-granularity `saves` was
+declared adapter-safe but never actually emitted (both granularities
+project to `entity_type="player"`, so the old audit logic could not tell
+them apart). The adapter now genuinely emits it, the audit's identity logic
+is now keyed on the real `metric_granularity` field instead of
+`entity_type`, and `total_player_saves` is now restricted to
+`metric_granularity == "player_match"` so the same real save is never
+summed twice.
+
+Re-ran `football-intelligence-audit-statsbomb-adapter` (current code, same
+pinned full local cache, zero new network calls) -- **FULL REAL-CACHE
+CERTIFICATION VERIFIED** again, every check PASSED:
+
+| Check | Result |
+| --- | --- |
+| Total observations | **644,396** (net +768 vs. 643,628 -- exactly the newly-emitted `goalkeeper_match` `saves` observations, one per resolved goalkeeper-match instance) |
+| Identities producing real observations | 110/110, genuinely verified via `(metric_name, metric_granularity)` identity, 0 unexpected, 0 zero-observation |
+| `no_missing_metric_granularity` | PASS -- 0 certified-path observations with `metric_granularity=None` |
+| Saves | still exactly **2,277** (`metric_granularity == "player_match"` only) vs. the independently-recomputed event count of 2,277 -- proves the new dual-granularity `saves` emission does not double-count |
+| All other checks (native score, assists, cards, participation universe, internal-only policy) | unchanged, still PASS |
+
+CODE/UNIT CONTRACT VERIFIED (fixture-level tests) and FULL REAL-CACHE
+CERTIFICATION VERIFIED (this real, complete 380-match re-run) both hold as
+of Block 20D.2's review-fix pass.
 
 ### Tests
 

@@ -25,6 +25,38 @@ def test_resolve_competition_unmapped_id_is_unresolved() -> None:
     assert resolution.logical_key is None
 
 
+def test_resolve_competition_wyscout_open_uses_real_provider_native_id() -> None:
+    # "364" is Wyscout's own numeric competitionId for England 2017/18,
+    # verified against the real cached matches_England.json -- never the
+    # canonical "ENG_PL" code (Block 20D.2 completion pass correction).
+    resolution = resolve_competition(source_code="wyscout-open", external_id="364")
+    assert resolution.status == "resolved"
+    assert resolution.logical_key == "competition:ENG_PL"
+    assert resolve_competition(source_code="wyscout-open", external_id="ENG_PL").status == (
+        "unresolved"
+    )
+
+
+def test_resolve_competition_statsbomb_open_uses_real_provider_native_id() -> None:
+    # "2" is StatsBomb's own numeric competition_id for England 2015/16,
+    # verified against the real cached matches/2/27.json.
+    resolution = resolve_competition(source_code="statsbomb-open", external_id="2")
+    assert resolution.status == "resolved"
+    assert resolution.logical_key == "competition:ENG_PL"
+    assert resolve_competition(source_code="statsbomb-open", external_id="ENG_PL").status == (
+        "unresolved"
+    )
+
+
+def test_resolve_competition_prepared_esp_ll_mappings_use_real_provider_native_ids() -> None:
+    wyscout = resolve_competition(source_code="wyscout-open", external_id="795")
+    statsbomb = resolve_competition(source_code="statsbomb-open", external_id="11")
+    assert wyscout.status == "resolved"
+    assert wyscout.logical_key == "competition:ESP_LL"
+    assert statsbomb.status == "resolved"
+    assert statsbomb.logical_key == "competition:ESP_LL"
+
+
 def test_normalize_team_name_handles_cross_language_alias() -> None:
     # "Munich" (English) vs "München" (German) for the same real club.
     assert normalize_team_name("Bayern Munich") == normalize_team_name("FC Bayern München")
@@ -121,6 +153,36 @@ def test_cluster_match_dates_keeps_dates_outside_tolerance_separate() -> None:
     clusters = cluster_match_dates([date(2025, 8, 22), date(2025, 8, 25)])
     assert clusters[date(2025, 8, 22)] == date(2025, 8, 22)
     assert clusters[date(2025, 8, 25)] == date(2025, 8, 25)
+
+
+def test_cluster_match_dates_does_not_transitively_chain_across_a_bounded_span() -> None:
+    # day1 -> day2 is within tolerance, day2 -> day3 is within tolerance, but
+    # day1 -> day3 is NOT within tolerance -- the cluster must never chain
+    # all three together just because each adjacent pair is close (Block
+    # 20D.1's real congested-fixture-list risk, fixed in Block 20D.2).
+    day1, day2, day3 = date(2025, 8, 22), date(2025, 8, 23), date(2025, 8, 24)
+    clusters = cluster_match_dates([day1, day2, day3])
+    assert clusters[day1] == day1
+    assert clusters[day2] == day1
+    # day3 is 2 days from day1 (the cluster's representative) -- outside the
+    # default 1-day tolerance -- so it must start its own cluster, even
+    # though it is only 1 day from day2.
+    assert clusters[day3] == day3
+
+
+def test_cluster_match_dates_is_independent_of_input_order() -> None:
+    day1, day2, day3 = date(2025, 8, 22), date(2025, 8, 23), date(2025, 8, 24)
+    forward = cluster_match_dates([day1, day2, day3])
+    reversed_order = cluster_match_dates([day3, day2, day1])
+    shuffled = cluster_match_dates([day2, day3, day1])
+    assert forward == reversed_order == shuffled
+
+
+def test_cluster_match_dates_is_independent_of_duplicate_dates() -> None:
+    day1, day2 = date(2025, 8, 22), date(2025, 8, 23)
+    without_duplicates = cluster_match_dates([day1, day2])
+    with_duplicates = cluster_match_dates([day1, day1, day2, day2, day2])
+    assert without_duplicates == with_duplicates
 
 
 def test_resolve_player_is_always_unresolved_in_v0() -> None:

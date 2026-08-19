@@ -15,7 +15,8 @@ the repository; it is not a legal opinion.
 | --- | --- | --- | --- | --- | --- | --- |
 | Football-Data.co.uk | Publisher provides direct season CSV downloads and a column key; no explicit redistribution licence was located | Yes | Unknown | Direct `mmz4281/<season>/<division>.csv` download | ENG_PL 2025/26: 380/380 matches, 20 teams; selected match/team fields, no player metrics | Not certified for redistribution |
 | OpenFootball (`football.json`) | Repository dedicates schema/data/scripts to the public domain (CC0) | Yes | Yes (CC0) | Direct raw-JSON download (`raw.githubusercontent.com/openfootball/football.json`) | ENG_PL 2025/26: 380/380 matches, 20 teams; match results only, no team-match stats, no player metrics | Certified (public domain); used only to reconcile Football-Data.co.uk, not as the canonical load source |
-| StatsBomb Open Data | Official repository publishes JSON for research/analysis and requires attribution under its user agreement | Yes | Unknown in this repository (no standalone redistribution licence relied on) | Official GitHub raw JSON | FIFA World Cup 2022 validation sample only; never ENG_PL | Validation-only, not domestic production data |
+| Wyscout Open Data | Official Figshare collection `4415000` (DOI `10.6084/m9.figshare.c.4415000.v5`), CC BY 4.0 (attribution required) | Yes | Yes (CC BY 4.0) | Public Figshare v2 API (`api.figshare.com/v2`, documented, unauthenticated) | ENG_PL 2017/18: 380/380 matches, 20 teams, 603 players; 77/77 adapter-safe Metric Catalog V2 identities. **412,609 real observations** -- re-verified against the full real cache under the current `metric_granularity`-aware emission/audit contract (Block 20D.2 review-fix pass); historically certified at 411,844 observations under Block 20B.2b's original (pre-`metric_granularity`) contract, before `goalkeeper_match` `saves` was a distinct emitted identity | Certified adapter (historical/deep, approved for automated acquisition per this table); not current-season data, no canonical/production promotion decision made |
+| StatsBomb Open Data | Official repository publishes JSON for research/analysis and requires attribution under its user agreement | Yes | Unknown in this repository (no standalone redistribution licence relied on) | Official GitHub raw JSON, pinned commit SHA | FIFA World Cup 2022 validation sample (Block 16); separately, ENG_PL 2015/16: 380/380 matches, 20 teams; 110/110 adapter-safe Metric Catalog V2 identities. **644,396 real observations** -- re-verified against the full real cache under the current `metric_granularity`-aware emission/audit contract (Block 20D.2 review-fix pass); historically certified at 643,628 observations under Block 20C.2b's original (pre-`metric_granularity`) contract | Certified adapter (historical/deep, approved for automated acquisition per this table) for ENG_PL 2015/16; `STATSBOMB_INTERNAL_ONLY = True` for all StatsBomb evidence -- commercial-use compliance under StatsBomb's stricter User Agreement remains an open product/legal question this repository does not resolve, so no canonical/production promotion decision has been made for either the WC2022 sample or the ENG_PL 2015/16 evidence |
 | Fantasy Premier League | FPL terms prohibit automated systems used to access the game and extract information | No | No permission established | None; collector/client and derived files removed | No domestic player coverage | Prohibited for this implementation |
 | API-Football | Existing V1 provider integration; plan/credential terms apply | No calls in Block 16 corrective pass | Unknown | Existing authenticated API integration only | Historical V1 paths; not used to fill the Block 16 gap | Not a Block 16 real-snapshot source |
 
@@ -26,6 +27,13 @@ Snapshot retrieval details:
   `provenance.retrieved_at` (Block 18).
 - StatsBomb WC2022: see `data/validation/wc2022/wc2022_validation_sample.json` provenance.
 - FPL: no retained dataset and no automated retrieval path.
+- Wyscout ENG_PL 2017/18 (412,609) / StatsBomb ENG_PL 2015/16 (644,396):
+  Block 20D.2's review-fix pass re-ran `football-intelligence-audit-
+  wyscout-adapter` / `football-intelligence-audit-statsbomb-adapter`
+  (current code, no new downloads) against the same full real caches
+  Block 20B.2b/20C.2b originally certified against, all checks PASS
+  including the new `no_missing_metric_granularity` check -- no network
+  request was made for this re-verification.
 
 ## API-Football
 

@@ -52,16 +52,29 @@ missing rather than guessed.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
 from football_intelligence.data_mesh.models import EntityType, NormalizedObservation, SourceType
+from football_intelligence.metric_catalog.types import MetricGranularity
 from football_intelligence.providers.wyscout_open_mapping import adapter_safe_mappings
+from football_intelligence.providers.wyscout_open_text import repair_wyscout_double_escaped_unicode
 
 SOURCE_CODE = "wyscout-open"
 SOURCE_TYPE: SourceType = "objective_structured"
-SEMANTIC_VERSION = "wyscout-open-v0.1"
+# Bumped from "wyscout-open-v0.1" (Block 20B.2b's original certified
+# adapter) in Block 20D.2's review-fix pass: observable emission semantics
+# changed materially -- every observation now carries an explicit
+# `metric_granularity`, `goalkeeper_match`-granularity `saves` is now
+# genuinely emitted (previously declared but never produced), `home_away`
+# moved from catalog granularity "match" to "team_match", and identity
+# hints were materially enriched (explicit `team_external_id`/`team_name`,
+# `player_external_id`/`player_name`, `home_team_*`/`away_team_*`,
+# `kickoff_date`). Old and new observations must not share a provenance
+# version.
+SEMANTIC_VERSION = "wyscout-open-v0.2"
 COMPETITION_CODE = "ENG_PL"
 SEASON_LABEL = "2017/18"
 
@@ -139,36 +152,28 @@ _ADAPTER_SAFE_IDENTITIES: frozenset[tuple[str, str]] = frozenset(
     (m.catalog_key, m.catalog_granularity) for m in adapter_safe_mappings()
 )
 
-# `home_away` is the one documented exception to the mechanical granularity
-# projection below: its catalog granularity is "match", but its verified
-# primitive (`teamsData[*].side`) is inherently a per-team-in-this-match
-# fact, not a single match-wide value -- see `parse_match_observations`'s
-# docstring comment for the full reasoning. It is emitted with
-# entity_type="team" (the same team-match-scoped convention every other
-# team-match fact in this codebase already uses), so it needs an explicit
-# override here rather than the generic "match" -> entity_type="match"
-# projection.
-_SAFE_METRIC_ENTITY_TYPE_OVERRIDES: frozenset[tuple[str, EntityType]] = frozenset(
-    {("home_away", "team")}
-)
-
 # The (metric_name, entity_type) pairs this adapter is allowed to emit --
-# every safe catalog identity, projected through the entity_type a
-# NormalizedObservation can actually express (there is no distinct
-# "player_match" vs "goalkeeper_match" entity_type; both are entity_type
-# "player", matching how StatsBomb Open Data's adapter already emits one
-# "saves" observation that simultaneously satisfies both catalog
-# identities). This is the runtime emission guard: any metric_name/
-# entity_type pair not in this set can never be safe, catching accidental
-# emission of a non-safe identity even though NormalizedObservation cannot
-# fully express catalog granularity.
-_SAFE_METRIC_ENTITY_PAIRS: frozenset[tuple[str, EntityType]] = (
-    frozenset(
-        (key, _GRANULARITY_TO_ENTITY_TYPE[granularity])
-        for key, granularity in _ADAPTER_SAFE_IDENTITIES
-        if key != "home_away"
-    )
-    | _SAFE_METRIC_ENTITY_TYPE_OVERRIDES
+# every safe catalog identity, projected through entity_type alone (there
+# is no distinct "player_match" vs "goalkeeper_match" entity_type; both
+# project to entity_type "player", matching how StatsBomb Open Data's
+# adapter already emits one "saves" observation that simultaneously
+# satisfies both catalog identities). `NormalizedObservation` itself DOES
+# fully express catalog granularity via its own `metric_granularity` field
+# (Block 20D.2) -- this coarser, entity_type-only check is a secondary,
+# defense-in-depth guard kept alongside the exact
+# `(metric_name, metric_granularity)` check in `_guard()` below, never a
+# substitute for it: any metric_name/entity_type pair not in this set can
+# never be safe, catching an internal wiring bug even before the exact
+# check runs.
+#
+# `home_away`'s catalog granularity was corrected from "match" to
+# "team_match" (Block 20D.2 review-fix pass): the primitive
+# (`teamsData[*].side`) is inherently a per-team-in-this-match fact, and
+# "team_match" already projects to entity_type="team" mechanically below --
+# no special-case override needed any more (an earlier pass carried one
+# here specifically because the catalog was misclassified).
+_SAFE_METRIC_ENTITY_PAIRS: frozenset[tuple[str, EntityType]] = frozenset(
+    (key, _GRANULARITY_TO_ENTITY_TYPE[granularity]) for key, granularity in _ADAPTER_SAFE_IDENTITIES
 )
 
 
@@ -187,7 +192,7 @@ _EMITTED_IDENTITIES: frozenset[tuple[str, str]] = frozenset(
     {
         ("home_score", "match"),
         ("away_score", "match"),
-        ("home_away", "match"),
+        ("home_away", "team_match"),
         ("status", "match"),
         ("kickoff_at", "match"),
         ("round_name", "match"),
@@ -283,6 +288,14 @@ class _MatchInfo:
     status: Any
     gameweek: Any
     venue: Any
+    # Provider-native identifiers read directly from this match's own
+    # `competitionId`/`seasonId` fields -- verified real values for England
+    # 2017/18: competitionId=364, seasonId=181150. Genuinely supplied per
+    # match, never the canonical "ENG_PL" code (Block 20D.2 completion pass
+    # correction: an earlier pass had put the canonical code itself into
+    # `competition_external_id`, which is not a provider-native identifier).
+    competition_external_id: str | None
+    season_external_id: str | None
 
 
 @dataclass
@@ -338,6 +351,8 @@ def _match_info(match: dict[str, Any]) -> _MatchInfo | None:
         elif side == "away":
             away_team_id = team_id
             away_score = score if isinstance(score, int) else None
+    competition_id = match.get("competitionId")
+    season_id = match.get("seasonId")
     return _MatchInfo(
         match_id=match_id,
         kickoff_at=_parse_kickoff(match),
@@ -348,6 +363,8 @@ def _match_info(match: dict[str, Any]) -> _MatchInfo | None:
         status=match.get("status"),
         gameweek=match.get("gameweek"),
         venue=match.get("venue"),
+        competition_external_id=str(competition_id) if isinstance(competition_id, int) else None,
+        season_external_id=str(season_id) if isinstance(season_id, int) else None,
     )
 
 
@@ -389,6 +406,54 @@ def _match_roster(match: dict[str, Any]) -> _MatchRoster:
                 if isinstance(pin, int) and pin != _SENTINEL_PLAYER_ID:
                     roster.sub_in_by_team[team_id].add(pin)
     return roster
+
+
+def _team_names_by_id(teams_payload: list[Any] | None) -> dict[int, str]:
+    """`wyId -> name` from the official `teams.json` reference file --
+    real team names are only available there, never in `matches_England.json`
+    itself. Prefers the short `name` field (e.g. "Burnley") over
+    `officialName` ("Burnley FC"), matching the short-form convention
+    already used elsewhere in this codebase. Applies the verified Wyscout
+    double-escaped-Unicode repair (Block 20D.1/20D.2) to whichever field is
+    used. `None`/missing stays missing -- never a fabricated name."""
+
+    names: dict[int, str] = {}
+    if not teams_payload:
+        return names
+    for team in teams_payload:
+        if not isinstance(team, dict):
+            continue
+        wy_id = team.get("wyId")
+        if not isinstance(wy_id, int):
+            continue
+        raw_name = team.get("name") or team.get("officialName")
+        if isinstance(raw_name, str) and raw_name.strip():
+            names[wy_id] = repair_wyscout_double_escaped_unicode(raw_name)
+    return names
+
+
+def _player_names_by_id(players_payload: list[Any]) -> dict[int, str]:
+    """`wyId -> shortName` (falling back to "firstName lastName") from the
+    official `players.json` reference file. Applies the verified Wyscout
+    double-escaped-Unicode repair to whichever field is used."""
+
+    names: dict[int, str] = {}
+    for player in players_payload:
+        if not isinstance(player, dict):
+            continue
+        wy_id = player.get("wyId")
+        if not isinstance(wy_id, int):
+            continue
+        short_name = player.get("shortName")
+        if isinstance(short_name, str) and short_name.strip():
+            names[wy_id] = repair_wyscout_double_escaped_unicode(short_name)
+            continue
+        first_name = player.get("firstName")
+        last_name = player.get("lastName")
+        parts = [p for p in (first_name, last_name) if isinstance(p, str) and p.strip()]
+        if parts:
+            names[wy_id] = repair_wyscout_double_escaped_unicode(" ".join(parts))
+    return names
 
 
 def _goalkeeper_ids(players_payload: list[Any]) -> frozenset[int]:
@@ -534,6 +599,7 @@ def _observation(
     observed_at: datetime,
     source_reference: str,
     ingestion_run_id: int | None,
+    metric_granularity: MetricGranularity,
 ) -> NormalizedObservation:
     return NormalizedObservation(
         source_code=SOURCE_CODE,
@@ -548,6 +614,7 @@ def _observation(
         source_reference=source_reference,
         ingestion_run_id=ingestion_run_id,
         semantic_version=SEMANTIC_VERSION,
+        metric_granularity=metric_granularity,
     )
 
 
@@ -555,7 +622,20 @@ def _fallback_now() -> datetime:
     return datetime.now(UTC)
 
 
-def _guard(entity_type: EntityType, metric_name: str) -> None:
+def _guard(
+    entity_type: EntityType, metric_name: str, metric_granularity: MetricGranularity
+) -> None:
+    # The exact (catalog_key, catalog_granularity) check is authoritative --
+    # this is the only check that can distinguish e.g. `saves`/player_match
+    # from `saves`/goalkeeper_match, which the entity_type-only check below
+    # cannot (both project to entity_type "player"). The entity_type check
+    # stays as defense-in-depth: it catches an internal wiring bug where a
+    # call site passed a granularity inconsistent with its own entity_type.
+    if (metric_name, metric_granularity) not in _ADAPTER_SAFE_IDENTITIES:
+        raise WyscoutObservationConflictError(
+            f"refusing to build a non-adapter-safe observation: "
+            f"metric_name={metric_name!r} metric_granularity={metric_granularity!r}"
+        )
     if (metric_name, entity_type) not in _SAFE_METRIC_ENTITY_PAIRS:
         raise WyscoutObservationConflictError(
             f"refusing to build a non-adapter-safe observation: "
@@ -565,7 +645,7 @@ def _guard(entity_type: EntityType, metric_name: str) -> None:
 
 def _emit(
     observations: list[NormalizedObservation],
-    seen: dict[tuple[str, EntityType, str, str], Any],
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any],
     *,
     entity_type: EntityType,
     entity_source_id: str,
@@ -575,9 +655,10 @@ def _emit(
     observed_at: datetime,
     source_reference: str,
     ingestion_run_id: int | None,
+    metric_granularity: MetricGranularity,
 ) -> None:
-    _guard(entity_type, metric_name)
-    identity = (SOURCE_CODE, entity_type, entity_source_id, metric_name)
+    _guard(entity_type, metric_name, metric_granularity)
+    identity = (SOURCE_CODE, entity_type, entity_source_id, metric_name, metric_granularity)
     if identity in seen:
         if seen[identity] != value:
             raise WyscoutObservationConflictError(
@@ -595,25 +676,141 @@ def _emit(
             observed_at=observed_at,
             source_reference=source_reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity=metric_granularity,
         )
     )
 
 
-_SCOPE_HINTS: dict[str, str] = {
-    "competition_external_id": COMPETITION_CODE,
-    "season_label": SEASON_LABEL,
-}
+def _scope_hints(info: _MatchInfo | None = None) -> dict[str, str]:
+    """Provider-native competition identity + our own normalized season
+    label. `competition_external_id` is the source's own numeric
+    `competitionId` (verified: 364 for England 2017/18), never the
+    canonical "ENG_PL" code -- only populated when this specific match
+    genuinely carries it. `info=None` (season-aggregate call sites with no
+    single match in scope) omits `competition_external_id` rather than
+    guessing."""
+
+    hints: dict[str, str] = {"season_label": SEASON_LABEL}
+    if info is not None and info.competition_external_id is not None:
+        hints["competition_external_id"] = info.competition_external_id
+    return hints
+
+
+def _match_hints(info: _MatchInfo, team_names: Mapping[int, str]) -> dict[str, str]:
+    """Identity hints for a match-granularity observation: provider-native
+    match id, home/away team ids and names when the source supplies them
+    (via the separate `teams.json` reference), and the raw per-observation
+    kickoff date.
+
+    `resolve_match()` (`data_mesh/entity_resolution.py`) is a pure function
+    of its exact inputs and performs no clustering of its own. The bounded
+    day-level tolerance that lets two providers converge on one logical
+    match identity despite reporting adjacent-but-not-identical dates
+    (`cluster_match_dates()`, applied via `build_match_date_clusters()` in
+    `data_mesh/pipeline.py`) is a separate step one layer up. Block
+    20D.2's V2 index builders
+    (`entity_resolution_v2.build_match_index_v2_from_observations()`) call
+    `resolve_match()` directly with each observation's raw `kickoff_date`
+    hint -- cross-source date-tolerance canonicalization for the certified
+    Wyscout/StatsBomb adapters is not yet wired into V2 and remains
+    explicitly deferred to Block 20D.4's pipeline/Reconciliation V2
+    wiring, not implemented a second time here."""
+
+    hints = _scope_hints(info)
+    hints["match_external_id"] = str(info.match_id)
+    if info.home_team_id is not None:
+        hints["home_team_external_id"] = str(info.home_team_id)
+        home_name = team_names.get(info.home_team_id)
+        if home_name:
+            hints["home_team_name"] = home_name
+    if info.away_team_id is not None:
+        hints["away_team_external_id"] = str(info.away_team_id)
+        away_name = team_names.get(info.away_team_id)
+        if away_name:
+            hints["away_team_name"] = away_name
+    if info.kickoff_at is not None:
+        hints["kickoff_date"] = info.kickoff_at.date().isoformat()
+    return hints
+
+
+def _team_scoped_hints(
+    info: _MatchInfo, team_id: int, team_names: Mapping[int, str]
+) -> dict[str, str]:
+    """Identity hints for a team_match-granularity (or per-team `home_away`)
+    observation: the match it belongs to, plus this specific team's own
+    provider-native id and name."""
+
+    hints = _scope_hints(info)
+    hints["match_external_id"] = str(info.match_id)
+    hints["team_external_id"] = str(team_id)
+    name = team_names.get(team_id)
+    if name:
+        hints["team_name"] = name
+    return hints
+
+
+def _player_scoped_hints(
+    info: _MatchInfo,
+    roster: _MatchRoster,
+    player_id: int,
+    player_names: Mapping[int, str],
+) -> dict[str, str]:
+    """Identity hints for a player_appearance/player_match/goalkeeper_match
+    observation: the match, this player's own provider-native id and name
+    (from the separate `players.json` reference), and the team they played
+    for in this match when the roster resolves it."""
+
+    hints = _scope_hints(info)
+    hints["match_external_id"] = str(info.match_id)
+    hints["player_external_id"] = str(player_id)
+    name = player_names.get(player_id)
+    if name:
+        hints["player_name"] = name
+    team_id = roster.participating_players().get(player_id)
+    if team_id is not None:
+        hints["team_external_id"] = str(team_id)
+    return hints
+
+
+def _player_season_hints(
+    season_scope_hints: dict[str, str] | None,
+    player_names: Mapping[int, str],
+    player_id: int,
+) -> dict[str, str]:
+    """Identity hints for a player_season/goalkeeper_season observation:
+    competition/season scope (captured once from the first match seen)
+    plus this player's own provider-native id and name -- never a per-match
+    team, since a season fact is not scoped to one match."""
+
+    hints: dict[str, str] = (
+        dict(season_scope_hints) if season_scope_hints else {"season_label": SEASON_LABEL}
+    )
+    hints["player_external_id"] = str(player_id)
+    name = player_names.get(player_id)
+    if name:
+        hints["player_name"] = name
+    return hints
 
 
 def parse_match_observations(
     matches_payload: list[Any],
+    teams_payload: list[Any] | None = None,
     *,
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
-    """The 7 DIRECT `match`-granularity identities."""
+    """The 6 DIRECT `match`-granularity identities, plus `home_away`
+    (`team_match`-granularity, corrected Block 20D.2 review-fix pass --
+    inherently per-team-in-this-match, not a single match-wide value).
+    `teams_payload` (the official `teams.json` reference file) is optional
+    -- when supplied,
+    match/team-scoped observations carry real `home_team_name`/
+    `away_team_name`/`team_name` identity hints; when omitted, only the
+    provider-native team ids are populated (missing stays missing, never a
+    fabricated name)."""
 
     observations: list[NormalizedObservation] = []
-    seen: dict[tuple[str, EntityType, str, str], Any] = {}
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
+    team_names = _team_names_by_id(teams_payload)
 
     for match in matches_payload:
         if not isinstance(match, dict):
@@ -624,7 +821,7 @@ def parse_match_observations(
         observed_at = info.kickoff_at or _fallback_now()
         reference = "wyscout/matches_England.json"
         entity_source_id = str(info.match_id)
-        hints = dict(_SCOPE_HINTS)
+        hints = _match_hints(info, team_names)
 
         if info.home_score is not None:
             _emit(
@@ -638,6 +835,7 @@ def parse_match_observations(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="match",
             )
         if info.away_score is not None:
             _emit(
@@ -651,6 +849,7 @@ def parse_match_observations(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="match",
             )
         if isinstance(info.status, str) and info.status.strip():
             _emit(
@@ -664,6 +863,7 @@ def parse_match_observations(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="match",
             )
         if info.kickoff_at is not None:
             _emit(
@@ -677,6 +877,7 @@ def parse_match_observations(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="match",
             )
         if isinstance(info.gameweek, int):
             _emit(
@@ -690,6 +891,7 @@ def parse_match_observations(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="match",
             )
         if isinstance(info.venue, str) and info.venue.strip():
             _emit(
@@ -703,15 +905,16 @@ def parse_match_observations(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="match",
             )
 
-        # `home_away` (catalog granularity "match") is, by its own bare
-        # description ("Home / Away") and verified primitive
-        # (`teamsData[*].side`), inherently a per-team-in-this-match fact,
-        # not a single match-wide value -- there is no NormalizedObservation
-        # entity_type finer than "team" for this, so it is emitted per team
-        # the same way every other team-match-scoped fact in this codebase
-        # already is (`entity_source_id=f"{match_id}:{team_id}"`).
+        # `home_away` (catalog granularity "team_match", corrected Block
+        # 20D.2 review-fix pass) is, by its own bare description ("Home /
+        # Away") and verified primitive (`teamsData[*].side`), inherently a
+        # per-team-in-this-match fact, not a single match-wide value -- it
+        # is emitted per team the same way every other team-match-scoped
+        # fact in this codebase already is
+        # (`entity_source_id=f"{match_id}:{team_id}"`).
         for team_id, side in ((info.home_team_id, "home"), (info.away_team_id, "away")):
             if team_id is None:
                 continue
@@ -720,12 +923,13 @@ def parse_match_observations(
                 seen,
                 entity_type="team",
                 entity_source_id=f"{info.match_id}:{team_id}",
-                entity_identity_hints={**hints, "match_external_id": str(info.match_id)},
+                entity_identity_hints=_team_scoped_hints(info, team_id, team_names),
                 metric_name="home_away",
                 value=side,
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="team_match",
             )
 
     return observations
@@ -733,20 +937,26 @@ def parse_match_observations(
 
 def parse_participation_observations(
     matches_payload: list[Any],
+    players_payload: list[Any] | None = None,
     *,
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
     """`started` (player_appearance) + `matches`/`appearances`/`starts`/
     `sub_appearances` (player_season). `minutes`/`minutes_per_appearance`
-    are DERIVABLE_METHODOLOGY_PENDING and are never implemented here."""
+    are DERIVABLE_METHODOLOGY_PENDING and are never implemented here.
+    `players_payload` (the official `players.json` reference file) is
+    optional -- when supplied, hints carry real `player_name` identity;
+    when omitted, only the provider-native player id is populated."""
 
     observations: list[NormalizedObservation] = []
-    seen: dict[tuple[str, EntityType, str, str], Any] = {}
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
+    player_names = _player_names_by_id(players_payload or [])
 
     season_matches: dict[int, int] = defaultdict(int)
     season_starts: dict[int, int] = defaultdict(int)
     season_appearances: dict[int, int] = defaultdict(int)
     latest_contributing_date: dict[int, datetime] = {}
+    season_scope_hints: dict[str, str] | None = None
 
     for match in matches_payload:
         if not isinstance(match, dict):
@@ -757,7 +967,8 @@ def parse_participation_observations(
         roster = _match_roster(match)
         observed_at = info.kickoff_at or _fallback_now()
         reference = "wyscout/matches_England.json"
-        hints = {**_SCOPE_HINTS, "match_external_id": str(info.match_id)}
+        if season_scope_hints is None:
+            season_scope_hints = _scope_hints(info)
 
         started_ids: set[int] = set()
         for players in roster.lineup_by_team.values():
@@ -765,8 +976,19 @@ def parse_participation_observations(
         squad_ids = set(started_ids)
         for players in roster.bench_by_team.values():
             squad_ids |= players
+        squad_team_of: dict[int, int] = {}
+        for team_id, players in roster.lineup_by_team.items():
+            for player_id in players:
+                squad_team_of[player_id] = team_id
+        for team_id, players in roster.bench_by_team.items():
+            for player_id in players:
+                squad_team_of.setdefault(player_id, team_id)
 
         for player_id in squad_ids:
+            hints = _player_scoped_hints(info, roster, player_id, player_names)
+            squad_team_id = squad_team_of.get(player_id)
+            if squad_team_id is not None:
+                hints.setdefault("team_external_id", str(squad_team_id))
             _emit(
                 observations,
                 seen,
@@ -778,6 +1000,7 @@ def parse_participation_observations(
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="player_appearance",
             )
             season_matches[player_id] += 1
             if info.kickoff_at is not None and info.kickoff_at > latest_contributing_date.get(
@@ -795,17 +1018,19 @@ def parse_participation_observations(
         entity_source_id = str(player_id)
         observed_at = latest_contributing_date.get(player_id, _fallback_now())
         reference = "wyscout/matches_England.json"
+        season_hints = _player_season_hints(season_scope_hints, player_names, player_id)
         _emit(
             observations,
             seen,
             entity_type="player",
             entity_source_id=entity_source_id,
-            entity_identity_hints=dict(_SCOPE_HINTS),
+            entity_identity_hints=season_hints,
             metric_name="matches",
             value=matches_count,
             observed_at=observed_at,
             source_reference=reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity="player_season",
         )
         appearances_count = season_appearances.get(player_id, 0)
         starts_count = season_starts.get(player_id, 0)
@@ -814,36 +1039,39 @@ def parse_participation_observations(
             seen,
             entity_type="player",
             entity_source_id=entity_source_id,
-            entity_identity_hints=dict(_SCOPE_HINTS),
+            entity_identity_hints=season_hints,
             metric_name="appearances",
             value=appearances_count,
             observed_at=observed_at,
             source_reference=reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity="player_season",
         )
         _emit(
             observations,
             seen,
             entity_type="player",
             entity_source_id=entity_source_id,
-            entity_identity_hints=dict(_SCOPE_HINTS),
+            entity_identity_hints=season_hints,
             metric_name="starts",
             value=starts_count,
             observed_at=observed_at,
             source_reference=reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity="player_season",
         )
         _emit(
             observations,
             seen,
             entity_type="player",
             entity_source_id=entity_source_id,
-            entity_identity_hints=dict(_SCOPE_HINTS),
+            entity_identity_hints=season_hints,
             metric_name="sub_appearances",
             value=appearances_count - starts_count,
             observed_at=observed_at,
             source_reference=reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity="player_season",
         )
 
     return observations
@@ -851,7 +1079,7 @@ def parse_participation_observations(
 
 def _emit_player_match_metrics(
     observations: list[NormalizedObservation],
-    seen: dict[tuple[str, EntityType, str, str], Any],
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any],
     *,
     match_id: int,
     player_id: int,
@@ -875,6 +1103,7 @@ def _emit_player_match_metrics(
             observed_at=observed_at,
             source_reference=reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity="player_match",
         )
 
     for metric_name in _PLAYER_MATCH_COUNT_METRICS:
@@ -915,13 +1144,17 @@ def _emit_player_match_metrics(
 def parse_player_match_observations(
     matches_payload: list[Any],
     events_payload: list[Any],
+    players_payload: list[Any] | None = None,
     *,
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
-    """The 38 player_match identities in the adapter-safe subset."""
+    """The 38 player_match identities in the adapter-safe subset.
+    `players_payload` (the official `players.json` reference file) is
+    optional -- when supplied, hints carry real `player_name` identity."""
 
     observations: list[NormalizedObservation] = []
-    seen: dict[tuple[str, EntityType, str, str], Any] = {}
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
+    player_names = _player_names_by_id(players_payload or [])
 
     counts_by_match_player, _launches = _accumulate_player_match_events(events_payload)
 
@@ -934,10 +1167,10 @@ def parse_player_match_observations(
         roster = _match_roster(match)
         observed_at = info.kickoff_at or _fallback_now()
         reference = f"wyscout/events_England.json#match={info.match_id}"
-        hints = {**_SCOPE_HINTS, "match_external_id": str(info.match_id)}
 
         for player_id in roster.participating_players():
             counts = counts_by_match_player.get((info.match_id, player_id), _new_counts())
+            hints = _player_scoped_hints(info, roster, player_id, player_names)
             _emit_player_match_metrics(
                 observations,
                 seen,
@@ -963,9 +1196,10 @@ def parse_goalkeeper_observations(
     """The 8 goalkeeper_match + 2 goalkeeper_season identities."""
 
     observations: list[NormalizedObservation] = []
-    seen: dict[tuple[str, EntityType, str, str], Any] = {}
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
 
     goalkeeper_ids = _goalkeeper_ids(players_payload)
+    player_names = _player_names_by_id(players_payload)
     counts_by_match_player, launches_by_match_player = _accumulate_player_match_events(
         events_payload
     )
@@ -976,6 +1210,7 @@ def parse_goalkeeper_observations(
     season_clean_sheets: dict[int, int] = defaultdict(int)
     season_matches_resolved: dict[int, int] = defaultdict(int)
     latest_date: dict[int, datetime] = {}
+    season_scope_hints: dict[str, str] | None = None
 
     for match in matches_payload:
         if not isinstance(match, dict):
@@ -986,7 +1221,8 @@ def parse_goalkeeper_observations(
         roster = _match_roster(match)
         observed_at = info.kickoff_at or _fallback_now()
         reference = f"wyscout/events_England.json#match={info.match_id}"
-        hints = {**_SCOPE_HINTS, "match_external_id": str(info.match_id)}
+        if season_scope_hints is None:
+            season_scope_hints = _scope_hints(info)
         participating = roster.participating_players()
 
         team_goalkeepers: dict[int, list[int]] = defaultdict(list)
@@ -998,6 +1234,7 @@ def parse_goalkeeper_observations(
             if player_id not in goalkeeper_ids:
                 continue
             entity_source_id = f"{info.match_id}:{player_id}"
+            hints = _player_scoped_hints(info, roster, player_id, player_names)
             counts = counts_by_match_player.get((info.match_id, player_id), _new_counts())
 
             def emit(
@@ -1020,6 +1257,7 @@ def parse_goalkeeper_observations(
                     observed_at=observed_at,
                     source_reference=reference,
                     ingestion_run_id=ingestion_run_id,
+                    metric_granularity="goalkeeper_match",
                 )
 
             emit("passes", counts["passes_total"])
@@ -1030,6 +1268,13 @@ def parse_goalkeeper_observations(
                 )
             launches = launches_by_match_player.get((info.match_id, player_id), 0)
             emit("launches", launches)
+            # Same real event-derived count `_emit_player_match_metrics` already
+            # emits at `player_match` granularity -- genuinely two distinct
+            # catalog identities (Block 20D.2's canonical example of why
+            # `metric_granularity` exists), not a duplicate. `_emit`'s
+            # (metric_name, metric_granularity)-inclusive dedup identity keeps
+            # these two facts from ever being treated as conflicting or merged.
+            emit("saves", counts["saves"])
 
             # Only attribute team-level goalkeeping outcomes when exactly one
             # GK-role player took the field for this team in this match --
@@ -1069,17 +1314,19 @@ def parse_goalkeeper_observations(
         observed_at = latest_date.get(player_id, _fallback_now())
         reference = "wyscout/matches_England.json+events_England.json"
         entity_source_id = str(player_id)
+        season_hints = _player_season_hints(season_scope_hints, player_names, player_id)
         _emit(
             observations,
             seen,
             entity_type="player",
             entity_source_id=entity_source_id,
-            entity_identity_hints=dict(_SCOPE_HINTS),
+            entity_identity_hints=season_hints,
             metric_name="clean_sheets",
             value=season_clean_sheets.get(player_id, 0),
             observed_at=observed_at,
             source_reference=reference,
             ingestion_run_id=ingestion_run_id,
+            metric_granularity="goalkeeper_season",
         )
         shots_faced_total = season_shots_faced.get(player_id, 0)
         if shots_faced_total > 0:
@@ -1088,12 +1335,13 @@ def parse_goalkeeper_observations(
                 seen,
                 entity_type="player",
                 entity_source_id=entity_source_id,
-                entity_identity_hints=dict(_SCOPE_HINTS),
+                entity_identity_hints=season_hints,
                 metric_name="save_pct",
                 value=round(100.0 * season_saves.get(player_id, 0) / shots_faced_total, 4),
                 observed_at=observed_at,
                 source_reference=reference,
                 ingestion_run_id=ingestion_run_id,
+                metric_granularity="goalkeeper_season",
             )
 
     return observations
@@ -1136,15 +1384,19 @@ def parse_team_match_observations(
     matches_payload: list[Any],
     events_payload: list[Any],
     players_payload: list[Any],
+    teams_payload: list[Any] | None = None,
     *,
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
-    """The 17 team_match identities in the adapter-safe subset."""
+    """The 17 team_match identities in the adapter-safe subset.
+    `teams_payload` (the official `teams.json` reference file) is optional
+    -- when supplied, hints carry a real `team_name` identity."""
 
     observations: list[NormalizedObservation] = []
-    seen: dict[tuple[str, EntityType, str, str], Any] = {}
+    seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
 
     goalkeeper_ids = _goalkeeper_ids(players_payload)
+    team_names = _team_names_by_id(teams_payload)
     counts_by_match_player, _launches = _accumulate_player_match_events(events_payload)
 
     team_counts: dict[tuple[int, int], _TeamMatchCounts] = defaultdict(_TeamMatchCounts)
@@ -1194,7 +1446,6 @@ def parse_team_match_observations(
         roster = _match_roster(match)
         observed_at = info.kickoff_at or _fallback_now()
         reference = f"wyscout/events_England.json#match={info.match_id}"
-        hints = {**_SCOPE_HINTS, "match_external_id": str(info.match_id)}
         participating = roster.participating_players()
 
         for team_id, opponent_id, own_score, opp_score in (
@@ -1202,6 +1453,7 @@ def parse_team_match_observations(
             (info.away_team_id, info.home_team_id, info.away_score, info.home_score),
         ):
             entity_source_id = f"{info.match_id}:{team_id}"
+            hints = _team_scoped_hints(info, team_id, team_names)
             stats = team_counts.get((info.match_id, team_id), _TeamMatchCounts())
             opp_stats = team_counts.get((info.match_id, opponent_id), _TeamMatchCounts())
 
@@ -1225,6 +1477,7 @@ def parse_team_match_observations(
                     observed_at=observed_at,
                     source_reference=reference,
                     ingestion_run_id=ingestion_run_id,
+                    metric_granularity="team_match",
                 )
 
             if own_score is not None:
@@ -1266,21 +1519,26 @@ def parse_england_season(
     matches_payload: list[Any],
     events_payload: list[Any],
     players_payload: list[Any],
+    teams_payload: list[Any] | None = None,
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
     """Full adapter entry point: every adapter-safe observation for the
-    ENG_PL 2017/18 Wyscout Open Data source, from already-loaded payloads."""
+    ENG_PL 2017/18 Wyscout Open Data source, from already-loaded payloads.
+    `teams_payload` (the official `teams.json` reference file) is optional
+    -- when supplied, match/team-scoped hints carry real team names."""
 
     observations: list[NormalizedObservation] = []
     observations.extend(
-        parse_match_observations(matches_payload, ingestion_run_id=ingestion_run_id)
+        parse_match_observations(matches_payload, teams_payload, ingestion_run_id=ingestion_run_id)
     )
     observations.extend(
-        parse_participation_observations(matches_payload, ingestion_run_id=ingestion_run_id)
+        parse_participation_observations(
+            matches_payload, players_payload, ingestion_run_id=ingestion_run_id
+        )
     )
     observations.extend(
         parse_player_match_observations(
-            matches_payload, events_payload, ingestion_run_id=ingestion_run_id
+            matches_payload, events_payload, players_payload, ingestion_run_id=ingestion_run_id
         )
     )
     observations.extend(
@@ -1296,6 +1554,7 @@ def parse_england_season(
             matches_payload,
             events_payload,
             players_payload,
+            teams_payload,
             ingestion_run_id=ingestion_run_id,
         )
     )

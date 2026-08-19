@@ -122,6 +122,10 @@ def test_mappings_by_classification_partitions_all_entries() -> None:
         ("saves", "player_match"),
         ("corners", "team_match"),
         ("goals_for", "team_match"),
+        # Corrected Block 20D.2 review-fix pass: "home_away" is
+        # team_match-granularity, not match-granularity -- the primitive
+        # (`teamsData[*].side`) is inherently per-team-in-this-match.
+        ("home_away", "team_match"),
     ],
 )
 def test_direct_metrics_are_classified_direct(key: str, granularity: str) -> None:
@@ -305,7 +309,7 @@ def test_adapter_safe_subset_never_includes_methodology_pending_entries() -> Non
 
 @pytest.mark.parametrize(
     "key",
-    ["home_score", "away_score", "home_away", "status", "kickoff_at", "round_name", "venue_name"],
+    ["home_score", "away_score", "status", "kickoff_at", "round_name", "venue_name"],
 )
 def test_new_match_identities_exist_and_are_direct(key: str) -> None:
     mapping = _find(key, "match")

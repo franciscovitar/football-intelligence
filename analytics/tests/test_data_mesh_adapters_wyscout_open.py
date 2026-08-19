@@ -31,19 +31,30 @@ from football_intelligence.providers.wyscout_open_mapping import adapter_safe_ma
 # events with eventName/subEventName/tags/positions, players.json role.code2.
 
 _PLAYERS_PAYLOAD = [
-    {"wyId": 11, "role": {"code2": "GK"}},
-    {"wyId": 12, "role": {"code2": "DF"}},
-    {"wyId": 13, "role": {"code2": "FW"}},
-    {"wyId": 14, "role": {"code2": "MD"}},
-    {"wyId": 15, "role": {"code2": "MD"}},
-    {"wyId": 21, "role": {"code2": "DF"}},
-    {"wyId": 22, "role": {"code2": "GK"}},
-    {"wyId": 23, "role": {"code2": "FW"}},
-    {"wyId": 31, "role": {"code2": "FW"}},
+    {"wyId": 11, "role": {"code2": "GK"}, "shortName": "H. Keeper"},
+    {"wyId": 12, "role": {"code2": "DF"}, "shortName": "D. Fender"},
+    {"wyId": 13, "role": {"code2": "FW"}, "shortName": "S. Triker"},
+    {"wyId": 14, "role": {"code2": "MD"}, "shortName": "M. Field"},
+    {"wyId": 15, "role": {"code2": "MD"}, "shortName": "S. Ub"},
+    {"wyId": 21, "role": {"code2": "DF"}, "shortName": "A. Defender"},
+    {"wyId": 22, "role": {"code2": "GK"}, "shortName": "A. Keeper"},
+    {"wyId": 23, "role": {"code2": "FW"}, "shortName": "A. Striker"},
+    {"wyId": 31, "role": {"code2": "FW"}, "shortName": "C. Striker"},
+]
+
+_TEAMS_PAYLOAD = [
+    {"wyId": 100, "name": "Team A", "officialName": "Team A FC"},
+    {"wyId": 200, "name": "Team B", "officialName": "Team B FC"},
+    {"wyId": 300, "name": "Team C", "officialName": "Team C FC"},
 ]
 
 _MATCH_1 = {
     "wyId": 1001,
+    # Real shape: Wyscout's own provider-native identifiers, verified
+    # against the real England 2017/18 cache (competitionId=364,
+    # seasonId=181150) -- Block 20D.2's completion pass.
+    "competitionId": 364,
+    "seasonId": 181150,
     "dateutc": "2018-01-01 15:00:00",
     "status": "Played",
     "gameweek": 1,
@@ -178,6 +189,8 @@ _EVENTS_1 = [
 # conceding goalkeeper's failed Save attempt carries the Goal tag.
 _MATCH_2 = {
     "wyId": 1002,
+    "competitionId": 364,
+    "seasonId": 181150,
     "dateutc": "2018-01-08 15:00:00",
     "status": "Played",
     "gameweek": 2,
@@ -255,12 +268,50 @@ def test_direct_match_observations() -> None:
 
     for obs in observations:
         assert obs.source_code == SOURCE_CODE
-        assert obs.entity_identity_hints["competition_external_id"] == COMPETITION_CODE
+        # Block 20D.2 completion pass: the real provider-native numeric id
+        # (verified: "364" for England 2017/18), never the canonical
+        # "ENG_PL" code.
+        assert obs.entity_identity_hints["competition_external_id"] == "364"
+        assert obs.entity_identity_hints["competition_external_id"] != COMPETITION_CODE
         assert obs.entity_identity_hints["season_label"] == SEASON_LABEL
 
     home_away = {o.entity_source_id: o.value for o in observations if o.metric_name == "home_away"}
     assert home_away["1001:100"] == "home"
     assert home_away["1001:200"] == "away"
+
+
+def test_match_observation_carries_match_and_team_identity_hints_without_teams_payload() -> None:
+    observations = parse_match_observations(_MATCHES_PAYLOAD)
+    obs = next(
+        o for o in observations if o.entity_source_id == "1001" and o.metric_name == "status"
+    )
+    assert obs.entity_identity_hints["match_external_id"] == "1001"
+    assert obs.entity_identity_hints["home_team_external_id"] == "100"
+    assert obs.entity_identity_hints["away_team_external_id"] == "200"
+    assert obs.entity_identity_hints["kickoff_date"] == "2018-01-01"
+    # No teams_payload was supplied -- names must stay missing, never guessed.
+    assert "home_team_name" not in obs.entity_identity_hints
+    assert "away_team_name" not in obs.entity_identity_hints
+
+
+def test_match_observation_carries_team_names_when_teams_payload_supplied() -> None:
+    observations = parse_match_observations(_MATCHES_PAYLOAD, _TEAMS_PAYLOAD)
+    obs = next(
+        o for o in observations if o.entity_source_id == "1001" and o.metric_name == "status"
+    )
+    assert obs.entity_identity_hints["home_team_name"] == "Team A"
+    assert obs.entity_identity_hints["away_team_name"] == "Team B"
+
+
+def test_home_away_observation_carries_this_teams_own_identity_hints() -> None:
+    observations = parse_match_observations(_MATCHES_PAYLOAD, _TEAMS_PAYLOAD)
+    home = next(
+        o for o in observations if o.entity_source_id == "1001:100" and o.metric_name == "home_away"
+    )
+    assert home.entity_identity_hints["team_external_id"] == "100"
+    assert home.entity_identity_hints["team_name"] == "Team A"
+    assert home.entity_identity_hints["match_external_id"] == "1001"
+    assert "away_team_external_id" not in home.entity_identity_hints
 
 
 # -- B. Player event aggregation ----------------------------------------------
@@ -469,18 +520,20 @@ def test_emitted_identities_are_a_subset_of_adapter_safe_mappings() -> None:
 
 
 @pytest.mark.parametrize(
-    ("metric_name", "entity_type"),
+    ("metric_name", "entity_type", "metric_granularity"),
     [
-        ("advanced.xg", "player"),  # REQUIRES_MODEL
-        ("tackles", "player"),  # AMBIGUOUS
-        ("progressive_passes", "player"),  # DERIVABLE_METHODOLOGY_PENDING
-        ("carries", "player"),  # UNSUPPORTED
-        ("league_strength", "competition"),  # provider-out-of-scope
+        ("advanced.xg", "player", "player_match"),  # REQUIRES_MODEL
+        ("tackles", "player", "player_match"),  # AMBIGUOUS
+        ("progressive_passes", "player", "player_match"),  # DERIVABLE_METHODOLOGY_PENDING
+        ("carries", "player", "player_match"),  # UNSUPPORTED
+        ("league_strength", "competition", "competition"),  # provider-out-of-scope
     ],
 )
-def test_non_safe_identities_can_never_be_emitted(metric_name: str, entity_type: str) -> None:
+def test_non_safe_identities_can_never_be_emitted(
+    metric_name: str, entity_type: str, metric_granularity: str
+) -> None:
     observations: list[NormalizedObservation] = []
-    seen: dict[tuple[str, str, str, str], Any] = {}
+    seen: dict[tuple[str, str, str, str, str], Any] = {}
     with pytest.raises(WyscoutObservationConflictError):
         _emit(
             observations,
@@ -493,6 +546,7 @@ def test_non_safe_identities_can_never_be_emitted(metric_name: str, entity_type:
             observed_at=datetime(2018, 1, 1),
             source_reference="test",
             ingestion_run_id=None,
+            metric_granularity=metric_granularity,  # type: ignore[arg-type]
         )
     assert observations == []
 
@@ -532,7 +586,7 @@ def test_deterministic_output_across_repeated_runs() -> None:
 
 def test_identical_duplicate_observation_is_silently_deduplicated() -> None:
     observations: list[NormalizedObservation] = []
-    seen: dict[tuple[str, str, str, str], Any] = {}
+    seen: dict[tuple[str, str, str, str, str], Any] = {}
     kwargs: dict[str, Any] = dict(
         entity_type="player",
         entity_source_id="1",
@@ -542,6 +596,7 @@ def test_identical_duplicate_observation_is_silently_deduplicated() -> None:
         observed_at=datetime(2018, 1, 1),
         source_reference="test",
         ingestion_run_id=None,
+        metric_granularity="player_match",
     )
     _emit(observations, seen, **kwargs)
     _emit(observations, seen, **kwargs)
@@ -550,7 +605,7 @@ def test_identical_duplicate_observation_is_silently_deduplicated() -> None:
 
 def test_conflicting_duplicate_observation_raises() -> None:
     observations: list[NormalizedObservation] = []
-    seen: dict[tuple[str, str, str, str], Any] = {}
+    seen: dict[tuple[str, str, str, str, str], Any] = {}
     base: dict[str, Any] = dict(
         entity_type="player",
         entity_source_id="1",
@@ -559,6 +614,7 @@ def test_conflicting_duplicate_observation_raises() -> None:
         observed_at=datetime(2018, 1, 1),
         source_reference="test",
         ingestion_run_id=None,
+        metric_granularity="player_match",
     )
     _emit(observations, seen, value=1, **base)
     with pytest.raises(WyscoutObservationConflictError):
@@ -593,3 +649,249 @@ def test_adapter_module_has_no_database_or_network_dependency() -> None:
 
 def test_adapter_module_lives_under_data_mesh_adapters() -> None:
     assert wyscout_open.__name__.startswith(adapters_package.__name__)
+
+
+def test_semantic_version_is_bumped_from_the_pre_review_fix_pass_adapter() -> None:
+    # Block 20D.2's review-fix pass changed observable emission semantics
+    # (explicit metric_granularity on every observation, genuine
+    # goalkeeper_match "saves" emission, home_away granularity corrected,
+    # materially enriched identity hints) -- the Block 20B.2b original
+    # version ("wyscout-open-v0.1") must not be shared with these new
+    # semantics.
+    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.1"
+    assert wyscout_open.SEMANTIC_VERSION == "wyscout-open-v0.2"
+
+
+# -- S. Block 20D.2: metric_granularity is always explicit on the certified path --
+
+
+def test_every_certified_observation_carries_explicit_metric_granularity() -> None:
+    observations = parse_england_season(
+        matches_payload=_MATCHES_PAYLOAD,
+        events_payload=_EVENTS_PAYLOAD,
+        players_payload=_PLAYERS_PAYLOAD,
+    )
+    assert observations, "fixture produced no observations"
+    for obs in observations:
+        assert obs.metric_granularity is not None
+        assert (obs.metric_name, obs.metric_granularity) in _SAFE_IDENTITIES
+
+
+def test_saves_player_match_and_goalkeeper_match_are_both_emitted_and_distinguishable() -> None:
+    observations = parse_england_season(
+        matches_payload=_MATCHES_PAYLOAD,
+        events_payload=_EVENTS_PAYLOAD,
+        players_payload=_PLAYERS_PAYLOAD,
+    )
+    saves_observations = [obs for obs in observations if obs.metric_name == "saves"]
+    granularities = {obs.metric_granularity for obs in saves_observations}
+    # Both catalog identities must genuinely be emitted for a real fixture
+    # with at least one confirmed goalkeeper -- a fixture that only ever
+    # produced player_match would silently mean goalkeeper_match "saves"
+    # was declared safe but never actually implemented. This is the
+    # canonical real example of why `metric_granularity` exists at all.
+    assert granularities == {"player_match", "goalkeeper_match"}, (
+        f"expected both player_match and goalkeeper_match saves to be emitted, got {granularities}"
+    )
+    player_match_ids = {
+        obs.entity_source_id
+        for obs in saves_observations
+        if obs.metric_granularity == "player_match"
+    }
+    goalkeeper_match_ids = {
+        obs.entity_source_id
+        for obs in saves_observations
+        if obs.metric_granularity == "goalkeeper_match"
+    }
+    # Every goalkeeper's saves fact must exist at BOTH granularities for the
+    # exact same (match, player) -- proving the two are genuinely
+    # coexisting facts about the same real quantity, not merely two
+    # unrelated observations that happen to share a metric name.
+    assert goalkeeper_match_ids
+    assert goalkeeper_match_ids <= player_match_ids
+
+
+def test_emit_dedup_identity_includes_metric_granularity() -> None:
+    # Block 20D.2 completion pass regression: `_emit`'s internal dedup/
+    # conflict identity must include `metric_granularity`, not just
+    # `(source_code, entity_type, entity_source_id, metric_name)` --
+    # otherwise `saves`/player_match and `saves`/goalkeeper_match for the
+    # SAME (match, player) would collide as if they were the same fact.
+    observations: list[NormalizedObservation] = []
+    seen: dict[tuple[str, str, str, str, str], Any] = {}
+    shared_kwargs: dict[str, Any] = dict(
+        entity_type="player",
+        entity_source_id="1:11",
+        entity_identity_hints={},
+        metric_name="saves",
+        value=3,
+        observed_at=datetime(2018, 1, 1),
+        source_reference="test",
+        ingestion_run_id=None,
+    )
+
+    # Two different granularities for the identical (source, entity_type,
+    # entity_source_id, metric_name) must both be emitted -- never
+    # deduplicated away and never treated as a conflict, even though the
+    # value is identical (a real, expected case: the same real save count
+    # genuinely is both facts).
+    _emit(observations, seen, **shared_kwargs, metric_granularity="player_match")
+    _emit(observations, seen, **shared_kwargs, metric_granularity="goalkeeper_match")
+    assert len(observations) == 2
+    assert {obs.metric_granularity for obs in observations} == {"player_match", "goalkeeper_match"}
+
+    # Re-emitting the identical (source, entity_type, entity_source_id,
+    # metric_name, metric_granularity, value) must still be idempotently
+    # deduplicated at the SAME exact granularity.
+    _emit(observations, seen, **shared_kwargs, metric_granularity="player_match")
+    assert len(observations) == 2
+
+    # A different value at the exact same identity (including granularity)
+    # must still raise -- granularity-awareness must never weaken genuine
+    # conflict detection.
+    with pytest.raises(WyscoutObservationConflictError):
+        _emit(
+            observations,
+            seen,
+            **{**shared_kwargs, "value": 4},
+            metric_granularity="player_match",
+        )
+    assert len(observations) == 2
+
+
+def test_emit_rejects_a_granularity_metric_name_pair_outside_the_safe_mapping() -> None:
+    observations: list[NormalizedObservation] = []
+    seen: dict[tuple[str, str, str, str, str], Any] = {}
+    with pytest.raises(WyscoutObservationConflictError):
+        _emit(
+            observations,
+            seen,
+            entity_type="player",
+            entity_source_id="1",
+            entity_identity_hints={},
+            metric_name="saves",
+            value=1,
+            observed_at=datetime(2018, 1, 1),
+            source_reference="test",
+            ingestion_run_id=None,
+            # "saves" is not a safe identity at player_season granularity --
+            # only player_match/goalkeeper_match are. The exact (metric_name,
+            # metric_granularity) check must reject this even though "saves"
+            # alone is a safe metric_name at other granularities.
+            metric_granularity="player_season",  # type: ignore[arg-type]
+        )
+    assert observations == []
+
+
+# -- Identity hint contract V2 (Block 20D.2 completion pass) ----------------
+
+
+def test_team_match_observation_carries_this_teams_own_identity_hints() -> None:
+    observations = parse_team_match_observations(
+        _MATCHES_PAYLOAD, _EVENTS_PAYLOAD, _PLAYERS_PAYLOAD, _TEAMS_PAYLOAD
+    )
+    shots = next(
+        o
+        for o in observations
+        if o.entity_source_id == "1001:100" and o.metric_name == "shots_total"
+    )
+    assert shots.entity_identity_hints["team_external_id"] == "100"
+    assert shots.entity_identity_hints["team_name"] == "Team A"
+    assert shots.entity_identity_hints["match_external_id"] == "1001"
+    assert "away_team_external_id" not in shots.entity_identity_hints
+
+
+def test_team_match_observation_omits_team_name_without_teams_payload() -> None:
+    observations = parse_team_match_observations(
+        _MATCHES_PAYLOAD, _EVENTS_PAYLOAD, _PLAYERS_PAYLOAD
+    )
+    shots = next(
+        o
+        for o in observations
+        if o.entity_source_id == "1001:100" and o.metric_name == "shots_total"
+    )
+    assert shots.entity_identity_hints["team_external_id"] == "100"
+    assert "team_name" not in shots.entity_identity_hints
+
+
+def test_player_match_observation_carries_player_and_team_identity_hints() -> None:
+    observations = parse_player_match_observations(
+        _MATCHES_PAYLOAD, _EVENTS_PAYLOAD, _PLAYERS_PAYLOAD
+    )
+    goals = next(
+        o for o in observations if o.entity_source_id == "1001:13" and o.metric_name == "goals"
+    )
+    assert goals.entity_identity_hints["player_external_id"] == "13"
+    assert goals.entity_identity_hints["player_name"] == "S. Triker"
+    assert goals.entity_identity_hints["team_external_id"] == "100"
+    assert goals.entity_identity_hints["match_external_id"] == "1001"
+
+
+def test_player_match_observation_omits_player_name_without_players_payload() -> None:
+    observations = parse_player_match_observations(_MATCHES_PAYLOAD, _EVENTS_PAYLOAD)
+    goals = next(
+        o for o in observations if o.entity_source_id == "1001:13" and o.metric_name == "goals"
+    )
+    assert goals.entity_identity_hints["player_external_id"] == "13"
+    assert "player_name" not in goals.entity_identity_hints
+
+
+def test_goalkeeper_match_observation_carries_player_identity_hints() -> None:
+    observations = parse_goalkeeper_observations(
+        _MATCHES_PAYLOAD, _EVENTS_PAYLOAD, _PLAYERS_PAYLOAD
+    )
+    saves = next(
+        o for o in observations if o.entity_source_id == "1001:11" and o.metric_name == "passes"
+    )
+    assert saves.entity_identity_hints["player_external_id"] == "11"
+    assert saves.entity_identity_hints["player_name"] == "H. Keeper"
+    assert saves.entity_identity_hints["team_external_id"] == "100"
+
+
+def test_player_season_observation_carries_player_identity_but_no_match_or_team() -> None:
+    observations = parse_participation_observations(_MATCHES_PAYLOAD, _PLAYERS_PAYLOAD)
+    matches_obs = next(
+        o for o in observations if o.entity_source_id == "13" and o.metric_name == "matches"
+    )
+    assert matches_obs.entity_identity_hints["player_external_id"] == "13"
+    assert matches_obs.entity_identity_hints["player_name"] == "S. Triker"
+    assert "match_external_id" not in matches_obs.entity_identity_hints
+    assert "team_external_id" not in matches_obs.entity_identity_hints
+
+
+def test_full_season_run_with_teams_payload_carries_rich_identity_hints() -> None:
+    observations = parse_england_season(
+        matches_payload=_MATCHES_PAYLOAD,
+        events_payload=_EVENTS_PAYLOAD,
+        players_payload=_PLAYERS_PAYLOAD,
+        teams_payload=_TEAMS_PAYLOAD,
+    )
+    home_away = next(o for o in observations if o.entity_source_id == "1001:100")
+    assert home_away.entity_identity_hints["team_name"] == "Team A"
+    goals = next(
+        o for o in observations if o.entity_source_id == "1001:13" and o.metric_name == "goals"
+    )
+    assert goals.entity_identity_hints["player_name"] == "S. Triker"
+
+
+def test_observation_values_are_unchanged_by_the_identity_hint_enrichment() -> None:
+    # Enriching entity_identity_hints must never alter what metric a source
+    # observation actually reports.
+    with_names = parse_england_season(
+        matches_payload=_MATCHES_PAYLOAD,
+        events_payload=_EVENTS_PAYLOAD,
+        players_payload=_PLAYERS_PAYLOAD,
+        teams_payload=_TEAMS_PAYLOAD,
+    )
+    without_names = parse_england_season(
+        matches_payload=_MATCHES_PAYLOAD,
+        events_payload=_EVENTS_PAYLOAD,
+        players_payload=_PLAYERS_PAYLOAD,
+    )
+    values_with_names = {
+        (o.entity_type, o.entity_source_id, o.metric_name): o.value for o in with_names
+    }
+    values_without_names = {
+        (o.entity_type, o.entity_source_id, o.metric_name): o.value for o in without_names
+    }
+    assert values_with_names == values_without_names
