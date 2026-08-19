@@ -500,6 +500,74 @@ preserved in the historical narrative sections of `docs/BLOCK20_MULTI_
 SOURCE.md` and `docs/STATSBOMB_METRIC_MAPPING.md`, explicitly labelled as
 such, never erased or silently overwritten.
 
+## Final integrity fixes (PR #18 review)
+
+A further independent review of the committed PR found four narrow
+integrity gaps, closed without redesigning anything above.
+
+### 1 & 2. The audit coverage gate and unexpected-identity check were not wired to fail
+
+The two real audit jobs already computed `safe_identities_with_zero_
+observations` correctly (the granularity-aware set from the earlier
+micro-audit), but nothing turned a non-empty set into a failing
+`VerificationCheck` -- a future real audit could have printed "76/77" and
+still exited `0`. Added `all_adapter_safe_identities_observed` to both
+audits, `passed = not safe_identities_with_zero_observations`, detail
+listing the exact missing `(metric_name, metric_granularity)` identities.
+
+Separately, `no_unexpected_identities_emitted` still checked
+`(metric_name, entity_type)` against `_SAFE_METRIC_ENTITY_PAIRS` -- too
+coarse after Block 20D.2: `saves`/`player_season` has a perfectly valid
+`entity_type="player"` (same as the safe `saves`/`player_match`), so this
+check alone could never flag it as unexpected. Added a new, authoritative
+`unexpected_exact_identities` (`observed_identities - safe_identities`,
+keyed on the real `metric_granularity` field) and a new
+`no_unexpected_exact_identities_emitted` check in both audits. The
+original entity_type-keyed check and field are kept, explicitly documented
+as a coarser defense-in-depth signal, never a substitute.
+
+### 3. `metric_granularity` had no DB persistence safeguard
+
+`db/data_mesh_repository.py`'s `persist_observations()` writes to
+`ingestion.source_observations`, a Block 13 table with no column or
+natural key for `metric_granularity`. Persisting a V2 observation there
+would silently upsert `saves`/`player_match` and `saves`/`goalkeeper_match`
+onto the same row (same `entity_type`, same `entity_source_id`) --
+destroying real evidence, not merely mislabeling it. No schema migration
+was made (deliberately out of scope for this block). Instead,
+`persist_observations()` now pre-scans the whole batch and raises
+`MetricGranularityNotPersistableError` before executing any SQL statement
+-- including the provider-id lookup -- the moment any observation carries
+a non-`None` `metric_granularity`. A batch mixing legacy and V2
+observations fails entirely, never partially persisting the legacy item
+first. Legacy (`metric_granularity=None`) observations are completely
+unaffected -- `tests/integration/test_data_mesh_pipeline.py`'s existing
+real-Postgres test already covers that path and needed no changes.
+Real V2-aware persistence (a genuine schema change: a new column and a
+widened natural key) remains deferred to the Reconciliation V2 / Block
+20D.4 work -- this is an explicit, documented, temporary boundary, not a
+silently unsupported gap.
+
+### 4. The Metric Catalog release version still described the old `home_away` identity
+
+`home_away`'s true catalog identity is `(key="home_away",
+granularity="team_match")` since the earlier fix in this document, but
+`CATALOG_V2_VERSION` ("metric-catalog-v2.0") -- the single release version
+every `MetricDefinition` in the catalog shares, by this catalog's own
+existing convention -- still described the catalog as it stood before that
+identity changed. Bumped to `"metric-catalog-v2.1"`. No other adapter/model
+version changed as a result; `SEMANTIC_VERSION` for the two certified
+adapters and `MODEL_VERSION` for the reconciliation engine are unaffected
+by this catalog-level bump.
+
+### 5. One stale comment
+
+A comment above `_SAFE_METRIC_ENTITY_PAIRS` in `wyscout_open.py` still
+said `NormalizedObservation cannot fully express catalog granularity` --
+false since Block 20D.2 added the `metric_granularity` field. Corrected to
+describe `_SAFE_METRIC_ENTITY_PAIRS` accurately: a coarser, entity_type-only
+defense-in-depth check, never the reason granularity can't be expressed.
+
 ## Next step: Block 20D.3
 
 Generalize the certified adapters to Spain/ESP_LL scope, populate the real

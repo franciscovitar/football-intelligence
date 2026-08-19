@@ -85,7 +85,16 @@ class AdapterAuditReport:
     implemented_identity_count: int
     identities_with_observations: int
     safe_identities_with_zero_observations: tuple[tuple[str, str], ...]
+    # (metric_name, entity_type) pairs outside `_SAFE_METRIC_ENTITY_PAIRS` --
+    # a coarser, defense-in-depth signal kept alongside
+    # `unexpected_exact_identities` below, never a substitute for it (an
+    # entity_type pair can be valid while the exact granularity is not,
+    # e.g. saves/player_season still has entity_type="player").
     unexpected_identities: tuple[tuple[str, str], ...]
+    # (metric_name, metric_granularity) pairs observed but absent from the
+    # real Metric Catalog adapter-safe set -- the authoritative unexpected-
+    # output check (Block 20D.2 review-fix pass).
+    unexpected_exact_identities: tuple[tuple[str, str], ...]
     checks: tuple[VerificationCheck, ...]
 
     @property
@@ -355,6 +364,12 @@ def build_report(
     safe_identities = {(m.catalog_key, m.catalog_granularity) for m in adapter_safe_mappings()}
     safe_pairs_with_observations = safe_identities & observed_identities
     zero_observation_identities = tuple(sorted(safe_identities - safe_pairs_with_observations))
+    # The authoritative unexpected-output check: an observed
+    # (metric_name, metric_granularity) pair that is not adapter-safe.
+    # `saves/player_season` is unexpected even though `saves/player_match`
+    # is safe -- both project to entity_type="player", so the coarser
+    # `unexpected` (entity_type-keyed) list above cannot catch this case.
+    unexpected_exact_identities = tuple(sorted(observed_identities - safe_identities))
 
     # Participation universe cross-checks: every emitted player_match/
     # goalkeeper_match observation must be a confirmed participant (starter
@@ -448,11 +463,29 @@ def build_report(
     )
     checks.append(
         _check(
+            "no_unexpected_exact_identities_emitted",
+            not unexpected_exact_identities,
+            f"found {len(unexpected_exact_identities)} unexpected (metric_name, "
+            f"metric_granularity) pairs -- observed but not adapter-safe: "
+            f"{unexpected_exact_identities[:10]}",
+        )
+    )
+    checks.append(
+        _check(
             "no_missing_metric_granularity",
             missing_granularity_count == 0,
             f"found {missing_granularity_count} certified-path observations with "
             "metric_granularity=None -- every certified observation must declare its "
             "granularity explicitly, never silently projected from entity_type",
+        )
+    )
+    checks.append(
+        _check(
+            "all_adapter_safe_identities_observed",
+            not zero_observation_identities,
+            f"found {len(zero_observation_identities)} adapter-safe (metric_name, "
+            f"metric_granularity) identities with zero real observations this run: "
+            f"{zero_observation_identities}",
         )
     )
     checks.append(
@@ -574,6 +607,7 @@ def build_report(
         identities_with_observations=len(safe_pairs_with_observations),
         safe_identities_with_zero_observations=zero_observation_identities,
         unexpected_identities=tuple(sorted(set(unexpected))),
+        unexpected_exact_identities=unexpected_exact_identities,
         checks=tuple(checks),
     )
 
@@ -606,8 +640,12 @@ def _print_report(report: AdapterAuditReport) -> None:
         f"{report.safe_identities_with_zero_observations}"
     )
     print(
-        f"unexpected identities emitted ({len(report.unexpected_identities)}): "
+        f"unexpected (metric_name, entity_type) pairs ({len(report.unexpected_identities)}): "
         f"{report.unexpected_identities}"
+    )
+    print(
+        f"unexpected exact (metric_name, metric_granularity) identities "
+        f"({len(report.unexpected_exact_identities)}): {report.unexpected_exact_identities}"
     )
 
     print()
@@ -647,6 +685,7 @@ def _report_to_dict(report: AdapterAuditReport) -> dict[str, Any]:
             report.safe_identities_with_zero_observations
         ),
         "unexpected_identities": list(report.unexpected_identities),
+        "unexpected_exact_identities": list(report.unexpected_exact_identities),
         "checks": [{"name": c.name, "passed": c.passed, "detail": c.detail} for c in report.checks],
         "all_checks_passed": report.all_passed,
     }

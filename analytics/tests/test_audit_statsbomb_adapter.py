@@ -18,8 +18,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
 from football_intelligence.data_mesh.models import NormalizedObservation
+from football_intelligence.jobs import audit_statsbomb_adapter
 from football_intelligence.jobs.audit_statsbomb_adapter import build_report
+from football_intelligence.providers.statsbomb_open_mapping import StatsBombMetricMapping
 
 _NOW = datetime(2015, 8, 8, tzinfo=UTC)
 
@@ -144,3 +148,94 @@ def test_saves_full_type_set_check_reflects_only_player_match_not_both_granulari
         with_both_granularities, "saves_use_full_certified_type_set_not_old_undercount"
     )
     assert check_only_player_match.detail == check_with_both.detail
+
+
+# ---------------------------------------------------------------------------
+# Fix 1: all_adapter_safe_identities_observed must actually gate all_passed
+# ---------------------------------------------------------------------------
+
+_SMALL_SAFE_SET = (
+    StatsBombMetricMapping(
+        catalog_key="saves",
+        catalog_granularity="player_match",
+        classification="DIRECT",
+        source_primitive="test",
+        derivation_note="test",
+    ),
+    StatsBombMetricMapping(
+        catalog_key="saves",
+        catalog_granularity="goalkeeper_match",
+        classification="DIRECT",
+        source_primitive="test",
+        derivation_note="test",
+    ),
+)
+
+
+def test_one_missing_safe_identity_fails_the_coverage_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(audit_statsbomb_adapter, "adapter_safe_mappings", lambda: _SMALL_SAFE_SET)
+    # Only player_match emitted -- goalkeeper_match is safe but missing.
+    report = build_report([_obs(metric_granularity="player_match")], bundles=[])
+    check = _check(report, "all_adapter_safe_identities_observed")
+    assert check.passed is False
+    assert ("saves", "goalkeeper_match") in report.safe_identities_with_zero_observations
+    assert report.all_passed is False
+
+
+def test_complete_exact_identity_coverage_passes_the_coverage_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(audit_statsbomb_adapter, "adapter_safe_mappings", lambda: _SMALL_SAFE_SET)
+    report = build_report(
+        [
+            _obs(metric_granularity="player_match"),
+            _obs(metric_granularity="goalkeeper_match"),
+        ],
+        bundles=[],
+    )
+    check = _check(report, "all_adapter_safe_identities_observed")
+    assert check.passed is True
+    assert report.safe_identities_with_zero_observations == ()
+
+
+# ---------------------------------------------------------------------------
+# Fix 2: unexpected identities must be exact-granularity aware
+# ---------------------------------------------------------------------------
+
+
+def test_saves_player_season_is_an_unexpected_exact_identity() -> None:
+    # "saves" is never a safe identity at player_season granularity -- only
+    # player_match/goalkeeper_match are. entity_type="player" is valid for
+    # all three, so the coarser (metric_name, entity_type) check alone
+    # cannot catch this.
+    report = build_report([_obs(metric_granularity="player_season")], bundles=[])
+    assert ("saves", "player_season") in report.unexpected_exact_identities
+    check = _check(report, "no_unexpected_exact_identities_emitted")
+    assert check.passed is False
+
+
+def test_saves_player_match_is_not_an_unexpected_exact_identity() -> None:
+    report = build_report([_obs(metric_granularity="player_match")], bundles=[])
+    assert ("saves", "player_match") not in report.unexpected_exact_identities
+    check = _check(report, "no_unexpected_exact_identities_emitted")
+    assert check.passed is True
+
+
+def test_saves_goalkeeper_match_is_not_an_unexpected_exact_identity() -> None:
+    report = build_report([_obs(metric_granularity="goalkeeper_match")], bundles=[])
+    assert ("saves", "goalkeeper_match") not in report.unexpected_exact_identities
+    check = _check(report, "no_unexpected_exact_identities_emitted")
+    assert check.passed is True
+
+
+def test_missing_granularity_is_never_inferred_into_an_exact_identity() -> None:
+    # A None-granularity observation must be caught by
+    # no_missing_metric_granularity, never silently treated as evidence for
+    # (or against) any specific exact identity.
+    report = build_report([_obs(metric_granularity=None)], bundles=[])
+    assert report.unexpected_exact_identities == ()
+    missing_check = _check(report, "no_missing_metric_granularity")
+    assert missing_check.passed is False
+    unexpected_check = _check(report, "no_unexpected_exact_identities_emitted")
+    assert unexpected_check.passed is True
+    assert report.all_passed is False

@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 
 from football_intelligence.metric_catalog.catalog import METRIC_CATALOG_V2, catalog_by_granularity
+from football_intelligence.metric_catalog.types import CATALOG_V2_VERSION
 from football_intelligence.normalization.models import (
     MatchRecord,
     PlayerAppearanceRecord,
@@ -130,6 +131,21 @@ def test_catalog_preserves_the_48_dto_derived_metrics() -> None:
 def test_same_key_can_exist_at_different_granularities() -> None:
     granularities = {metric.granularity for metric in METRIC_CATALOG_V2 if metric.key == "saves"}
     assert {"player_match", "goalkeeper_match"} <= granularities
+
+
+def test_home_away_is_team_match_granularity_and_carries_the_current_release_version() -> None:
+    # Block 20D.2 final micro-audit: home_away's real catalog identity is
+    # (key="home_away", granularity="team_match") -- corrected from the
+    # earlier, wrong "match" classification (the primitive is inherently
+    # per-team-in-this-match, not a single match-wide value). The catalog
+    # release version must not stay attached to the old identity.
+    home_away = next(metric for metric in METRIC_CATALOG_V2 if metric.key == "home_away")
+    assert home_away.granularity == "team_match"
+    assert home_away.semantic_version == CATALOG_V2_VERSION
+    assert CATALOG_V2_VERSION != "metric-catalog-v2.0"
+    assert not any(
+        metric.key == "home_away" and metric.granularity == "match" for metric in METRIC_CATALOG_V2
+    )
 
 
 def test_derived_metrics_are_never_marked_raw_and_vice_versa() -> None:

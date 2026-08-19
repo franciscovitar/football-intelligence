@@ -153,15 +153,18 @@ _ADAPTER_SAFE_IDENTITIES: frozenset[tuple[str, str]] = frozenset(
 )
 
 # The (metric_name, entity_type) pairs this adapter is allowed to emit --
-# every safe catalog identity, projected through the entity_type a
-# NormalizedObservation can actually express (there is no distinct
-# "player_match" vs "goalkeeper_match" entity_type; both are entity_type
-# "player", matching how StatsBomb Open Data's adapter already emits one
-# "saves" observation that simultaneously satisfies both catalog
-# identities). This is the runtime emission guard: any metric_name/
-# entity_type pair not in this set can never be safe, catching accidental
-# emission of a non-safe identity even though NormalizedObservation cannot
-# fully express catalog granularity.
+# every safe catalog identity, projected through entity_type alone (there
+# is no distinct "player_match" vs "goalkeeper_match" entity_type; both
+# project to entity_type "player", matching how StatsBomb Open Data's
+# adapter already emits one "saves" observation that simultaneously
+# satisfies both catalog identities). `NormalizedObservation` itself DOES
+# fully express catalog granularity via its own `metric_granularity` field
+# (Block 20D.2) -- this coarser, entity_type-only check is a secondary,
+# defense-in-depth guard kept alongside the exact
+# `(metric_name, metric_granularity)` check in `_guard()` below, never a
+# substitute for it: any metric_name/entity_type pair not in this set can
+# never be safe, catching an internal wiring bug even before the exact
+# check runs.
 #
 # `home_away`'s catalog granularity was corrected from "match" to
 # "team_match" (Block 20D.2 review-fix pass): the primitive

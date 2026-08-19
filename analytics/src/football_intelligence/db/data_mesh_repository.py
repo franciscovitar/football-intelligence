@@ -3,6 +3,31 @@
 Writes only to the `ingestion` schema (raw/audit evidence + reconciliation
 decisions). This repository never writes to `football.*` canonical tables --
 the PoC proves reconciliation without feeding production data.
+
+## Temporary persistence boundary: `metric_granularity` (Block 20D.2)
+
+`ingestion.source_observations` is Block 13's original persistence
+contract. Its columns and natural key (`provider_id, entity_type,
+entity_source_id, metric_name, observed_at`) predate Metric Catalog V2's
+`metric_granularity` field and have no column or natural-key component for
+it. A certified V2 observation's `metric_granularity` genuinely
+distinguishes two different real facts that would otherwise collide on
+this table's own natural key -- e.g. `saves`/`player_match` and
+`saves`/`goalkeeper_match` for the same match/player share the same
+`entity_type` ("player") and the same `entity_source_id`, so persisting
+both here would silently upsert one over the other, destroying real
+evidence rather than merely mislabeling it.
+
+Rather than silently dropping `metric_granularity`, serializing it into
+`entity_identity_hints` as an undocumented workaround, or attempting a
+schema migration as part of this block, `persist_observations()` refuses
+the entire batch up front -- before any SQL statement executes -- the
+moment any observation in it carries a non-`None` `metric_granularity`.
+Legacy (pre-Metric-Catalog-V2) observations, which always have
+`metric_granularity=None`, are completely unaffected and persist exactly
+as before. Real V2-aware persistence (a genuine schema change: a new
+column and a widened natural key) is deferred to the Reconciliation V2 /
+Block 20D.4 work, not implemented here.
 """
 
 from __future__ import annotations
@@ -14,6 +39,16 @@ from typing import Any
 from psycopg import Connection
 
 from football_intelligence.data_mesh.models import NormalizedObservation, ReconciliationDecision
+
+
+class MetricGranularityNotPersistableError(RuntimeError):
+    """A batch contained an observation with an explicit `metric_granularity`,
+    but `ingestion.source_observations` (Block 13's legacy pre-V2
+    persistence contract) has no column or natural key to preserve it.
+    Persisting it anyway would risk silently collapsing distinct catalog
+    identities onto the same row. Real V2 DB persistence/schema support is
+    deferred to the Reconciliation V2 / Block 20D.4 work -- see this
+    module's docstring."""
 
 
 class DataMeshRepository:
@@ -36,6 +71,23 @@ class DataMeshRepository:
         return provider_id
 
     def persist_observations(self, observations: Sequence[NormalizedObservation]) -> int:
+        # Fail the whole batch before any INSERT -- see this module's
+        # docstring ("Temporary persistence boundary: metric_granularity").
+        non_persistable = [obs for obs in observations if obs.metric_granularity is not None]
+        if non_persistable:
+            first = non_persistable[0]
+            raise MetricGranularityNotPersistableError(
+                f"refusing to persist a batch of {len(observations)} observation(s): "
+                f"{len(non_persistable)} carry an explicit metric_granularity (e.g. "
+                f"{first.metric_granularity!r} for {first.source_code}:{first.entity_type}:"
+                f"{first.entity_source_id}:{first.metric_name}). "
+                "ingestion.source_observations is a legacy pre-V2 persistence contract with "
+                "no column or natural key for metric_granularity -- persisting would risk "
+                "silently collapsing distinct catalog identities (e.g. saves/player_match "
+                "and saves/goalkeeper_match) onto the same row. V2 DB persistence/schema "
+                "support is deferred to the Reconciliation V2 / Block 20D.4 work."
+            )
+
         written = 0
         for item in observations:
             provider_id = self.lookup_provider_id(item.source_code)
