@@ -64,6 +64,15 @@ def _match_summary(match_id: int, *, home_score: int = 2, away_score: int = 1) -
         "match_status": "available",
         "match_week": 1,
         "stadium": {"name": "Home Stadium"},
+        # Real shape: StatsBomb's own provider-native identifiers, verified
+        # against the real England 2015/16 cache (competition_id=2,
+        # season_id=27) -- Block 20D.2's completion pass.
+        "competition": {
+            "competition_id": 2,
+            "country_name": "England",
+            "competition_name": "Premier League",
+        },
+        "season": {"season_id": 27, "season_name": "2015/2016"},
     }
 
 
@@ -462,17 +471,91 @@ def test_source_reference_carries_pinned_revision() -> None:
         assert obs.source_reference.startswith("statsbomb/open-data@")
 
 
-def test_scope_hints_carry_competition_and_season() -> None:
+def test_scope_hints_carry_provider_native_competition_id_not_canonical_code() -> None:
+    # Block 20D.2 completion pass: `competition_external_id` must be the
+    # source's own numeric competition id (verified real value: "2" for
+    # England 2015/16), never our internal canonical "ENG_PL" code.
     observations = adapt_match_bundle(_bundle_1())
     obs = _find(observations, "match", str(_MATCH_ID_1), "status")
-    assert obs.entity_identity_hints["competition_external_id"] == COMPETITION_CODE
+    assert obs.entity_identity_hints["competition_external_id"] == "2"
+    assert obs.entity_identity_hints["competition_external_id"] != COMPETITION_CODE
     assert obs.entity_identity_hints["season_label"] == SEASON_LABEL
     assert SEASON_LABEL == "2015/16"
     assert COMPETITION_CODE == "ENG_PL"
 
 
+def test_match_observation_carries_home_away_team_identity_hints() -> None:
+    observations = adapt_match_bundle(_bundle_1())
+    obs = _find(observations, "match", str(_MATCH_ID_1), "status")
+    assert obs.entity_identity_hints["match_external_id"] == str(_MATCH_ID_1)
+    assert obs.entity_identity_hints["home_team_external_id"] == str(_HOME_TEAM_ID)
+    assert obs.entity_identity_hints["home_team_name"] == "Home FC"
+    assert obs.entity_identity_hints["away_team_external_id"] == str(_AWAY_TEAM_ID)
+    assert obs.entity_identity_hints["away_team_name"] == "Away FC"
+    assert obs.entity_identity_hints["kickoff_date"] == "2015-08-08"
+
+
+def test_team_match_observation_carries_this_teams_own_identity_hints() -> None:
+    observations = adapt_match_bundle(_bundle_1())
+    shots = _find(observations, "team", f"{_MATCH_ID_1}:{_HOME_TEAM_ID}", "shots_total")
+    assert shots.entity_identity_hints["team_external_id"] == str(_HOME_TEAM_ID)
+    assert shots.entity_identity_hints["team_name"] == "Home FC"
+    assert shots.entity_identity_hints["match_external_id"] == str(_MATCH_ID_1)
+    # A team-scoped observation must not carry the opponent's identity.
+    assert "away_team_external_id" not in shots.entity_identity_hints
+
+
+def test_player_match_observation_carries_player_and_team_identity_hints() -> None:
+    observations = adapt_match_bundle(_bundle_1())
+    goals = _find(observations, "player", f"{_MATCH_ID_1}:{_SCORER['id']}", "goals")
+    assert goals.entity_identity_hints["player_external_id"] == str(_SCORER["id"])
+    assert goals.entity_identity_hints["player_name"] == _SCORER["name"]
+    assert goals.entity_identity_hints["team_external_id"] == str(_HOME_TEAM_ID)
+    assert goals.entity_identity_hints["match_external_id"] == str(_MATCH_ID_1)
+
+
+def test_goalkeeper_match_observation_carries_player_identity_hints() -> None:
+    observations = adapt_match_bundle(_bundle_1())
+    saves = _find(observations, "player", f"{_MATCH_ID_1}:{_HOME_GK['id']}", "saves")
+    assert saves.entity_identity_hints["player_external_id"] == str(_HOME_GK["id"])
+    assert saves.entity_identity_hints["player_name"] == _HOME_GK["name"]
+
+
+def test_player_season_observation_carries_player_identity_but_no_match_or_team() -> None:
+    observations = statsbomb_open.parse_lineup_participation_observations(
+        [_bundle_1(), _bundle_2()]
+    )
+    matches_obs = _find(observations, "player", str(_SCORER["id"]), "matches")
+    assert matches_obs.entity_identity_hints["player_external_id"] == str(_SCORER["id"])
+    assert matches_obs.entity_identity_hints["player_name"] == _SCORER["name"]
+    assert "match_external_id" not in matches_obs.entity_identity_hints
+    assert "team_external_id" not in matches_obs.entity_identity_hints
+
+
+def test_observation_values_are_unchanged_by_the_identity_hint_enrichment() -> None:
+    # Enriching entity_identity_hints must never alter what metric a source
+    # observation actually reports.
+    observations = adapt_match_bundle(_bundle_1())
+    home_score = _find(observations, "match", str(_MATCH_ID_1), "home_score")
+    away_score = _find(observations, "match", str(_MATCH_ID_1), "away_score")
+    goals = _find(observations, "player", f"{_MATCH_ID_1}:{_SCORER['id']}", "goals")
+    assert home_score.value == 2
+    assert away_score.value == 1
+    assert goals.value == 1
+
+
 def test_semantic_version_is_bumped_from_the_pre_block_20_adapter() -> None:
     assert statsbomb_open.SEMANTIC_VERSION != "statsbomb-open-v0.1"
+
+
+def test_semantic_version_is_bumped_from_the_pre_review_fix_pass_adapter() -> None:
+    # Block 20D.2's review-fix pass changed observable emission semantics
+    # (explicit metric_granularity on every observation, genuine
+    # goalkeeper_match "saves" emission, home_away granularity corrected,
+    # materially enriched identity hints) -- the Block 20C.2b version
+    # ("statsbomb-open-v0.2") must not be shared with these new semantics.
+    assert statsbomb_open.SEMANTIC_VERSION != "statsbomb-open-v0.2"
+    assert statsbomb_open.SEMANTIC_VERSION == "statsbomb-open-v0.3"
 
 
 # -- C/D/E/F/G. Lineup-authoritative participant universe --------------------
@@ -735,27 +818,27 @@ def test_only_adapter_safe_identities_are_emitted() -> None:
 
 def test_pending_methodology_metric_is_rejected() -> None:
     with pytest.raises(StatsBombObservationConflictError):
-        statsbomb_open._guard("player", "minutes")
+        statsbomb_open._guard("player", "minutes", "player_appearance")
 
 
 def test_requires_model_metric_is_rejected() -> None:
     with pytest.raises(StatsBombObservationConflictError):
-        statsbomb_open._guard("player", "xa")
+        statsbomb_open._guard("player", "xa", "player_match")
 
 
 def test_unsupported_metric_is_rejected() -> None:
     with pytest.raises(StatsBombObservationConflictError):
-        statsbomb_open._guard("player_match", "big_chances")
+        statsbomb_open._guard("player", "big_chances", "player_match")
 
 
 def test_ambiguous_metric_is_rejected() -> None:
     with pytest.raises(StatsBombObservationConflictError):
-        statsbomb_open._guard("player", "tackles_won")
+        statsbomb_open._guard("player", "tackles_won", "player_match")
 
 
 def test_provider_out_of_scope_metric_is_rejected() -> None:
     with pytest.raises(StatsBombObservationConflictError):
-        statsbomb_open._guard("team", "team_strength_elo")
+        statsbomb_open._guard("team", "team_strength_elo", "team")
 
 
 @pytest.mark.parametrize(
@@ -765,7 +848,7 @@ def test_provider_out_of_scope_metric_is_rejected() -> None:
 def test_sampled_methodology_pending_identities_are_all_rejected(mapping) -> None:
     entity_type = statsbomb_open._GRANULARITY_TO_ENTITY_TYPE[mapping.catalog_granularity]
     with pytest.raises(StatsBombObservationConflictError):
-        statsbomb_open._guard(entity_type, mapping.catalog_key)
+        statsbomb_open._guard(entity_type, mapping.catalog_key, mapping.catalog_granularity)
 
 
 def test_no_methodology_pending_identity_overlaps_emitted_identities() -> None:
@@ -826,6 +909,7 @@ def test_conflicting_duplicate_observation_raises() -> None:
         observed_at=now,
         source_reference="x",
         ingestion_run_id=None,
+        metric_granularity="player_match",
     )
     with pytest.raises(StatsBombObservationConflictError):
         statsbomb_open._emit(
@@ -839,6 +923,7 @@ def test_conflicting_duplicate_observation_raises() -> None:
             observed_at=now,
             source_reference="x",
             ingestion_run_id=None,
+            metric_granularity="player_match",
         )
 
 
@@ -858,6 +943,7 @@ def test_identical_duplicate_observation_is_silently_collapsed() -> None:
             observed_at=now,
             source_reference="x",
             ingestion_run_id=None,
+            metric_granularity="player_match",
         )
     assert len(observations) == 1
 
@@ -940,3 +1026,137 @@ def test_adapter_module_is_registered_under_data_mesh_adapters() -> None:
 def test_parse_match_returns_none_for_malformed_summary() -> None:
     assert parse_match({}) is None
     assert parse_match({"match_id": 1}) is None
+
+
+# -- Block 20D.2: metric_granularity is always explicit on the certified path -----
+
+
+def test_every_certified_observation_carries_explicit_metric_granularity() -> None:
+    observations = parse_premier_league_season([_bundle_1(), _bundle_2()])
+    assert observations, "fixtures produced no observations"
+    safe_identities = {(m.catalog_key, m.catalog_granularity) for m in adapter_safe_mappings()}
+    for obs in observations:
+        assert obs.metric_granularity is not None
+        assert (obs.metric_name, obs.metric_granularity) in safe_identities
+
+
+def test_saves_player_match_and_goalkeeper_match_are_both_emitted_and_distinguishable() -> None:
+    observations = parse_premier_league_season([_bundle_1(), _bundle_2()])
+    saves_observations = [obs for obs in observations if obs.metric_name == "saves"]
+    granularities = {obs.metric_granularity for obs in saves_observations}
+    # Both catalog identities must genuinely be emitted for a real fixture
+    # with at least one confirmed goalkeeper -- a fixture that only ever
+    # produced player_match would silently mean goalkeeper_match "saves"
+    # was declared safe but never actually implemented. This is the
+    # canonical real example of why `metric_granularity` exists at all.
+    assert granularities == {"player_match", "goalkeeper_match"}, (
+        f"expected both player_match and goalkeeper_match saves to be emitted, got {granularities}"
+    )
+    player_match_ids = {
+        obs.entity_source_id
+        for obs in saves_observations
+        if obs.metric_granularity == "player_match"
+    }
+    goalkeeper_match_ids = {
+        obs.entity_source_id
+        for obs in saves_observations
+        if obs.metric_granularity == "goalkeeper_match"
+    }
+    # Every goalkeeper's saves fact must exist at BOTH granularities for the
+    # exact same (match, player) -- proving the two are genuinely
+    # coexisting facts about the same real quantity.
+    assert goalkeeper_match_ids
+    assert goalkeeper_match_ids <= player_match_ids
+
+
+def test_emit_dedup_identity_includes_metric_granularity() -> None:
+    # Block 20D.2 completion pass regression: `_emit`'s internal dedup/
+    # conflict identity must include `metric_granularity`, not just
+    # `(source_code, entity_type, entity_source_id, metric_name)` --
+    # otherwise `saves`/player_match and `saves`/goalkeeper_match for the
+    # SAME (match, player) would collide as if they were the same fact.
+    observations: list = []
+    seen: dict = {}
+    shared_kwargs: dict = dict(
+        entity_type="player",
+        entity_source_id="1:11",
+        entity_identity_hints={},
+        metric_name="saves",
+        value=3,
+        observed_at=datetime.now(),
+        source_reference="test",
+        ingestion_run_id=None,
+    )
+
+    # Two different granularities for the identical (source, entity_type,
+    # entity_source_id, metric_name) must both be emitted -- never
+    # deduplicated away and never treated as a conflict.
+    statsbomb_open._emit(observations, seen, **shared_kwargs, metric_granularity="player_match")
+    statsbomb_open._emit(observations, seen, **shared_kwargs, metric_granularity="goalkeeper_match")
+    assert len(observations) == 2
+    assert {obs.metric_granularity for obs in observations} == {"player_match", "goalkeeper_match"}
+
+    # Re-emitting the identical (source, entity_type, entity_source_id,
+    # metric_name, metric_granularity, value) must still be idempotently
+    # deduplicated at the SAME exact granularity.
+    statsbomb_open._emit(observations, seen, **shared_kwargs, metric_granularity="player_match")
+    assert len(observations) == 2
+
+    # A different value at the exact same identity (including granularity)
+    # must still raise.
+    with pytest.raises(StatsBombObservationConflictError):
+        statsbomb_open._emit(
+            observations,
+            seen,
+            **{**shared_kwargs, "value": 4},
+            metric_granularity="player_match",
+        )
+    assert len(observations) == 2
+
+
+def test_emit_rejects_a_granularity_metric_name_pair_outside_the_safe_mapping() -> None:
+    observations: list = []
+    seen: dict = {}
+    with pytest.raises(StatsBombObservationConflictError):
+        statsbomb_open._emit(
+            observations,
+            seen,
+            entity_type="player",
+            entity_source_id="1:1",
+            entity_identity_hints={},
+            metric_name="saves",
+            value=1,
+            observed_at=datetime.now(),
+            source_reference="x",
+            ingestion_run_id=None,
+            # "saves" is a safe identity at player_match/goalkeeper_match,
+            # never at player_season -- the exact (metric_name,
+            # metric_granularity) check must reject this.
+            metric_granularity="player_season",
+        )
+    assert observations == []
+
+
+def test_legacy_compatibility_functions_still_default_metric_granularity_to_none() -> None:
+    """The pre-Metric-Catalog-V2 Coverage Lab compatibility path
+    (`find_competition_season`/`parse_match_list`/`parse_match_events`)
+    predates granularity and is deliberately not required to supply it."""
+
+    observations = statsbomb_open.parse_match_list(
+        [
+            {
+                "match_id": 555,
+                "match_date": "2023-01-01",
+                "home_team": {"home_team_id": 1, "home_team_name": "Home"},
+                "away_team": {"away_team_id": 2, "away_team_name": "Away"},
+                "home_score": 1,
+                "away_score": 0,
+                "competition": {"competition_name": "Test League"},
+            }
+        ],
+        competition_code="TEST",
+        season_label="2022/2023",
+        ingestion_run_id=None,
+    )
+    assert observations
+    assert all(obs.metric_granularity is None for obs in observations)

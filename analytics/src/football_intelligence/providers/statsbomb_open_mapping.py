@@ -165,11 +165,13 @@ _MATCH_MAPPINGS: tuple[StatsBombMetricMapping, ...] = (
     ),
     _mapping(
         "home_away",
-        "match",
+        "team_match",
         "DIRECT",
         "home_team/away_team objects on the match summary",
         "Verified present for all 380 matches; the existing adapter already derives team "
-        "identity from these fields.",
+        "identity from these fields. Catalog granularity corrected to team_match "
+        "(Block 20D.2 review-fix pass) -- the primitive is per-team-in-this-match, "
+        "not a single match-wide value.",
     ),
     _mapping(
         "status",

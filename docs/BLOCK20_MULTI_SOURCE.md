@@ -388,3 +388,171 @@ StatsBomb evidence remains `internal_only` until the commercial-use
 compliance question is explicitly resolved by a product/legal decision
 this repository does not make. See `docs/STATSBOMB_METRIC_MAPPING.md` for
 the full evidence trail.
+
+## Block 20D — Entity Resolution & Reconciliation V2
+
+### Block 20D.1 — real multi-source entity resolution diagnosis (diagnosis only)
+
+Audited the V0 entity resolver (`data_mesh/entity_resolution.py`,
+`data_mesh/pipeline.py`) against the two now-certified historical adapters
+and found it could not resolve either: team resolution depended on an
+`entity_type == "team", metric_name == "name"` observation neither
+certified adapter emits (identity lives only in `entity_identity_hints`
+now); `COMPETITION_MAPPINGS` had no `wyscout-open`/`statsbomb-open`
+entries at all; and nothing in `NormalizedObservation` distinguished a
+metric's Metric Catalog granularity, so `saves`/player_match and
+`saves`/goalkeeper_match -- both projecting to `entity_type == "player"`
+-- were information-theoretically indistinguishable once resolved.
+
+Empirically investigated the real Wyscout Open x StatsBomb Open Spain/La
+Liga 2017/18 overlap directly against both providers' real cached data.
+**Finding, stated precisely because it is easy to get wrong**: Wyscout's
+Spain 2017/18 file is a genuine full season (380/380 matches). StatsBomb's
+"La Liga 2017/18" file is **not** a partial league season -- it is all 36
+of one club's matches: **Barcelona 2017/18, 36 of Barcelona's 38 league
+matches** (2 fixtures StatsBomb does not carry: Málaga v Barcelona
+2018-03-10, Levante v Barcelona 2018-05-13). All 36 StatsBomb matches have
+an exact-date Wyscout counterpart; 20 real opponent/team identities are
+represented; zero date mismatches. This description -- "Wyscout La Liga
+2017/18 full season x StatsBomb Barcelona 2017/18, 36 matches" -- must be
+used verbatim; "StatsBomb's partial La Liga 2017/18" is not an accurate
+characterization of the real data and must never be written that way.
+
+Also found, empirically, a real Wyscout source-data defect: some fields in
+the official Figshare `teams.json`/`players.json` files (`name`,
+`officialName`, `firstName`, `lastName`) are JSON-escaped twice for
+non-ASCII characters -- after one normal `json.loads()`, the resulting
+string still contains the literal `\uXXXX` text sequence instead of the
+intended character (verified at the raw-byte level, e.g. `"Atlético
+Madrid"` should read "Atlético Madrid").
+
+No repository files were modified in this diagnosis.
+
+### Block 20D.2 — Entity Resolution V2 foundation
+
+Implemented the foundation the 20D.1 diagnosis identified as missing,
+purely additively -- every existing V0 function and the real
+Football-Data.co.uk x OpenFootball ENG_PL 2025/26 baseline (380 matches,
+20 teams, 1,140/1,140 agreed match-fact decisions, 0 conflicts, 0
+unresolved, idempotent) are unchanged and re-verified passing. Full design
+and evidence trail: [`ENTITY_RESOLUTION_V2.md`](ENTITY_RESOLUTION_V2.md).
+
+Summary of what changed:
+
+- `NormalizedObservation` gained an explicit `metric_granularity` field.
+  Both certified adapters now set it on every emitted observation
+  (verified: `saves` is emitted at both `player_match` and
+  `goalkeeper_match`, and the two are now distinguishable). Legacy,
+  pre-Metric-Catalog-V2 code paths (each adapter's Coverage-Lab-era generic
+  probe functions) keep defaulting it to `None` -- not upgraded, not
+  removed, per the same "preserve legacy behavior" discipline as every
+  prior Block 20 adapter change.
+- A narrow, Wyscout-specific double-escaped-Unicode text repair
+  (`providers/wyscout_open_text.py`) fixes the real defect found in
+  20D.1 -- deliberately not folded into the generic
+  `normalize_team_name()`, since it repairs one provider's raw field
+  encoding, not a name-comparison heuristic.
+- Two real Spanish team-name convergence gaps found via an empirical
+  collision check across the 20 real ESP_LL Wyscout/StatsBomb team names
+  (beyond the "RC Deportivo" case anticipated going in): "Celta Vigo" vs
+  "Celta de Vigo", and "Levante UD" vs "Levante". Fixed via two new
+  `_TEAM_STOPWORDS` entries (`rc`, `ud`) and a narrow, documented
+  `_SPANISH_SHORT_NAME_ALIASES` table -- all 20 ESP_LL team names from both
+  providers now converge to one identity, verified empirically, not
+  assumed.
+- Real `wyscout-open`/`statsbomb-open` `CompetitionMapping` entries for
+  ENG_PL, plus prepared-but-not-yet-emitted ESP_LL entries -- both scopes
+  using each provider's real verified provider-native numeric competition
+  identifiers (Wyscout `competitionId=364`/795, StatsBomb
+  `competition_id=2`/11), never a guessed or internal canonical value.
+- `cluster_match_dates()`'s adjacent-pair-chaining bug fixed: a cluster is
+  now bounded to its own representative date, so it can no longer
+  transitively span more than `tolerance_days` across three or more close
+  dates.
+- A new, purely additive module, `data_mesh/entity_resolution_v2.py`:
+  `logical_fact_key()` (a granularity-safe logical fact identity builder --
+  different matches, different seasons, and different granularities can
+  never collapse into one key), a V2 source-local team/match index with
+  conflict detection built directly from real `entity_identity_hints`
+  (`build_team_index_v2_from_observations`/
+  `build_match_index_v2_from_observations`/`resolve_team_v2`/
+  `resolve_match_v2`, raising `IdentityConflictError` rather than silently
+  picking one of two contradictory mappings), and the player-identity
+  crosswalk **contract** (`PlayerCrosswalkEntry`/`PlayerCrosswalk`/
+  `resolve_player_v2` -- no entries populated here, no name-only
+  resolution, `UNRESOLVED` without an explicit validated entry).
+
+**Completion pass** (re-opened after the initial 20D.2 implementation was
+found PARTIAL): both certified adapters now emit the full identity-hint
+contract -- `team_external_id`/`team_name`, `home_team_external_id`/
+`home_team_name`, `away_team_external_id`/`away_team_name`,
+`player_external_id`/`player_name` -- narrowly threading an optional
+`teams_payload` parameter into the Wyscout adapter (StatsBomb's own match
+summary and lineup file already carried team/player names). The V2 index
+reads these hints directly and never depends on `entity_source_id`'s
+composite `"{match_id}:{team_id}"` shape. `COMPETITION_MAPPINGS`'
+`wyscout-open`/`statsbomb-open` ENG_PL entries were corrected from the
+canonical `"ENG_PL"` code (not provider-native) to each adapter's real
+numeric id, matching the same discipline already applied to the ESP_LL
+entries. `wyscout-open` was also added to
+`test_real_data_source_policy.py`'s approved-provider allowlist, reviewed
+and documented as an acquisition/registration approval (matching
+`statsbomb-open`'s existing precedent), never a canonical/production
+promotion decision -- see `docs/ENTITY_RESOLUTION_V2.md` for the full
+review. Full detail on every completion-pass change:
+[`ENTITY_RESOLUTION_V2.md`](ENTITY_RESOLUTION_V2.md).
+
+**Not done in this block** (by design -- see "Do NOT" list in the block's
+own task record): no Spain/ESP_LL scope generalization of either adapter,
+no execution of the real Wyscout x StatsBomb rich overlap reconciliation
+(20D.3), no change to reconciliation grouping or semantic comparison
+policy (`reconcile_metric()` untouched; `resolve_and_reconcile()`'s
+grouping still keys on `(logical_key, entity_type, metric_name)` without
+`metric_granularity` -- each `NormalizedObservation` already carries its
+own `metric_granularity` through unchanged into that grouping, so nothing
+is lost, but two observations at different granularities that happen to
+share a `(logical_key, entity_type, metric_name)` are not yet grouped
+separately; that is Block 20D.4's job), no DB ingestion, no fuzzy or LLM
+player matching, no automatic player crosswalk population, and no change
+to `STATSBOMB_INTERNAL_ONLY`.
+
+**Review-fix pass and micro-audit** (re-opened twice more after the
+completion pass): four independent-review findings were closed --
+`_emit()`'s internal dedup/conflict identity now includes
+`metric_granularity` (previously only `(source_code, entity_type,
+entity_source_id, metric_name)`, unable to distinguish `saves`/player_match
+from `saves`/goalkeeper_match); `PlayerCrosswalkEntry` now enforces its own
+documented minimum evidence bar at construction time (non-blank
+`team_context_key`, at least one non-blank `shared_match_key`) instead of
+merely documenting it; `home_away`'s Metric Catalog granularity was
+corrected from `"match"` to `"team_match"` (a real classification error
+that forced a hand-maintained entity-type override in both adapters and
+both audit jobs, now removed, with the full 194-identity accounting
+re-verified exact for both providers); and `logical_fact_key()` /
+`build_match_index_v2_from_observations()` now treat a blank string
+exactly like a missing one everywhere required context is checked.
+
+The micro-audit that followed found the two real-cache audit jobs
+themselves (`jobs/audit_wyscout_adapter.py`,
+`jobs/audit_statsbomb_adapter.py`) still projected identity coverage
+through `(metric_name, entity_type)` -- the exact same blind spot `_emit()`
+had, capable of certifying full 77/77 or 110/110 coverage even if
+`goalkeeper_match` `saves` was never actually emitted. Fixed: both audits
+now key coverage and duplicate/conflict detection directly on the real
+`(metric_name, metric_granularity)` field, with a new
+`no_missing_metric_granularity` check. Re-running both audits against the
+same full real caches Block 20B.2b/20C.2b originally certified against
+(found in sibling worktrees, no new downloads) gave real, current, exact
+totals under the corrected contract: **Wyscout 412,609 observations**
+(net +765 vs. the historical 411,844 -- exactly the newly-emitted
+`goalkeeper_match` `saves`) and **StatsBomb 644,396 observations** (net
++768 vs. the historical 643,628), both still 77/77 and 110/110
+adapter-safe identities, this time genuinely proven via
+`metric_granularity`-aware logic rather than the old projection. StatsBomb's
+independently-recomputed `saves` count stayed exactly 2,277 (not doubled),
+confirming the audit's own save-total arithmetic was also corrected to
+count each real save once. Also bumped both adapters' `SEMANTIC_VERSION`
+(`wyscout-open-v0.1` -> `v0.2`, `statsbomb-open-v0.2` -> `v0.3`): this
+pass changed observable emission semantics, so old and new observations
+must not share a provenance version. Full detail:
+[`ENTITY_RESOLUTION_V2.md`](ENTITY_RESOLUTION_V2.md).

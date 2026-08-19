@@ -29,6 +29,13 @@ _APPROVED_PROVIDER_CODES = frozenset(
         "football-data-uk",
         "statsbomb-open",
         "openfootball",
+        # Wyscout Open Data (Block 20B): certified Data Mesh adapter since
+        # Block 20B.2b (411,844 real NormalizedObservation rows, same
+        # evidentiary bar as statsbomb-open, CC BY 4.0 -- less restrictive
+        # than StatsBomb's internal_only terms). Never added to this
+        # allowlist at the time; added in Block 20D.2 when
+        # entity_resolution.COMPETITION_MAPPINGS first referenced it.
+        "wyscout-open",
     }
 )
 

@@ -27,7 +27,17 @@ _NON_ALNUM_RE = re.compile(r"[^a-z0-9\s]")
 # Bournemouth" vs "Bournemouth"). Stripping them is a deterministic
 # transformation, not a similarity heuristic: it is applied identically
 # regardless of which two names are being compared.
-_TEAM_STOPWORDS = frozenset({"fc", "afc", "sc", "sv", "tsg", "vfb", "vfl", "bsc", "spvgg", "ev"})
+#
+# "rc"/"ud" added in Block 20D.2, verified against the real Wyscout x
+# StatsBomb ESP_LL 2017/18 team-name overlap (`docs/ENTITY_RESOLUTION_V2.md`):
+# StatsBomb's "RC Deportivo La Coruña" vs Wyscout's "Deportivo La Coruña",
+# and both providers' own use of "UD"/"CD"/"CF"-style Spanish club-entity
+# suffixes, are the same generic-prefix/suffix pattern "fc"/"afc" already
+# covers for English/German clubs -- confirmed by running the collision
+# check below across all 4 real name sets before adding them, not assumed.
+_TEAM_STOPWORDS = frozenset(
+    {"fc", "afc", "sc", "sv", "tsg", "vfb", "vfl", "bsc", "spvgg", "ev", "rc", "ud"}
+)
 
 # Known cross-language spelling variants for the same city/club. This is an
 # explicit, reviewable alias table -- not a fuzzy/edit-distance guess.
@@ -59,6 +69,18 @@ _ENGLISH_SHORT_NAME_ALIASES: dict[str, str] = {
     "wolves": "wolverhampton wanderers",
 }
 
+# Same mechanism and matching convention as `_ENGLISH_SHORT_NAME_ALIASES`
+# above, added Block 20D.2 and verified against the real Wyscout x
+# StatsBomb ESP_LL 2017/18 team-name overlap: StatsBomb's "Celta Vigo" and
+# Wyscout's "Celta de Vigo" do not converge via stopword-stripping alone
+# ("de" is a genuine Spanish preposition, not a generic corporate-entity
+# token like "fc"/"rc"/"ud", so it is deliberately NOT added to
+# `_TEAM_STOPWORDS` -- that would be a much broader, less reviewable
+# change than this one club-specific alias).
+_SPANISH_SHORT_NAME_ALIASES: dict[str, str] = {
+    "celta vigo": "celta de vigo",
+}
+
 MATCH_DATE_TOLERANCE_DAYS = 1
 
 
@@ -66,7 +88,9 @@ def normalize_team_name(raw: str) -> str:
     decomposed = unicodedata.normalize("NFKD", raw)
     without_marks = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
     lowered = without_marks.casefold().strip()
-    lowered = _ENGLISH_SHORT_NAME_ALIASES.get(lowered, lowered)
+    lowered = _ENGLISH_SHORT_NAME_ALIASES.get(
+        lowered, _SPANISH_SHORT_NAME_ALIASES.get(lowered, lowered)
+    )
     cleaned = _NON_ALNUM_RE.sub(" ", lowered)
     tokens = [token for token in _SPACE_RE.split(cleaned) if token]
     significant = [
@@ -94,27 +118,32 @@ def cluster_match_dates(
     """Deterministically cluster kickoff dates that fall within tolerance.
 
     Returns a mapping from every input date to a canonical representative
-    date (the earliest date in its cluster). Two dates land in the same
-    cluster exactly when a chain of `dates_within_tolerance` steps connects
-    them; because the input is sorted before clustering, the result depends
-    only on the *set* of dates observed, never on which source or provider
-    reported which date first. Dates whose nearest neighbor is outside
-    tolerance start (and stay in) their own cluster.
+    date (the earliest date in its cluster). Because the input is sorted
+    before clustering, the result depends only on the *set* of dates
+    observed, never on which source or provider reported which date first.
+
+    **Bounded-span invariant (Block 20D.2 fix)**: every date in a cluster is
+    compared against the cluster's own *representative* date (its earliest
+    member), never against the immediately preceding date. The earlier
+    adjacent-pair-chaining implementation could transitively merge day 1 and
+    day 3 into one cluster whenever day 2 was also present (1->2 within
+    tolerance, 2->3 within tolerance), even though day 1 and day 3 are
+    genuinely 2 days apart -- a real risk for congested festive-period or
+    cup-replay fixture lists, found during Block 20D.1's diagnosis. With
+    this fix, a cluster's total span can never exceed `tolerance_days`: a
+    date starts a new cluster the moment it falls outside tolerance of that
+    cluster's representative, regardless of any closer intermediate date.
     """
 
     unique_sorted = sorted(set(dates))
     canonical: dict[date, date] = {}
     cluster_start: date | None = None
-    previous: date | None = None
     for current in unique_sorted:
-        if (
-            cluster_start is None
-            or previous is None
-            or not dates_within_tolerance(previous, current, tolerance_days=tolerance_days)
+        if cluster_start is None or not dates_within_tolerance(
+            cluster_start, current, tolerance_days=tolerance_days
         ):
             cluster_start = current
         canonical[current] = cluster_start
-        previous = current
     return canonical
 
 
@@ -189,6 +218,38 @@ COMPETITION_MAPPINGS: tuple[CompetitionMapping, ...] = (
     # Only ENG_PL was verified/used in Block 18; other competitions are not
     # mapped here to avoid claiming coverage that was never actually probed.
     CompetitionMapping("openfootball", "en.1.json", "ENG_PL", "English Premier League"),
+    # Wyscout Open (Block 20B, mapping added 20D.2, corrected 20D.2
+    # completion pass): `external_id` is the provider's own numeric
+    # `competitionId`, read directly from the real cached
+    # `matches_England.json` (every match record's own `competitionId`
+    # field: 364) and now genuinely emitted in every certified observation's
+    # `competition_external_id` hint (`data_mesh/adapters/wyscout_open.py`,
+    # `_MatchInfo.competition_external_id`). An earlier pass had put the
+    # canonical "ENG_PL" code itself here -- not a provider-native
+    # identifier, and corrected once the adapter began emitting the real
+    # source-native id.
+    CompetitionMapping("wyscout-open", "364", "ENG_PL", "English Premier League"),
+    # StatsBomb Open (Block 20C, mapping added 20D.2, corrected 20D.2
+    # completion pass): `external_id` is the provider's own numeric
+    # `competition_id`, read directly from the real cached
+    # `matches/2/27.json` (every match record's own `competition.
+    # competition_id` field: 2) and now genuinely emitted in every certified
+    # observation's `competition_external_id` hint
+    # (`data_mesh/adapters/statsbomb_open.py`,
+    # `_MatchInfo.competition_external_id`). Same correction as Wyscout
+    # above.
+    CompetitionMapping("statsbomb-open", "2", "ENG_PL", "English Premier League"),
+    # Prepared for Block 20D.3 (NOT yet emitted by either adapter -- ESP_LL
+    # scope generalization is explicitly out of scope for 20D.2). Real,
+    # verified provider-native numeric competition identifiers a genuinely
+    # generalized adapter would expose, fetched live from each provider's
+    # own official source during Block 20D.1's real Wyscout x StatsBomb
+    # Spain overlap investigation -- never assumed equal between the two
+    # providers (Wyscout 795/season 181144 and StatsBomb 11/season 1 are
+    # unrelated numbering schemes that happen to describe the same real
+    # competition/season).
+    CompetitionMapping("wyscout-open", "795", "ESP_LL", "Spain (La Liga)"),
+    CompetitionMapping("statsbomb-open", "11", "ESP_LL", "Spain - La Liga"),
 )
 
 
