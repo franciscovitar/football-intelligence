@@ -36,6 +36,7 @@ football-intelligence-audit-wyscout-adapter = "football_intelligence.jobs.audit_
 football-intelligence-fetch-statsbomb-open = "football_intelligence.jobs.fetch_statsbomb_open:main"
 football-intelligence-audit-statsbomb-mapping = "football_intelligence.jobs.audit_statsbomb_mapping:main"
 football-intelligence-audit-statsbomb-adapter = "football_intelligence.jobs.audit_statsbomb_adapter:main"
+football-intelligence-audit-wyscout-statsbomb-overlap = "football_intelligence.jobs.audit_wyscout_statsbomb_overlap:main"
 
 [dependency-groups]
 dev = [

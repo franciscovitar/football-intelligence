@@ -73,6 +73,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from football_intelligence.data_mesh.adapters.scope import AdapterScope, ScopeMismatchError
 from football_intelligence.data_mesh.models import EntityType, NormalizedObservation, SourceType
 from football_intelligence.metric_catalog.types import MetricGranularity
 from football_intelligence.providers.statsbomb_open import DEFAULT_PINNED_REVISION
@@ -94,6 +95,32 @@ SOURCE_TYPE: SourceType = "objective_structured"
 SEMANTIC_VERSION = "statsbomb-open-v0.3"
 COMPETITION_CODE = "ENG_PL"
 SEASON_LABEL = "2015/16"
+
+# Block 20D.3: the certified adapter's original (and still default) scope,
+# unchanged in value from the module constants above -- every existing
+# caller that does not pass `scope=` gets byte-for-byte the same ENG_PL
+# 2015/16 behavior as before generalization. `provider_competition_id`/
+# `provider_season_id` are real, verified against every match record's own
+# `competition.competition_id`/`season.season_id` fields (Block 20D.2).
+DEFAULT_SCOPE = AdapterScope(
+    canonical_competition_code=COMPETITION_CODE,
+    season_label=SEASON_LABEL,
+    provider_competition_id=2,
+    provider_season_id=27,
+)
+
+# Prepared for Block 20D.3's rich overlap enablement: real, verified
+# provider-native ids for Spain/La Liga 2017/18 (`competition_id=11`,
+# `season_id=1`), discovered live during Block 20D.1's investigation. This
+# is the real "Barcelona 2017/18" open-data scope (36 of Barcelona's 38
+# league matches), never the whole real La Liga season -- see
+# `docs/ENTITY_RESOLUTION_V2.md`.
+ESP_LL_SCOPE = AdapterScope(
+    canonical_competition_code="ESP_LL",
+    season_label="2017/18",
+    provider_competition_id=11,
+    provider_season_id=1,
+)
 
 _STARTING_XI_REASON = "Starting XI"
 _GOALKEEPER_POSITION_NAME = "Goalkeeper"
@@ -646,21 +673,47 @@ def _emit(
     )
 
 
-def _scope_hints(info: _MatchInfo | None = None) -> dict[str, str]:
-    """Provider-native competition identity + our own normalized season
-    label. `competition_external_id` is the source's own numeric
-    `competition_id` (verified: 2 for England 2015/16), never the canonical
-    "ENG_PL" code -- only populated when this specific match genuinely
-    carries it. `info=None` (season-aggregate call sites with no single
-    match in scope) omits `competition_external_id` rather than guessing."""
+def _validate_scope(info: _MatchInfo, scope: AdapterScope) -> None:
+    """Refuses a match whose own real `competition_id`/`season_id` does not
+    match the declared `AdapterScope` for this run -- e.g. a batch mixing
+    ENG_PL and ESP_LL matches, or an ESP_LL run fed an England match.
+    Never silently accepted, silently dropped, or attributed to the wrong
+    scope (Block 20D.3)."""
 
-    hints: dict[str, str] = {"season_label": SEASON_LABEL}
+    expected_competition_id = str(scope.provider_competition_id)
+    if info.competition_external_id != expected_competition_id:
+        raise ScopeMismatchError(
+            f"match {info.match_id} has competition_id={info.competition_external_id!r}, "
+            f"expected {expected_competition_id!r} for scope "
+            f"{scope.canonical_competition_code}/{scope.season_label} -- refusing to emit "
+            "observations for a match outside the declared scope"
+        )
+    if scope.provider_season_id is not None:
+        expected_season_id = str(scope.provider_season_id)
+        if info.season_external_id != expected_season_id:
+            raise ScopeMismatchError(
+                f"match {info.match_id} has season_id={info.season_external_id!r}, expected "
+                f"{expected_season_id!r} for scope {scope.canonical_competition_code}/"
+                f"{scope.season_label} -- refusing to emit observations for a match outside "
+                "the declared scope"
+            )
+
+
+def _scope_hints(info: _MatchInfo | None, scope: AdapterScope) -> dict[str, str]:
+    """Provider-native competition identity + this run's declared season
+    label. `competition_external_id` is the source's own numeric
+    `competition_id`, never a canonical code -- only populated when this
+    specific match genuinely carries it. `info=None` (season-aggregate call
+    sites with no single match in scope) omits `competition_external_id`
+    rather than guessing."""
+
+    hints: dict[str, str] = {"season_label": scope.season_label}
     if info is not None and info.competition_external_id is not None:
         hints["competition_external_id"] = info.competition_external_id
     return hints
 
 
-def _match_hints(info: _MatchInfo) -> dict[str, str]:
+def _match_hints(info: _MatchInfo, scope: AdapterScope) -> dict[str, str]:
     """Identity hints for a match-granularity observation: provider-native
     match id, home/away team ids and names when the source supplies them,
     and the raw per-observation kickoff date.
@@ -679,7 +732,7 @@ def _match_hints(info: _MatchInfo) -> dict[str, str]:
     explicitly deferred to Block 20D.4's pipeline/Reconciliation V2
     wiring, not implemented a second time here."""
 
-    hints = _scope_hints(info)
+    hints = _scope_hints(info, scope)
     hints["match_external_id"] = str(info.match_id)
     if info.home_team_id is not None:
         hints["home_team_external_id"] = str(info.home_team_id)
@@ -694,13 +747,13 @@ def _match_hints(info: _MatchInfo) -> dict[str, str]:
     return hints
 
 
-def _team_scoped_hints(info: _MatchInfo, team_id: int) -> dict[str, str]:
+def _team_scoped_hints(info: _MatchInfo, team_id: int, scope: AdapterScope) -> dict[str, str]:
     """Identity hints for a team_match-granularity (or per-team `home_away`)
     observation: the match it belongs to, plus this specific team's own
     provider-native id and name (never the whole match's home/away pair --
     that belongs on the match-granularity observation itself)."""
 
-    hints = _scope_hints(info)
+    hints = _scope_hints(info, scope)
     hints["match_external_id"] = str(info.match_id)
     hints["team_external_id"] = str(team_id)
     name: str | None = None
@@ -717,6 +770,7 @@ def _player_season_hints(
     season_scope_hints: dict[str, str] | None,
     player_name_by_id: dict[int, str],
     player_id: int,
+    scope: AdapterScope,
 ) -> dict[str, str]:
     """Identity hints for a player_season/goalkeeper_season observation:
     competition/season scope (captured once from the first match seen, since
@@ -725,7 +779,7 @@ def _player_season_hints(
     fact is not scoped to one match."""
 
     hints: dict[str, str] = (
-        dict(season_scope_hints) if season_scope_hints else {"season_label": SEASON_LABEL}
+        dict(season_scope_hints) if season_scope_hints else {"season_label": scope.season_label}
     )
     hints["player_external_id"] = str(player_id)
     name = player_name_by_id.get(player_id)
@@ -734,13 +788,15 @@ def _player_season_hints(
     return hints
 
 
-def _player_scoped_hints(info: _MatchInfo, roster: _MatchRoster, player_id: int) -> dict[str, str]:
+def _player_scoped_hints(
+    info: _MatchInfo, roster: _MatchRoster, player_id: int, scope: AdapterScope
+) -> dict[str, str]:
     """Identity hints for a player_appearance/player_match/goalkeeper_match
     observation: the match, this player's own provider-native id and name
     (from the lineup file), and the team they played for in this match when
     the roster resolves it."""
 
-    hints = _scope_hints(info)
+    hints = _scope_hints(info, scope)
     hints["match_external_id"] = str(info.match_id)
     hints["player_external_id"] = str(player_id)
     name = roster.player_name.get(player_id)
@@ -760,8 +816,11 @@ def _lineups_reference(match_id: int, source_revision: str) -> str:
     return f"statsbomb/open-data@{source_revision}/data/lineups/{match_id}.json"
 
 
-def _matches_reference(source_revision: str) -> str:
-    return f"statsbomb/open-data@{source_revision}/data/matches/2/27.json"
+def _matches_reference(source_revision: str, scope: AdapterScope) -> str:
+    return (
+        f"statsbomb/open-data@{source_revision}/data/matches/"
+        f"{scope.provider_competition_id}/{scope.provider_season_id}.json"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -775,19 +834,21 @@ def parse_match_observations(
     bundles: list[MatchBundle],
     *,
     source_revision: str = DEFAULT_PINNED_REVISION,
+    scope: AdapterScope = DEFAULT_SCOPE,
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
     observations: list[NormalizedObservation] = []
     seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
-    reference = _matches_reference(source_revision)
+    reference = _matches_reference(source_revision, scope)
 
     for bundle in bundles:
         info = parse_match(bundle.match_summary)
         if info is None:
             continue
+        _validate_scope(info, scope)
         observed_at = info.kickoff_at or _fallback_now()
         entity_source_id = str(info.match_id)
-        hints = _match_hints(info)
+        hints = _match_hints(info, scope)
 
         if info.home_score is not None:
             _emit(
@@ -886,7 +947,7 @@ def parse_match_observations(
                 seen,
                 entity_type="team",
                 entity_source_id=f"{info.match_id}:{team_id}",
-                entity_identity_hints=_team_scoped_hints(info, team_id),
+                entity_identity_hints=_team_scoped_hints(info, team_id, scope),
                 metric_name="home_away",
                 value=side,
                 observed_at=observed_at,
@@ -911,6 +972,7 @@ def _emit_squad_facts(
     info: _MatchInfo,
     observed_at: datetime,
     reference: str,
+    scope: AdapterScope,
     ingestion_run_id: int | None,
 ) -> None:
     """`started`/`shirt_number` for the full named squad (roster membership
@@ -921,7 +983,7 @@ def _emit_squad_facts(
     match_id = info.match_id
     for player_id in roster.squad_players():
         entity_source_id = f"{match_id}:{player_id}"
-        hints = _player_scoped_hints(info, roster, player_id)
+        hints = _player_scoped_hints(info, roster, player_id, scope)
         _emit(
             observations,
             seen,
@@ -971,6 +1033,7 @@ def parse_lineup_participation_observations(
     bundles: list[MatchBundle],
     *,
     source_revision: str = DEFAULT_PINNED_REVISION,
+    scope: AdapterScope = DEFAULT_SCOPE,
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
     """`started`/`shirt_number`/`listed_position` (player_appearance) +
@@ -991,6 +1054,7 @@ def parse_lineup_participation_observations(
         info = parse_match(bundle.match_summary)
         if info is None:
             continue
+        _validate_scope(info, scope)
         roster = parse_lineups(bundle.lineups_payload)
         observed_at = info.kickoff_at or _fallback_now()
         reference = _lineups_reference(info.match_id, source_revision)
@@ -1002,12 +1066,13 @@ def parse_lineup_participation_observations(
             info=info,
             observed_at=observed_at,
             reference=reference,
+            scope=scope,
             ingestion_run_id=ingestion_run_id,
         )
         for player_id in roster.player_name:
             player_name_by_id.setdefault(player_id, roster.player_name[player_id])
         if season_scope_hints is None:
-            season_scope_hints = _scope_hints(info)
+            season_scope_hints = _scope_hints(info, scope)
 
         for player_id in roster.squad_players():
             season_matches[player_id] += 1
@@ -1025,7 +1090,7 @@ def parse_lineup_participation_observations(
     for player_id, matches_count in season_matches.items():
         entity_source_id = str(player_id)
         observed_at = latest_contributing_date.get(player_id, _fallback_now())
-        season_hints = _player_season_hints(season_scope_hints, player_name_by_id, player_id)
+        season_hints = _player_season_hints(season_scope_hints, player_name_by_id, player_id, scope)
         _emit(
             observations,
             seen,
@@ -1418,6 +1483,7 @@ def parse_player_match_observations(
     bundles: list[MatchBundle],
     *,
     source_revision: str = DEFAULT_PINNED_REVISION,
+    scope: AdapterScope = DEFAULT_SCOPE,
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
     """The 58 player_match identities in the adapter-safe subset. Emitted
@@ -1433,6 +1499,7 @@ def parse_player_match_observations(
         info = parse_match(bundle.match_summary)
         if info is None:
             continue
+        _validate_scope(info, scope)
         roster = parse_lineups(bundle.lineups_payload)
         accumulation = _accumulate_match_events(bundle.events_payload)
         observed_at = info.kickoff_at or _fallback_now()
@@ -1442,7 +1509,7 @@ def parse_player_match_observations(
         for player_id in roster.participating_players():
             counts = dict(accumulation.counts_by_player.get(player_id, _new_counts()))
             counts["passes_received"] = accumulation.passes_received_by_player.get(player_id, 0)
-            player_hints = _player_scoped_hints(info, roster, player_id)
+            player_hints = _player_scoped_hints(info, roster, player_id, scope)
             _emit_player_match_metrics(
                 observations,
                 seen,
@@ -1477,6 +1544,7 @@ def parse_goalkeeper_observations(
     bundles: list[MatchBundle],
     *,
     source_revision: str = DEFAULT_PINNED_REVISION,
+    scope: AdapterScope = DEFAULT_SCOPE,
     ingestion_run_id: int | None = None,
     include_season: bool = True,
 ) -> list[NormalizedObservation]:
@@ -1504,6 +1572,7 @@ def parse_goalkeeper_observations(
         info = parse_match(bundle.match_summary)
         if info is None:
             continue
+        _validate_scope(info, scope)
         roster = parse_lineups(bundle.lineups_payload)
         accumulation = _accumulate_match_events(bundle.events_payload)
         observed_at = info.kickoff_at or _fallback_now()
@@ -1512,13 +1581,13 @@ def parse_goalkeeper_observations(
         for player_id in roster.player_name:
             player_name_by_id.setdefault(player_id, roster.player_name[player_id])
         if season_scope_hints is None:
-            season_scope_hints = _scope_hints(info)
+            season_scope_hints = _scope_hints(info, scope)
 
         for player_id in participating:
             if player_id not in roster.goalkeepers:
                 continue
             entity_source_id = f"{info.match_id}:{player_id}"
-            hints = _player_scoped_hints(info, roster, player_id)
+            hints = _player_scoped_hints(info, roster, player_id, scope)
             counts = accumulation.counts_by_player.get(player_id, _new_counts())
             saves = int(counts["saves"])
             goals_conceded = int(counts["goals_conceded"])
@@ -1588,7 +1657,7 @@ def parse_goalkeeper_observations(
             continue
         observed_at = latest_date.get(player_id, _fallback_now())
         entity_source_id = str(player_id)
-        season_hints = _player_season_hints(season_scope_hints, player_name_by_id, player_id)
+        season_hints = _player_season_hints(season_scope_hints, player_name_by_id, player_id, scope)
         _emit(
             observations,
             seen,
@@ -1687,6 +1756,7 @@ def parse_team_match_observations(
     bundles: list[MatchBundle],
     *,
     source_revision: str = DEFAULT_PINNED_REVISION,
+    scope: AdapterScope = DEFAULT_SCOPE,
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
     """The 26 team_match identities in the adapter-safe subset. Cards and
@@ -1699,7 +1769,10 @@ def parse_team_match_observations(
 
     for bundle in bundles:
         info = parse_match(bundle.match_summary)
-        if info is None or info.home_team_id is None or info.away_team_id is None:
+        if info is None:
+            continue
+        _validate_scope(info, scope)
+        if info.home_team_id is None or info.away_team_id is None:
             continue
         roster = parse_lineups(bundle.lineups_payload)
         accumulation = _accumulate_match_events(bundle.events_payload)
@@ -1728,7 +1801,7 @@ def parse_team_match_observations(
             (info.away_team_id, info.home_team_id, info.away_score, info.home_score),
         ):
             entity_source_id = f"{info.match_id}:{team_id}"
-            hints = _team_scoped_hints(info, team_id)
+            hints = _team_scoped_hints(info, team_id, scope)
             stats = team_counts.get(team_id, _TeamMatchCounts())
             opp_stats = team_counts.get(opponent_id, _TeamMatchCounts())
 
@@ -1810,6 +1883,7 @@ def adapt_match_bundle(
     bundle: MatchBundle,
     *,
     source_revision: str = DEFAULT_PINNED_REVISION,
+    scope: AdapterScope = DEFAULT_SCOPE,
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
     """Every adapter-safe observation derivable from ONE match alone --
@@ -1822,12 +1896,13 @@ def adapt_match_bundle(
     observations: list[NormalizedObservation] = []
     observations.extend(
         parse_match_observations(
-            bundles, source_revision=source_revision, ingestion_run_id=ingestion_run_id
+            bundles, source_revision=source_revision, scope=scope, ingestion_run_id=ingestion_run_id
         )
     )
 
     info = parse_match(bundle.match_summary)
     if info is not None:
+        _validate_scope(info, scope)
         roster = parse_lineups(bundle.lineups_payload)
         seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
         _emit_squad_facts(
@@ -1837,25 +1912,27 @@ def adapt_match_bundle(
             info=info,
             observed_at=info.kickoff_at or _fallback_now(),
             reference=_lineups_reference(info.match_id, source_revision),
+            scope=scope,
             ingestion_run_id=ingestion_run_id,
         )
 
     observations.extend(
         parse_player_match_observations(
-            bundles, source_revision=source_revision, ingestion_run_id=ingestion_run_id
+            bundles, source_revision=source_revision, scope=scope, ingestion_run_id=ingestion_run_id
         )
     )
     observations.extend(
         parse_goalkeeper_observations(
             bundles,
             source_revision=source_revision,
+            scope=scope,
             ingestion_run_id=ingestion_run_id,
             include_season=False,
         )
     )
     observations.extend(
         parse_team_match_observations(
-            bundles, source_revision=source_revision, ingestion_run_id=ingestion_run_id
+            bundles, source_revision=source_revision, scope=scope, ingestion_run_id=ingestion_run_id
         )
     )
     return observations
@@ -1865,14 +1942,19 @@ def parse_premier_league_season(
     bundles: list[MatchBundle],
     *,
     source_revision: str = DEFAULT_PINNED_REVISION,
+    scope: AdapterScope = DEFAULT_SCOPE,
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
-    """Full adapter entry point: every adapter-safe observation for the
-    pinned Premier League 2015/16 StatsBomb Open Data source, from
-    already-loaded `MatchBundle`s covering the full season. This is the
-    only path that correctly computes player_season/goalkeeper_season
-    identities (they require every match, not one) -- see
-    `adapt_match_bundle` for the single-match subset."""
+    """Full certified adapter entry point: every adapter-safe observation
+    for one real competition/season, from already-loaded `MatchBundle`s
+    covering the full scope. Despite the historical name (this function
+    predates Block 20D.3's generalization and every existing caller still
+    gets Premier League 2015/16 behavior by default), it is now the single
+    certified season-level entry point for any declared `scope` -- never a
+    second, copy-pasted per-scope function. This is the only path that
+    correctly computes player_season/goalkeeper_season identities (they
+    require every match, not one) -- see `adapt_match_bundle` for the
+    single-match subset."""
 
     if not STATSBOMB_INTERNAL_ONLY:
         raise AssertionError(
@@ -1884,27 +1966,27 @@ def parse_premier_league_season(
     observations: list[NormalizedObservation] = []
     observations.extend(
         parse_match_observations(
-            bundles, source_revision=source_revision, ingestion_run_id=ingestion_run_id
+            bundles, source_revision=source_revision, scope=scope, ingestion_run_id=ingestion_run_id
         )
     )
     observations.extend(
         parse_lineup_participation_observations(
-            bundles, source_revision=source_revision, ingestion_run_id=ingestion_run_id
+            bundles, source_revision=source_revision, scope=scope, ingestion_run_id=ingestion_run_id
         )
     )
     observations.extend(
         parse_player_match_observations(
-            bundles, source_revision=source_revision, ingestion_run_id=ingestion_run_id
+            bundles, source_revision=source_revision, scope=scope, ingestion_run_id=ingestion_run_id
         )
     )
     observations.extend(
         parse_goalkeeper_observations(
-            bundles, source_revision=source_revision, ingestion_run_id=ingestion_run_id
+            bundles, source_revision=source_revision, scope=scope, ingestion_run_id=ingestion_run_id
         )
     )
     observations.extend(
         parse_team_match_observations(
-            bundles, source_revision=source_revision, ingestion_run_id=ingestion_run_id
+            bundles, source_revision=source_revision, scope=scope, ingestion_run_id=ingestion_run_id
         )
     )
     return observations
