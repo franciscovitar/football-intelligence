@@ -489,6 +489,22 @@ class PlayerTeamContextEvidence:
                     f"key {match_key!r}"
                 )
             seen.add(match_key)
+        if self.shared_match_keys != tuple(sorted(self.shared_match_keys)):
+            # Same contract style as PlayerCrosswalkEntry.team_context_evidence's
+            # ordering check below: fail fast on a non-canonical order rather
+            # than silently sorting inside this immutable object. Without
+            # this, two logically identical evidence objects built from the
+            # same real matches in a different collection order would
+            # compare unequal (`("match:a", "match:b") != ("match:b",
+            # "match:a")`), weakening `PlayerCrosswalk.add()`'s exact-
+            # idempotence -- the same real pair could be rejected as a
+            # spurious conflict merely because a caller enumerated its
+            # matches in a different order.
+            raise PlayerCrosswalkValidationError(
+                "PlayerTeamContextEvidence.shared_match_keys must be in canonical ascending "
+                "order -- callers must sort deterministically before construction, never rely "
+                "on implicit collection order"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -622,6 +638,20 @@ class PlayerCrosswalk:
                 f"-- add() only accepts an exact repeat of already-stored evidence"
             )
         self.entries[key] = entry
+
+    def would_conflict(self, entry: PlayerCrosswalkEntry) -> bool:
+        """Pure preflight: True if `add(entry)` would raise
+        `PlayerCrosswalkConflictError` right now -- never mutates the
+        registry. Lets a caller that must insert more than one related
+        entry atomically (e.g. both sides of a validated two-provider
+        pair) check every entry first and only commit if none would
+        conflict, rather than adding some and discovering a conflict on a
+        later one, which would leave a one-sided entry for a pair that
+        failed validation as a whole."""
+
+        key = (entry.source_code, entry.provider_player_id)
+        existing = self.entries.get(key)
+        return existing is not None and existing != entry
 
     def lookup(self, *, source_code: str, provider_player_id: str) -> PlayerCrosswalkEntry | None:
         return self.entries.get((source_code, provider_player_id))

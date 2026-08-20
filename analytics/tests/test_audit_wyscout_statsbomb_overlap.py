@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import pytest
+
 from football_intelligence.data_mesh.entity_resolution_v2 import (
     build_match_index_v2_from_observations,
     build_team_index_v2_from_observations,
@@ -617,6 +619,129 @@ def test_key_is_deterministic_across_repeated_calls() -> None:
         for _ in range(5)
     }
     assert len(keys) == 1
+
+
+# ---------------------------------------------------------------------------
+# Crosswalk key hardening: exactly the two-provider Wyscout Open x StatsBomb
+# Open equivalence, never an arbitrary provider set (review correction).
+# ---------------------------------------------------------------------------
+
+
+def test_key_rejects_zero_refs() -> None:
+    with pytest.raises(ValueError):
+        crosswalk_canonical_key(competition_code="ESP_LL", season_label="2017/18", provider_refs=[])
+
+
+def test_key_rejects_one_ref() -> None:
+    with pytest.raises(ValueError):
+        crosswalk_canonical_key(
+            competition_code="ESP_LL",
+            season_label="2017/18",
+            provider_refs=[("wyscout-open", "151")],
+        )
+
+
+def test_key_rejects_duplicate_same_ref() -> None:
+    with pytest.raises(ValueError):
+        crosswalk_canonical_key(
+            competition_code="ESP_LL",
+            season_label="2017/18",
+            provider_refs=[("wyscout-open", "151"), ("wyscout-open", "151")],
+        )
+
+
+def test_key_rejects_two_refs_from_the_same_source() -> None:
+    with pytest.raises(ValueError):
+        crosswalk_canonical_key(
+            competition_code="ESP_LL",
+            season_label="2017/18",
+            provider_refs=[("wyscout-open", "151"), ("wyscout-open", "999")],
+        )
+
+
+def test_key_rejects_an_unknown_source_code() -> None:
+    with pytest.raises(ValueError):
+        crosswalk_canonical_key(
+            competition_code="ESP_LL",
+            season_label="2017/18",
+            provider_refs=[("wyscout-open", "151"), ("some-other-provider", "6038")],
+        )
+
+
+def test_key_rejects_a_blank_provider_id() -> None:
+    with pytest.raises(ValueError):
+        crosswalk_canonical_key(
+            competition_code="ESP_LL",
+            season_label="2017/18",
+            provider_refs=[("wyscout-open", "   "), ("statsbomb-open", "6038")],
+        )
+
+
+def test_key_rejects_three_refs() -> None:
+    with pytest.raises(ValueError):
+        crosswalk_canonical_key(
+            competition_code="ESP_LL",
+            season_label="2017/18",
+            provider_refs=[
+                ("wyscout-open", "151"),
+                ("statsbomb-open", "6038"),
+                ("statsbomb-open", "9999"),
+            ],
+        )
+
+
+# ---------------------------------------------------------------------------
+# Atomic pair insertion (review correction) -- exercised end-to-end through
+# the real builder's normal (non-conflicting) path. The genuinely
+# conflicting path is proven directly against PlayerCrosswalk.would_conflict()
+# in tests/test_data_mesh_entity_resolution_v2.py: build_player_crosswalk's
+# own upstream ambiguity filtering (one_to_many/many_to_one) already makes a
+# same-call registry conflict structurally unreachable, since every accepted
+# pair's wyscout_id and statsbomb_id are each guaranteed unique across
+# accepted_pairs before the insertion loop ever runs.
+# ---------------------------------------------------------------------------
+
+
+def test_entries_created_reflects_actual_stored_pair_entries_for_a_multi_pair_batch() -> None:
+    wyscout_matches = [
+        _match_obs("wyscout-open", "5001", "100", "200", "2018-01-01"),
+        _match_obs("wyscout-open", "5002", "100", "300", "2018-01-08"),
+    ]
+    statsbomb_matches = [
+        _match_obs("statsbomb-open", "9001", "100", "200", "2018-01-01"),
+        _match_obs("statsbomb-open", "9002", "100", "300", "2018-01-08"),
+    ]
+    team_index, match_index = _build_indexes(wyscout_matches, statsbomb_matches)
+
+    wyscout_players = [
+        _player_obs("wyscout-open", "p1", "5001", "100", "Player One"),
+        _player_obs("wyscout-open", "p2", "5002", "100", "Player Two"),
+    ]
+    statsbomb_players = [
+        _player_obs("statsbomb-open", "s1", "9001", "100", "Player One"),
+        _player_obs("statsbomb-open", "s2", "9002", "100", "Player Two"),
+    ]
+    wyscout_report = collect_player_appearances(
+        wyscout_players, source_code="wyscout-open", team_index=team_index, match_index=match_index
+    )
+    statsbomb_report = collect_player_appearances(
+        statsbomb_players,
+        source_code="statsbomb-open",
+        team_index=team_index,
+        match_index=match_index,
+    )
+    crosswalk, report = build_player_crosswalk(
+        wyscout_report.appearances,
+        statsbomb_report.appearances,
+        wyscout_missing_name=0,
+        wyscout_missing_team=0,
+        statsbomb_missing_name=0,
+        statsbomb_missing_team=0,
+    )
+    assert len(report.accepted_pairs) == 2
+    assert report.entries_created == 2 * len(report.accepted_pairs) == 4
+    assert report.crosswalk_conflicts == 0
+    assert len(crosswalk.entries) == 4
 
 
 # ---------------------------------------------------------------------------

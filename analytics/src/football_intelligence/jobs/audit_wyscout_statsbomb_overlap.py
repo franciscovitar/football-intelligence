@@ -33,7 +33,6 @@ from football_intelligence.data_mesh.adapters import statsbomb_open, wyscout_ope
 from football_intelligence.data_mesh.entity_resolution_v2 import (
     IdentityConflictError,
     PlayerCrosswalk,
-    PlayerCrosswalkConflictError,
     PlayerCrosswalkEntry,
     PlayerCrosswalkValidationError,
     PlayerTeamContextEvidence,
@@ -582,6 +581,11 @@ def collect_player_appearances(
 
 
 CROSSWALK_KEY_PREFIX = "overlap-player-v2"
+CROSSWALK_WYSCOUT_SOURCE_CODE = "wyscout-open"
+CROSSWALK_STATSBOMB_SOURCE_CODE = "statsbomb-open"
+_EXPECTED_CROSSWALK_SOURCE_CODES = frozenset(
+    {CROSSWALK_WYSCOUT_SOURCE_CODE, CROSSWALK_STATSBOMB_SOURCE_CODE}
+)
 
 
 def crosswalk_canonical_key(
@@ -600,6 +604,17 @@ def crosswalk_canonical_key(
     an independent football-player identity rather than treating this
     overlap key as production identity.
 
+    Block 20D.3's crosswalk is specifically a validated TWO-provider
+    Wyscout Open x StatsBomb Open equivalence -- `provider_refs` must
+    contain EXACTLY one `(CROSSWALK_WYSCOUT_SOURCE_CODE, ...)` ref and one
+    `(CROSSWALK_STATSBOMB_SOURCE_CODE, ...)` ref, both with a non-blank
+    `provider_player_id`. Anything else (zero/one/three+ refs, a duplicate
+    ref, two refs from the same source, an unrecognized source code, a
+    blank id) fails fast with `ValueError` rather than silently hashing
+    malformed input into a plausible-looking key. Generalizing this helper
+    to an arbitrary future provider set is explicitly out of scope here --
+    that is real design work for whichever block adds a third provider.
+
     `digest` is a SHA-256 hex digest (stdlib `hashlib`, deterministic
     across processes -- unlike the built-in `hash()`, and never a random
     UUID) of the canonically ordered (sorted by `(source_code,
@@ -616,8 +631,30 @@ def crosswalk_canonical_key(
     passed first."""
 
     ordered_refs = sorted(provider_refs)
-    if not ordered_refs:
-        raise ValueError("crosswalk_canonical_key requires at least one provider ref")
+    if len(ordered_refs) != 2:
+        raise ValueError(
+            "crosswalk_canonical_key requires exactly 2 provider refs (one "
+            f"{CROSSWALK_WYSCOUT_SOURCE_CODE!r}, one {CROSSWALK_STATSBOMB_SOURCE_CODE!r}), got "
+            f"{len(ordered_refs)}: {ordered_refs!r}"
+        )
+    if len(set(ordered_refs)) != len(ordered_refs):
+        raise ValueError(
+            f"crosswalk_canonical_key received a duplicate provider ref: {ordered_refs!r}"
+        )
+    source_codes = {source_code for source_code, _provider_player_id in ordered_refs}
+    if source_codes != _EXPECTED_CROSSWALK_SOURCE_CODES:
+        raise ValueError(
+            f"crosswalk_canonical_key requires exactly one {CROSSWALK_WYSCOUT_SOURCE_CODE!r} ref "
+            f"and one {CROSSWALK_STATSBOMB_SOURCE_CODE!r} ref, got source codes "
+            f"{sorted(source_codes)!r}"
+        )
+    for source_code, provider_player_id in ordered_refs:
+        if not isinstance(provider_player_id, str) or not provider_player_id.strip():
+            raise ValueError(
+                f"crosswalk_canonical_key requires a non-blank provider_player_id for "
+                f"{source_code!r}, got {provider_player_id!r}"
+            )
+
     payload = "|".join(
         f"{source_code}:{provider_player_id}" for source_code, provider_player_id in ordered_refs
     )
@@ -798,28 +835,37 @@ def build_player_crosswalk(
             ),
         )
         try:
-            crosswalk.add(
-                PlayerCrosswalkEntry(
-                    source_code="wyscout-open",
-                    provider_player_id=pair.wyscout_player_id,
-                    canonical_player_key=canonical_key,
-                    normalized_name_used=pair.normalized_name,
-                    team_context_evidence=pair.team_context_evidence,
-                )
+            wyscout_entry = PlayerCrosswalkEntry(
+                source_code="wyscout-open",
+                provider_player_id=pair.wyscout_player_id,
+                canonical_player_key=canonical_key,
+                normalized_name_used=pair.normalized_name,
+                team_context_evidence=pair.team_context_evidence,
             )
-            entries_created += 1
-            crosswalk.add(
-                PlayerCrosswalkEntry(
-                    source_code="statsbomb-open",
-                    provider_player_id=pair.statsbomb_player_id,
-                    canonical_player_key=canonical_key,
-                    normalized_name_used=pair.normalized_name,
-                    team_context_evidence=pair.team_context_evidence,
-                )
+            statsbomb_entry = PlayerCrosswalkEntry(
+                source_code="statsbomb-open",
+                provider_player_id=pair.statsbomb_player_id,
+                canonical_player_key=canonical_key,
+                normalized_name_used=pair.normalized_name,
+                team_context_evidence=pair.team_context_evidence,
             )
-            entries_created += 1
-        except (PlayerCrosswalkConflictError, PlayerCrosswalkValidationError):
+        except PlayerCrosswalkValidationError:
             crosswalk_conflicts += 1
+            continue
+
+        # Atomic pairing: preflight BOTH sides against the registry before
+        # mutating either. A pair is a single validated unit of evidence --
+        # if either side would conflict, neither is added, so the registry
+        # can never retain a one-sided entry for a pair that failed as a
+        # whole (previously, a conflict on the second `add()` call could
+        # leave the first side's entry already committed).
+        if crosswalk.would_conflict(wyscout_entry) or crosswalk.would_conflict(statsbomb_entry):
+            crosswalk_conflicts += 1
+            continue
+
+        crosswalk.add(wyscout_entry)
+        crosswalk.add(statsbomb_entry)
+        entries_created += 2
 
     resolution_success_count = 0
     for pair in accepted_pairs:

@@ -991,3 +991,235 @@ def test_transferred_player_remains_one_registry_entry_per_provider_id() -> None
     crosswalk.add(_transfer_entry())
     assert len(crosswalk.entries) == 1
     assert crosswalk.lookup(source_code="wyscout-open", provider_player_id="151") is not None
+
+
+# ---------------------------------------------------------------------------
+# PlayerTeamContextEvidence.shared_match_keys canonical order (review
+# correction) -- fail fast on a non-canonical order rather than silently
+# sorting, matching the same contract style already used for
+# PlayerCrosswalkEntry.team_context_evidence ordering.
+# ---------------------------------------------------------------------------
+
+
+def test_shared_match_keys_in_canonical_ascending_order_is_valid() -> None:
+    evidence = PlayerTeamContextEvidence(
+        team_context_key="team:ESP_LL:celta de vigo", shared_match_keys=("match:a", "match:b")
+    )
+    assert evidence.shared_match_keys == ("match:a", "match:b")
+
+
+def test_shared_match_keys_out_of_order_is_rejected() -> None:
+    with pytest.raises(PlayerCrosswalkValidationError):
+        PlayerTeamContextEvidence(
+            team_context_key="team:ESP_LL:celta de vigo", shared_match_keys=("match:b", "match:a")
+        )
+
+
+def test_same_semantic_evidence_cannot_enter_the_registry_through_alternate_ordering() -> None:
+    # Two logically identical evidence sets built from the same real
+    # matches, differing only in collection order, must not be able to
+    # both reach the registry as apparently-different evidence -- the
+    # unsorted one is rejected at construction, so it can never even be
+    # compared against the sorted one that is already stored.
+    canonical_key = "overlap-player-v2:ESP_LL:2017/18:deadbeef"
+    sorted_entry = PlayerCrosswalkEntry(
+        source_code="wyscout-open",
+        provider_player_id="151",
+        canonical_player_key=canonical_key,
+        normalized_name_used="john guidetti",
+        team_context_evidence=(
+            PlayerTeamContextEvidence(
+                team_context_key="team:ESP_LL:alaves deportivo",
+                shared_match_keys=("match:a", "match:b"),
+            ),
+        ),
+    )
+    crosswalk = PlayerCrosswalk()
+    crosswalk.add(sorted_entry)
+
+    with pytest.raises(PlayerCrosswalkValidationError):
+        PlayerCrosswalkEntry(
+            source_code="wyscout-open",
+            provider_player_id="151",
+            canonical_player_key=canonical_key,
+            normalized_name_used="john guidetti",
+            team_context_evidence=(
+                PlayerTeamContextEvidence(
+                    team_context_key="team:ESP_LL:alaves deportivo",
+                    shared_match_keys=("match:b", "match:a"),  # unsorted
+                ),
+            ),
+        )
+    # The registry is untouched -- the malformed alternate ordering never
+    # even reached add().
+    assert len(crosswalk.entries) == 1
+
+
+# ---------------------------------------------------------------------------
+# PlayerCrosswalk.would_conflict() and atomic pair insertion (review
+# correction). build_player_crosswalk() now preflights both sides of a
+# two-provider pair via would_conflict() before mutating the registry, so a
+# conflict on either side can never leave a one-sided entry behind. These
+# tests exercise the registry primitive directly, mirroring the exact idiom
+# the builder uses.
+# ---------------------------------------------------------------------------
+
+
+def test_would_conflict_false_when_no_existing_entry() -> None:
+    crosswalk = PlayerCrosswalk()
+    assert crosswalk.would_conflict(_valid_entry()) is False
+
+
+def test_would_conflict_false_for_an_exact_repeat() -> None:
+    crosswalk = PlayerCrosswalk()
+    crosswalk.add(_valid_entry())
+    assert crosswalk.would_conflict(_valid_entry()) is False
+
+
+def test_would_conflict_true_for_genuinely_different_evidence() -> None:
+    crosswalk = PlayerCrosswalk()
+    crosswalk.add(_valid_entry())
+    assert (
+        crosswalk.would_conflict(_valid_entry(canonical_player_key="player:someone-else")) is True
+    )
+
+
+def test_would_conflict_never_mutates_the_registry() -> None:
+    crosswalk = PlayerCrosswalk()
+    crosswalk.add(_valid_entry())
+    before = dict(crosswalk.entries)
+    crosswalk.would_conflict(_valid_entry(canonical_player_key="player:someone-else"))
+    assert crosswalk.entries == before
+
+
+def _atomic_add_pair(
+    crosswalk: PlayerCrosswalk, first: PlayerCrosswalkEntry, second: PlayerCrosswalkEntry
+) -> bool:
+    """Mirrors exactly the atomic pairing idiom `build_player_crosswalk`
+    now uses: preflight both sides, only mutate the registry if neither
+    would conflict. Returns whether the pair was inserted."""
+
+    if crosswalk.would_conflict(first) or crosswalk.would_conflict(second):
+        return False
+    crosswalk.add(first)
+    crosswalk.add(second)
+    return True
+
+
+def _counterpart_entry(
+    template: PlayerCrosswalkEntry, *, source_code: str, provider_player_id: str
+) -> PlayerCrosswalkEntry:
+    return PlayerCrosswalkEntry(
+        source_code=source_code,
+        provider_player_id=provider_player_id,
+        canonical_player_key=template.canonical_player_key,
+        normalized_name_used=template.normalized_name_used,
+        team_context_evidence=template.team_context_evidence,
+    )
+
+
+def test_atomic_pair_insert_a_normal_pair_inserts_both_entries() -> None:
+    crosswalk = PlayerCrosswalk()
+    wyscout_entry = _valid_entry(provider_player_id="151", canonical_player_key="player:new-pair")
+    statsbomb_entry = _counterpart_entry(
+        wyscout_entry, source_code="statsbomb-open", provider_player_id="6038"
+    )
+    assert _atomic_add_pair(crosswalk, wyscout_entry, statsbomb_entry) is True
+    assert len(crosswalk.entries) == 2
+    assert crosswalk.lookup(source_code="wyscout-open", provider_player_id="151") == wyscout_entry
+    assert (
+        crosswalk.lookup(source_code="statsbomb-open", provider_player_id="6038") == statsbomb_entry
+    )
+
+
+def test_atomic_pair_insert_b_conflict_leaves_neither_new_entry_behind() -> None:
+    crosswalk = PlayerCrosswalk()
+    # Pre-existing entry for the wyscout side only.
+    crosswalk.add(
+        _valid_entry(provider_player_id="151", canonical_player_key="player:already-here")
+    )
+
+    conflicting_wyscout_entry = _valid_entry(
+        provider_player_id="151", canonical_player_key="player:new-pair"
+    )
+    statsbomb_entry = _counterpart_entry(
+        conflicting_wyscout_entry, source_code="statsbomb-open", provider_player_id="6038"
+    )
+
+    inserted = _atomic_add_pair(crosswalk, conflicting_wyscout_entry, statsbomb_entry)
+
+    assert inserted is False
+    # The statsbomb side had no pre-existing conflict of its own, but must
+    # NOT have been added -- the pair is one atomic unit.
+    assert crosswalk.lookup(source_code="statsbomb-open", provider_player_id="6038") is None
+    # The original wyscout entry is untouched (not overwritten, not lost).
+    stored = crosswalk.lookup(source_code="wyscout-open", provider_player_id="151")
+    assert stored is not None
+    assert stored.canonical_player_key == "player:already-here"
+    assert len(crosswalk.entries) == 1
+
+
+def test_atomic_pair_insert_c_entries_created_matches_actually_stored_entries() -> None:
+    crosswalk = PlayerCrosswalk()
+    entries_created = 0
+    for wyscout_id, statsbomb_id, key in (
+        ("151", "6038", "player:pair-1"),
+        ("3970", "6924", "player:pair-2"),
+    ):
+        wyscout_entry = _valid_entry(provider_player_id=wyscout_id, canonical_player_key=key)
+        statsbomb_entry = _counterpart_entry(
+            wyscout_entry, source_code="statsbomb-open", provider_player_id=statsbomb_id
+        )
+        if _atomic_add_pair(crosswalk, wyscout_entry, statsbomb_entry):
+            entries_created += 2
+    assert entries_created == 4
+    assert len(crosswalk.entries) == entries_created
+
+
+def test_atomic_pair_insert_d_conflict_is_counted_once_per_blocked_pair() -> None:
+    crosswalk = PlayerCrosswalk()
+    crosswalk.add(
+        _valid_entry(provider_player_id="151", canonical_player_key="player:already-here")
+    )
+
+    conflicting_wyscout_entry = _valid_entry(
+        provider_player_id="151", canonical_player_key="player:new-pair"
+    )
+    statsbomb_entry = _counterpart_entry(
+        conflicting_wyscout_entry, source_code="statsbomb-open", provider_player_id="6038"
+    )
+
+    crosswalk_conflicts = 0
+    if not _atomic_add_pair(crosswalk, conflicting_wyscout_entry, statsbomb_entry):
+        crosswalk_conflicts += 1
+    assert crosswalk_conflicts == 1
+
+
+def test_atomic_pair_insert_e_resolution_never_succeeds_from_a_blocked_pair() -> None:
+    crosswalk = PlayerCrosswalk()
+    crosswalk.add(
+        _valid_entry(provider_player_id="151", canonical_player_key="player:already-here")
+    )
+
+    conflicting_wyscout_entry = _valid_entry(
+        provider_player_id="151", canonical_player_key="player:new-pair"
+    )
+    statsbomb_entry = _counterpart_entry(
+        conflicting_wyscout_entry, source_code="statsbomb-open", provider_player_id="6038"
+    )
+    _atomic_add_pair(crosswalk, conflicting_wyscout_entry, statsbomb_entry)
+
+    # Neither side of the blocked pair resolves -- the statsbomb half in
+    # particular was never added, so it must stay UNRESOLVED, never
+    # resolvable from a one-sided partially-inserted failed pair.
+    statsbomb_resolution = resolve_player_v2(
+        source_code="statsbomb-open", provider_player_id="6038", crosswalk=crosswalk
+    )
+    assert statsbomb_resolution.status == "unresolved"
+    # The pre-existing wyscout entry still resolves to ITS OWN original
+    # value, untouched by the blocked pair.
+    wyscout_resolution = resolve_player_v2(
+        source_code="wyscout-open", provider_player_id="151", crosswalk=crosswalk
+    )
+    assert wyscout_resolution.status == "resolved"
+    assert wyscout_resolution.logical_key == "player:already-here"
