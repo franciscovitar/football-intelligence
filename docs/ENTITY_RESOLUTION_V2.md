@@ -568,12 +568,73 @@ false since Block 20D.2 added the `metric_granularity` field. Corrected to
 describe `_SAFE_METRIC_ENTITY_PAIRS` accurately: a coarser, entity_type-only
 defense-in-depth check, never the reason granularity can't be expressed.
 
-## Next step: Block 20D.3
+## Block 20D.3 -- Rich Overlap Enablement (complete)
 
-Generalize the certified adapters to Spain/ESP_LL scope, populate the real
-Wyscout x StatsBomb player crosswalk from the real Barcelona 2017/18
-overlap evidence (Block 20D.1's finding: **Wyscout La Liga 2017/18 full
-season x StatsBomb Barcelona 2017/18, 36 of Barcelona's 38 league
-matches** -- never described as "StatsBomb's partial La Liga 2017/18"),
-and execute the rich multi-source reconciliation this block deliberately
-did not attempt.
+Generalized both certified adapters to an explicit `AdapterScope` contract,
+verified the real Barcelona 2017/18 overlap evidence (36 shared canonical
+matches, 0 date mismatches, exactly 2 Wyscout-only Barcelona fixtures) via
+the V2 identity contract, and populated the first REAL deterministic
+`PlayerCrosswalk` from that overlap, including a genuine discovered
+contract gap: 4 real player pairs evidenced under more than one resolved
+team context (real January 2018 mid-season transfers), which the
+single-team-context `PlayerCrosswalkEntry` shape at the time could not
+represent without either destroying evidence or forcing an arbitrary
+choice -- excluded from the crosswalk and reported rather than either of
+those, pending explicit review.
+
+### Block 20D.3 corrective pass -- Option C multi-team-context crosswalk (complete)
+
+A diagnosis-only follow-up (real-cache re-run, no repository files
+changed) confirmed all 4 excluded pairs are genuine, clean,
+non-overlapping mid-season transfers -- not name collisions, not
+resolution bugs. This corrective pass then implemented the redesign that
+diagnosis left open: `PlayerCrosswalkEntry.team_context_key: str` /
+`shared_match_keys: tuple[str, ...]` were replaced by a new
+`PlayerTeamContextEvidence(team_context_key, shared_match_keys)` value
+object and `team_context_evidence: tuple[PlayerTeamContextEvidence, ...]`
+(N>=1 contexts per entry, validated for canonical ordering, no duplicate
+team context, and no shared match key claimed by two different contexts).
+The registry key (`PlayerCrosswalk.entries: dict[(source_code,
+provider_player_id), PlayerCrosswalkEntry]`) and `resolve_player_v2()`'s
+signature are both unchanged -- one provider player id still resolves to
+exactly one player identity, never one identity per club.
+`crosswalk_canonical_key()` was redesigned to a versioned, opaque,
+SHA-256-digest-based `overlap-player-v2:{competition}:{season}:{digest}`
+key over the validated, canonically-ordered provider refs -- team-context-
+and name-independent, so a transfer no longer changes a player's own
+identity key, and explicitly documented as never a global canonical
+player id. All 4 real transfers now resolve
+(`resolve_player_v2(wyscout_id) == resolve_player_v2(statsbomb_id)`, each
+with 2 correctly-scoped team contexts, no evidence dropped or
+misattributed): accepted pairs **430 -> 434**, crosswalk entries
+**860 -> 868**. A separately reported "1 one-to-many / 1 many-to-one"
+ambiguity figure was traced to two synthetic unit-test fixtures
+(`tests/test_audit_wyscout_statsbomb_overlap.py`) that correctly assert
+`== 1` for their own tiny constructed scenarios -- unrelated to the real
+data, which the authoritative machine audit has always reported as `0`/`0`
+both before and after this pass. Full detail:
+[`BLOCK20_MULTI_SOURCE.md`](BLOCK20_MULTI_SOURCE.md#block-20d3-corrective-pass----option-c-multi-team-context-crosswalk-complete).
+
+Also corrected in this pass: the assumption that the real ENG_PL 2025/26
+`resolve_and_reconcile()` regression (380 matches, 20 teams, 1,140/1,140
+agreed match-fact decisions, 0 unresolved, idempotent) requires
+PostgreSQL was checked against the actual code and found wrong --
+`resolve_and_reconcile()` is pure and in-memory; only canonical loading
+into `football.*` is genuinely DB-backed. A new regression test,
+`tests/test_real_snapshot_v2_reconciliation_regression.py`, reads the
+already-committed real snapshot files directly and reproduces the exact
+historical baseline with zero network access and zero database
+connection.
+
+## Next step: Block 20D.4
+
+Execute the rich multi-source Reconciliation V2 this block deliberately
+did not attempt: granularity-aware reconciliation grouping, semantic
+comparability policy, tolerances, provider-native-vs-derived comparison
+policy, source-independence policy, conflict resolution, how
+`STATSBOMB_INTERNAL_ONLY` propagates through reconciliation, the deferred
+cross-source date-tolerance clustering integration into V2, and a
+decision on whether/how `overlap-player-v2` crosswalk keys ever map to an
+independent, canonical `football.players` identity (the corrective pass
+above resolved the multi-team-context contract shape itself, not this
+separate production-promotion question).

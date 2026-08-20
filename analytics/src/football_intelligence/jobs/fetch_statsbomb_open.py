@@ -46,6 +46,16 @@ COMPETITION_NAME = "Premier League"
 SEASON_NAME = "2015/2016"
 EXPECTED_MATCH_COUNT = 380
 
+# Block 20D.3: real, verified provider-native ids for Spain/La Liga 2017/18
+# ("Barcelona 2017/18" open-data scope -- 36 of Barcelona's 38 league
+# matches, never the whole real La Liga season). Discovered live during
+# Block 20D.1's investigation.
+ESP_LL_COMPETITION_ID = 11
+ESP_LL_SEASON_ID = 1
+ESP_LL_COMPETITION_NAME = "La Liga"
+ESP_LL_SEASON_NAME = "2017/2018"
+ESP_LL_EXPECTED_MATCH_COUNT = 36
+
 DEFAULT_CACHE_ROOT = Path("data/cache/statsbomb-open")
 _DOWNLOAD_WORKERS = 8
 
@@ -70,13 +80,25 @@ def run_fetch(
     ref: str = DEFAULT_PINNED_REVISION,
     limit: int | None = None,
     workers: int = _DOWNLOAD_WORKERS,
+    competition_id: int = COMPETITION_ID,
+    season_id: int = SEASON_ID,
+    competition_name: str = COMPETITION_NAME,
+    season_name: str = SEASON_NAME,
+    expected_match_count: int = EXPECTED_MATCH_COUNT,
 ) -> tuple[SourceSnapshotManifest, Path]:
+    """Fetches and caches one real competition/season scope through the
+    official pinned `StatsBombOpenDataClient`. Defaults preserve the
+    original Block 20C.2a Premier League 2015/16 behavior exactly; Block
+    20D.3 passes `competition_id`/`season_id`/... explicitly for the
+    ESP_LL/La Liga 2017/18 (Barcelona open-data) scope -- never a second,
+    copy-pasted fetch job per scope."""
+
     client = StatsBombOpenDataClient(ref=ref)
 
     try:
         competitions_fetch = fetch_json_cached(client, "competitions.json", cache_root=cache_root)
         matches_fetch = fetch_json_cached(
-            client, f"matches/{COMPETITION_ID}/{SEASON_ID}.json", cache_root=cache_root
+            client, f"matches/{competition_id}/{season_id}.json", cache_root=cache_root
         )
     except StatsBombCacheError as exc:
         raise StatsBombFetchError(f"could not acquire competitions/matches: {exc}") from exc
@@ -114,14 +136,14 @@ def run_fetch(
         provider=PROVIDER_NAME,
         upstream_repository=UPSTREAM_REPOSITORY,
         pinned_commit_sha=client.source_revision,
-        competition_id=COMPETITION_ID,
-        season_id=SEASON_ID,
-        competition_name=COMPETITION_NAME,
-        season_name=SEASON_NAME,
+        competition_id=competition_id,
+        season_id=season_id,
+        competition_name=competition_name,
+        season_name=season_name,
         role=ROLE_HISTORICAL_DEEP,
         exposure_policy=EXPOSURE_POLICY_INTERNAL_ONLY,
         fetched_at=datetime.now(UTC),
-        expected_match_count=EXPECTED_MATCH_COUNT,
+        expected_match_count=expected_match_count,
         files=tuple(
             sorted(
                 (
@@ -155,6 +177,19 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Only fetch this many matches (for quick/partial runs); omit for the full season.",
     )
+    parser.add_argument(
+        "--competition-id",
+        type=int,
+        default=COMPETITION_ID,
+        help=(
+            "Provider-native competition id (Block 20D.3: pass "
+            f"{ESP_LL_COMPETITION_ID} for the ESP_LL/Barcelona 2017/18 scope)."
+        ),
+    )
+    parser.add_argument("--season-id", type=int, default=SEASON_ID)
+    parser.add_argument("--competition-name", type=str, default=COMPETITION_NAME)
+    parser.add_argument("--season-name", type=str, default=SEASON_NAME)
+    parser.add_argument("--expected-match-count", type=int, default=EXPECTED_MATCH_COUNT)
     return parser
 
 
@@ -162,13 +197,20 @@ def main() -> None:
     args = build_parser().parse_args()
     try:
         manifest, manifest_file = run_fetch(
-            cache_root=args.cache_dir, ref=args.ref, limit=args.limit
+            cache_root=args.cache_dir,
+            ref=args.ref,
+            limit=args.limit,
+            competition_id=args.competition_id,
+            season_id=args.season_id,
+            competition_name=args.competition_name,
+            season_name=args.season_name,
+            expected_match_count=args.expected_match_count,
         )
     except StatsBombFetchError as exc:
         print(f"STATSBOMB FETCH: FAIL - {exc}")
         raise SystemExit(1) from exc
 
-    print("=== STATSBOMB OPEN DATA FETCH (Block 20C.2a) ===")
+    print("=== STATSBOMB OPEN DATA FETCH ===")
     print(f"pinned commit sha: {manifest.pinned_commit_sha}")
     print(f"competition: {manifest.competition_name} ({manifest.competition_id})")
     print(f"season: {manifest.season_name} ({manifest.season_id})")

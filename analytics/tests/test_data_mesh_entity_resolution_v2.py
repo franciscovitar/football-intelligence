@@ -10,6 +10,7 @@ from football_intelligence.data_mesh.entity_resolution_v2 import (
     PlayerCrosswalkConflictError,
     PlayerCrosswalkEntry,
     PlayerCrosswalkValidationError,
+    PlayerTeamContextEvidence,
     build_match_index_v2,
     build_match_index_v2_from_observations,
     build_team_index_v2,
@@ -669,8 +670,11 @@ def _valid_entry(
         provider_player_id=provider_player_id,
         canonical_player_key=canonical_player_key,
         normalized_name_used="lionel messi",
-        team_context_key=team_context_key,
-        shared_match_keys=shared_match_keys,
+        team_context_evidence=(
+            PlayerTeamContextEvidence(
+                team_context_key=team_context_key, shared_match_keys=shared_match_keys
+            ),
+        ),
     )
 
 
@@ -778,8 +782,11 @@ def test_blank_normalized_name_is_rejected_at_construction() -> None:
             provider_player_id="123",
             canonical_player_key="player:messi",
             normalized_name_used="   ",
-            team_context_key="team:ESP_LL:barcelona",
-            shared_match_keys=("match:1",),
+            team_context_evidence=(
+                PlayerTeamContextEvidence(
+                    team_context_key="team:ESP_LL:barcelona", shared_match_keys=("match:1",)
+                ),
+            ),
         )
 
 
@@ -805,3 +812,182 @@ def test_one_valid_shared_match_resolves() -> None:
     )
     assert resolution.status == "resolved"
     assert resolution.confidence > 0.0
+
+
+# ---------------------------------------------------------------------------
+# PlayerTeamContextEvidence (Block 20D.3 corrective pass, Option C)
+# ---------------------------------------------------------------------------
+
+
+def test_player_team_context_evidence_valid_single_context() -> None:
+    evidence = PlayerTeamContextEvidence(
+        team_context_key="team:ESP_LL:celta de vigo", shared_match_keys=("match:1", "match:2")
+    )
+    assert evidence.team_context_key == "team:ESP_LL:celta de vigo"
+    assert evidence.shared_match_keys == ("match:1", "match:2")
+
+
+def test_player_team_context_evidence_rejects_blank_team() -> None:
+    with pytest.raises(PlayerCrosswalkValidationError):
+        PlayerTeamContextEvidence(team_context_key="   ", shared_match_keys=("match:1",))
+
+
+def test_player_team_context_evidence_rejects_zero_matches() -> None:
+    with pytest.raises(PlayerCrosswalkValidationError):
+        PlayerTeamContextEvidence(
+            team_context_key="team:ESP_LL:celta de vigo", shared_match_keys=()
+        )
+
+
+def test_player_team_context_evidence_rejects_blank_match_key() -> None:
+    with pytest.raises(PlayerCrosswalkValidationError):
+        PlayerTeamContextEvidence(
+            team_context_key="team:ESP_LL:celta de vigo", shared_match_keys=("match:1", "   ")
+        )
+
+
+def test_player_team_context_evidence_rejects_duplicate_match_key() -> None:
+    # Fail-fast rather than silently deduplicating -- a duplicate inside one
+    # context signals a bug in the caller's evidence collection.
+    with pytest.raises(PlayerCrosswalkValidationError):
+        PlayerTeamContextEvidence(
+            team_context_key="team:ESP_LL:celta de vigo", shared_match_keys=("match:1", "match:1")
+        )
+
+
+# ---------------------------------------------------------------------------
+# PlayerCrosswalkEntry with multiple team contexts (Block 20D.3 corrective
+# pass, Option C) -- a genuine mid-season transfer produces N>=2
+# PlayerTeamContextEvidence entries under ONE PlayerCrosswalkEntry, never a
+# second registry entry and never a forced single-team choice.
+# ---------------------------------------------------------------------------
+
+
+def _transfer_entry(
+    *,
+    provider_player_id: str = "151",
+    canonical_player_key: str = "overlap-player-v2:ESP_LL:2017/18:deadbeef",
+) -> PlayerCrosswalkEntry:
+    return PlayerCrosswalkEntry(
+        source_code="wyscout-open",
+        provider_player_id=provider_player_id,
+        canonical_player_key=canonical_player_key,
+        normalized_name_used="john guidetti",
+        team_context_evidence=(
+            PlayerTeamContextEvidence(
+                team_context_key="team:ESP_LL:alaves deportivo",
+                shared_match_keys=("match:jan-28",),
+            ),
+            PlayerTeamContextEvidence(
+                team_context_key="team:ESP_LL:celta de vigo", shared_match_keys=("match:dec-2",)
+            ),
+        ),
+    )
+
+
+def test_multiple_team_contexts_are_valid() -> None:
+    entry = _transfer_entry()
+    assert len(entry.team_context_evidence) == 2
+    assert entry.team_context_keys == ("team:ESP_LL:alaves deportivo", "team:ESP_LL:celta de vigo")
+
+
+def test_shared_match_keys_and_count_are_derived_from_structured_evidence() -> None:
+    # Derived from team_context_evidence, never a second stored source of
+    # truth -- the union of every context's own matches, sorted.
+    entry = _transfer_entry()
+    assert entry.shared_match_keys == ("match:dec-2", "match:jan-28")
+    assert entry.shared_match_count == 2
+
+
+def test_team_context_evidence_must_be_in_canonical_ascending_order() -> None:
+    with pytest.raises(PlayerCrosswalkValidationError):
+        PlayerCrosswalkEntry(
+            source_code="wyscout-open",
+            provider_player_id="151",
+            canonical_player_key="overlap-player-v2:ESP_LL:2017/18:deadbeef",
+            normalized_name_used="john guidetti",
+            team_context_evidence=(
+                # Deliberately out of order (celta > alaves alphabetically
+                # descending) -- callers must sort deterministically, never
+                # rely on implicit insertion order.
+                PlayerTeamContextEvidence(
+                    team_context_key="team:ESP_LL:celta de vigo", shared_match_keys=("match:dec-2",)
+                ),
+                PlayerTeamContextEvidence(
+                    team_context_key="team:ESP_LL:alaves deportivo",
+                    shared_match_keys=("match:jan-28",),
+                ),
+            ),
+        )
+
+
+def test_duplicate_team_context_key_is_rejected() -> None:
+    with pytest.raises(PlayerCrosswalkValidationError):
+        PlayerCrosswalkEntry(
+            source_code="wyscout-open",
+            provider_player_id="151",
+            canonical_player_key="overlap-player-v2:ESP_LL:2017/18:deadbeef",
+            normalized_name_used="john guidetti",
+            team_context_evidence=(
+                PlayerTeamContextEvidence(
+                    team_context_key="team:ESP_LL:alaves deportivo", shared_match_keys=("match:1",)
+                ),
+                PlayerTeamContextEvidence(
+                    team_context_key="team:ESP_LL:alaves deportivo", shared_match_keys=("match:2",)
+                ),
+            ),
+        )
+
+
+def test_same_match_under_two_different_team_contexts_is_rejected() -> None:
+    # A single real match can never evidence one player under two different
+    # teams for the same provider pair.
+    with pytest.raises(PlayerCrosswalkValidationError):
+        PlayerCrosswalkEntry(
+            source_code="wyscout-open",
+            provider_player_id="151",
+            canonical_player_key="overlap-player-v2:ESP_LL:2017/18:deadbeef",
+            normalized_name_used="john guidetti",
+            team_context_evidence=(
+                PlayerTeamContextEvidence(
+                    team_context_key="team:ESP_LL:alaves deportivo", shared_match_keys=("match:x",)
+                ),
+                PlayerTeamContextEvidence(
+                    team_context_key="team:ESP_LL:celta de vigo", shared_match_keys=("match:x",)
+                ),
+            ),
+        )
+
+
+def test_zero_team_context_evidence_is_rejected() -> None:
+    with pytest.raises(PlayerCrosswalkValidationError):
+        PlayerCrosswalkEntry(
+            source_code="wyscout-open",
+            provider_player_id="151",
+            canonical_player_key="overlap-player-v2:ESP_LL:2017/18:deadbeef",
+            normalized_name_used="john guidetti",
+            team_context_evidence=(),
+        )
+
+
+def test_transferred_player_resolves_with_confidence_from_total_shared_matches() -> None:
+    # Two contexts, one shared match each -- confidence must reflect the
+    # TOTAL genuinely shared match count across all contexts (2), never a
+    # single context's count, and never double-counting.
+    crosswalk = PlayerCrosswalk()
+    crosswalk.add(_transfer_entry())
+    resolution = resolve_player_v2(
+        source_code="wyscout-open", provider_player_id="151", crosswalk=crosswalk
+    )
+    assert resolution.status == "resolved"
+    # min(0.85, 0.55 + 0.10 * (2 - 1)) == 0.65
+    assert resolution.confidence == pytest.approx(0.65)
+
+
+def test_transferred_player_remains_one_registry_entry_per_provider_id() -> None:
+    # The registry key stays (source_code, provider_player_id) -- a
+    # transfer never creates a second entry for the same provider id.
+    crosswalk = PlayerCrosswalk()
+    crosswalk.add(_transfer_entry())
+    assert len(crosswalk.entries) == 1
+    assert crosswalk.lookup(source_code="wyscout-open", provider_player_id="151") is not None

@@ -556,3 +556,269 @@ count each real save once. Also bumped both adapters' `SEMANTIC_VERSION`
 pass changed observable emission semantics, so old and new observations
 must not share a provenance version. Full detail:
 [`ENTITY_RESOLUTION_V2.md`](ENTITY_RESOLUTION_V2.md).
+
+## Block 20D.3 -- Rich Overlap Enablement
+
+Enabled one real, rich, same-competition/same-season overlap between
+Wyscout Open and StatsBomb Open (ESP_LL/La Liga 2017/18) and built the
+first REAL deterministic `PlayerCrosswalk` population from it. This block
+prepares evidence for Reconciliation V2; it does not implement
+Reconciliation V2 itself (no change to `reconcile_metric()`, no
+granularity-aware reconciliation grouping, no DB writes).
+
+**Scope generalization.** Both certified adapters were hard-coded to a
+single scope (Wyscout ENG_PL 2017/18, StatsBomb ENG_PL 2015/16). A new
+`data_mesh/adapters/scope.py` module adds a small frozen `AdapterScope`
+dataclass (`canonical_competition_code`, `season_label`,
+`provider_competition_id`, `provider_season_id`) and a `ScopeMismatchError`.
+Every certified top-level adapter function now accepts an optional
+`scope: AdapterScope = DEFAULT_SCOPE` keyword-only parameter (omitting it
+preserves the exact original ENG_PL behavior) and validates each real
+per-match record's own native competition/season id against the declared
+scope immediately after parsing it, before any observation is emitted --
+refusing a mixed-scope batch outright rather than silently accepting or
+misattributing part of it. No copy-pasted `wyscout_spain_adapter.py`/
+`parse_spain_season_v2()` was created. Wyscout's real Figshare file-naming
+convention (`matches_England.json` vs `matches_Spain.json`) is handled by a
+small `_SCOPE_FILE_LABELS` lookup used only for `source_reference`
+provenance strings. **No `SEMANTIC_VERSION` bump for either adapter**: the
+real full-cache ENG_PL audits were rerun after generalization and produced
+byte-identical totals to the pre-generalization baseline (Wyscout
+412,609/77-77, StatsBomb 644,396/110-110, both `all_passed=True`) --
+observable transformation semantics did not change, only became
+parameterized.
+
+**Real ESP_LL evidence, verified before coding acceptance logic.** All of
+the block's "known evidence to verify" claims were confirmed exactly
+against real, freshly-loaded cached data: Wyscout ESP_LL 2017/18
+(competitionId=795, seasonId=181144) is 380 matches / 20 teams, fully
+consistent; StatsBomb's ESP_LL open-data scope (competition_id=11,
+season_id=1) is 36 matches, all involving Barcelona (20 distinct teams
+overall across those 36 matches); the real match overlap resolved through
+Block 20D.2's V2 identity contract (`build_team_index_v2_from_observations`
+/ `build_match_index_v2_from_observations` / `resolve_team_v2` /
+`resolve_match_v2` -- never `entity_source_id` parsing) is exactly 36
+shared canonical matches, 0 date mismatches, and exactly 2 Wyscout-only
+Barcelona league fixtures with no StatsBomb counterpart at all (Malaga vs
+Barcelona 2018-03-10, Levante vs Barcelona 2018-05-13) -- matching every
+expected fact with zero contradictions. All 20 real La Liga team identities
+converge deterministically across both providers with no fuzzy matching.
+No cross-source date-tolerance clustering was wired into V2 in this block
+(remains deferred to 20D.4, as in 20D.2).
+
+**Player name normalization** (`data_mesh/player_name_normalization.py`,
+new): Unicode NFKD accent folding, casefold, punctuation/separator
+folding, whitespace collapsing -- deliberately narrower than
+`normalize_team_name()`: token order is preserved (never reordered, unlike
+club names) and no alias table, nickname dictionary, or fuzzy/edit-distance
+equivalence is ever applied. A real, load-bearing finding during
+implementation: Wyscout's certified `player_name` hint carries a **short
+display name** ("L. Messi") while StatsBomb's carries the **full legal
+name** ("Lionel Andres Messi Cuccittini") -- an exact-match join across the
+two adapters' existing certified hints would have accepted almost nothing.
+The crosswalk audit job builds a separate Wyscout full-name lookup
+(`wyscout_full_names_by_id()`, from `players.json`'s `firstName`+
+`lastName`, repairing Wyscout's verified double-JSON-escaped Unicode defect
+at that provider boundary via `repair_wyscout_double_escaped_unicode()`
+before generic normalization) used only for the crosswalk join -- the
+certified adapter's own `player_name` hint is untouched and still correct
+for its already-certified purpose elsewhere.
+
+**Real player crosswalk** (`jobs/audit_wyscout_statsbomb_overlap.py`, new
+job, local-only, no DB writes, no canonical promotion). A candidate pair is
+accepted only when both sources independently evidence the same shared
+canonical match, the same resolved canonical team, and the same exact
+normalized player name (no name-only evidence, no missing-team evidence).
+Ambiguity is never resolved by picking "most likely": one provider id
+evidenced against more than one counterpart id is excluded from
+acceptance entirely and counted separately (`ambiguous_one_to_many`/
+`ambiguous_many_to_one`), as is a duplicate-name collision within one
+`(match, team, name)` slot. Real run against the full real ESP_LL
+scope (36 shared matches): **430 accepted pairs, 860 crosswalk entries
+created**, every accepted pair independently verified via
+`resolve_player_v2()` to resolve both provider ids to the same canonical
+key (`resolution_success_count == accepted_pairs`), 0 crosswalk conflicts,
+0 duplicate-name collisions, 0 inconsistent-name-evidence cases.
+`unresolved_no_exact_name_counterpart` is large (~15k `(match, team, name)`
+slots present on only one side) -- this is real, expected sample coverage
+(most Wyscout squad/bench players across 380 matches never appear in
+StatsBomb's 36-match Barcelona-only scope at all), not a defect.
+
+**Crosswalk canonical key**: `overlap-player:{competition_code}:
+{season_label}:{team_key}:{normalized_name}` -- deterministic,
+source-independent, explicitly namespaced `overlap-player:` (never the
+bare `player:<name>` global identity, never connected to
+`football.players`). Requires resolved canonical team context, not name
+alone; the same validated Wyscout/StatsBomb pair always resolves to the
+same key; a collision is structurally detectable via the existing
+`PlayerCrosswalk.add()` conflict machinery from Block 20D.2.
+
+**Discovered contract gap (section 11 audit, real, not hypothetical): 4
+real pairs evidenced under more than one resolved team context** within
+the single ESP_LL 2017/18 scope -- e.g. Wyscout id 151 / StatsBomb id 6038
+("John Guidetti"), evidenced under both Alaves and Celta de Vigo, matching
+Guidetti's real January 2018 loan move between those two clubs; similarly
+for Wyscout ids 3970, 3994, and 4332. Per the block's explicit instruction,
+these 4 pairs were **not** packed into one `team_context_key`, not
+arbitrarily assigned to one team, and not silently discarded -- they are
+excluded from crosswalk population entirely and reported by name/id/team
+context/match in the audit job's `multi_team_context_cases` output. The
+current `PlayerCrosswalkEntry` contract (one `team_context_key` per entry)
+was preserved as-is; a redesign to support multiple team contexts per
+canonical player (e.g. one entry per team-context per player, or a
+richer evidence-list contract) is left for explicit review before Block
+20D.4, not decided here.
+
+**Overlapping exact metric-identity inventory** (section 15, INVENTORY
+ONLY -- no comparability claim, no value comparison, no reconciliation):
+the real intersection of exact `(metric_name, metric_granularity)`
+identities observed by both adapters within the 36 shared matches is 65
+identities. Block 20D.4 owns everything downstream of this list:
+reconciliation grouping, semantic comparability, tolerances,
+provider-native-vs-derived comparison policy, source-independence policy,
+conflict resolution, and how `STATSBOMB_INTERNAL_ONLY` propagates through
+reconciliation.
+
+**Not done in this block** (by design): no Reconciliation V2
+implementation, no DB writes or V2 schema migration, no
+`football.*`/`intelligence.*` writes, no production/canonical promotion,
+no fuzzy/LLM player matching, no cross-league calibration, no change to
+`STATSBOMB_INTERNAL_ONLY` (remains `True`) or to the Block 20D.2 DB
+fail-closed `MetricGranularityNotPersistableError` boundary. `tests/
+integration/test_real_snapshot_v2_idempotency.py` and related
+(canonical loading into `football.*`) genuinely require PostgreSQL and
+remain correctly `SKIPPED` (DATABASE_URL not configured) -- but see the
+Block 20D.3 corrective pass below: the separate, DB-free `resolve_and_
+reconcile()` regression this repository has always used to validate the
+ENG_PL 2025/26 baseline was re-checked and does NOT require PostgreSQL;
+an earlier version of this section conflated the two. (A) the real
+Wyscout ENG_PL full adapter audit and (B) the real StatsBomb ENG_PL full
+adapter audit were both rerun at final stable state and reproduced their
+certified totals exactly.
+
+### Block 20D.3 corrective pass -- Option C multi-team-context crosswalk (complete)
+
+A follow-up implementation pass, requested after the diagnosis above was
+accepted as correct: the 4 real multi-team-context pairs are no longer
+excluded from the crosswalk. Diagnosis had already established, against
+real evidence, that all 4 are genuine clean mid-season transfers, not data
+defects -- John Guidetti (Wyscout 151 / StatsBomb 6038, Celta Vigo ->
+Alavés), Alejandro Gálvez Jimena (3970 / 6924, Eibar -> Las Palmas), Miguel
+Ángel Moyà Rumbo (3994 / 7069, Atlético Madrid -> Real Sociedad), and
+Javier Fuego Martínez (4332 / 6751, Espanyol -> Villarreal). The previous
+contract's single `team_context_key: str` field could only ever represent
+one club per entry, so it structurally could not accept these 4 real
+players without either silently packing two teams into one string,
+arbitrarily picking one team and destroying the other's evidence, or
+excluding them entirely (the choice actually made at the time, and
+reported rather than hidden).
+
+**`PlayerTeamContextEvidence`** (new,
+`data_mesh/entity_resolution_v2.py`): an immutable
+`(team_context_key, shared_match_keys)` pair with its own validation
+(non-blank team, at least one non-blank match key, no duplicate match key
+within one context -- fail-fast, never silently deduplicated).
+`PlayerCrosswalkEntry.team_context_key`/`shared_match_keys` (both `str`/
+flat `tuple[str, ...]`) are replaced by
+`team_context_evidence: tuple[PlayerTeamContextEvidence, ...]` -- one
+entry per team context, so a genuine transfer produces two (or more)
+contexts under ONE `PlayerCrosswalkEntry`, never a second registry entry
+and never a forced single-team choice. Validated at construction: at
+least one context, contexts in canonical ascending `team_context_key`
+order (callers must sort deterministically -- never silently re-sorted),
+no duplicate team context, and no shared match key may appear under two
+different contexts (a single real match can never evidence one player
+under two different teams for the same provider pair).
+`team_context_keys`/`shared_match_keys`/`shared_match_count` remain
+available as properties, now derived purely from
+`team_context_evidence` -- never a second stored source of truth. The
+registry key is unchanged: `PlayerCrosswalk.entries` is still keyed by
+`(source_code, provider_player_id)`, so one provider player id still
+resolves to exactly one player identity, never one identity per club.
+`resolve_player_v2()`'s confidence formula needed no code change --
+`shared_match_count` already aggregates the total genuinely shared match
+count across every context, deduplicated, never double-counted.
+
+**Opaque `overlap-player-v2` canonical key** (`jobs/audit_wyscout_
+statsbomb_overlap.py`'s `crosswalk_canonical_key()`): the previous
+`overlap-player:{competition}:{season}:{team_key}:{normalized_name}`
+format is retired -- it could never have supported a validated transfer
+(team membership changing mid-season would have to change the player's
+own identity key), and Block 20D.3's earlier diagnosis explicitly found
+normalized-name uniqueness "collision-free in this sample only," not a
+safe global identity component either. The new format,
+`overlap-player-v2:{competition_code}:{season_label}:{digest}`, is built
+from a SHA-256 hex digest (stdlib `hashlib`, deterministic across
+processes -- never the built-in `hash()`, never a random UUID) of the
+canonically ordered (sorted by `(source_code, provider_player_id)`),
+pipe-delimited, VALIDATED provider refs the pair was actually accepted
+against. Team context and normalized-name formatting deliberately do NOT
+participate in the digest: a validated transfer must resolve to the same
+key regardless of which team(s) back the evidence, and the key is
+provider-order-independent (the same pair produces the same key
+regardless of which provider is passed first). **This is explicitly not a
+global canonical player id** -- never `football.players`, never
+persisted, never user-facing; a future canonical-promotion decision must
+map these provider refs to an independent football-player identity
+rather than treating this overlap key as production identity. Because no
+Block 20D.3 crosswalk key has ever been committed, persisted, or exposed,
+the format change is a pre-commit correction, not a production migration
+-- nothing outside this branch depended on the retired format.
+
+**Name collision remains a resolution safety gate, never an identity
+component.** The exact-normalized-name-per-slot check
+(`inconsistent_name_evidence_cases`) is unchanged and still rejects a
+pair whose evidence disagrees on name across any (match, team) slot,
+including across a transferred player's multiple team contexts -- name
+no longer participates in `canonical_player_key`, but a name
+disagreement is still never resolved, only reported. Re-run against the
+same real ESP_LL cache the collision audit remains **collision-free in
+this sample only** (0 global duplicate normalized names, 0 same-team
+duplicates, 0 same-team+match duplicates) -- this still must never be
+read as a global "name is a safe player identity" claim.
+
+**Real re-run against the full ESP_LL cache**: accepted pairs
+**430 -> 434** (the 4 real transfers now included), crosswalk entries
+**860 -> 868** (2 per accepted pair, unchanged ratio),
+`resolution_success_count` **434 == accepted_pairs**, `crosswalk_
+conflicts` **0**. Every one of the 4 transfer pairs independently
+verified: `resolve_player_v2()` resolves both the Wyscout and StatsBomb
+provider id to the identical `canonical_player_key`, each carries exactly
+2 `PlayerTeamContextEvidence` contexts, every shared match belongs to
+exactly one context, and no evidence was dropped or misattributed
+(cross-checked against the raw Wyscout `teamsData[*].formation.lineup`
+payload directly, not merely the adapter's own output). All other real
+counts this block already certified are unchanged and re-verified: 380
+Wyscout matches / 20 teams, 36 StatsBomb matches / 20 teams, 36 shared
+canonical matches, 0 date mismatches, 20/20 team convergence, 65
+overlapping exact metric identities -- no adapter code changed, so no
+`SEMANTIC_VERSION` bump for either adapter.
+
+**Ambiguity count discrepancy, investigated and resolved.** A prior
+verbal summary of this block reported 1 one-to-many and 1 many-to-one
+ambiguity; the real, current, machine-readable overlap audit reports
+`ambiguous_one_to_many = 0` and `ambiguous_many_to_one = 0` against the
+full real ESP_LL cache, both before and after this corrective pass. The
+machine-readable audit is authoritative. Root cause, traced rather than
+assumed: `tests/test_audit_wyscout_statsbomb_overlap.py` contains two
+small, deliberately-constructed synthetic fixtures
+(`test_one_wyscout_id_matching_multiple_statsbomb_ids_is_unresolved_
+ambiguous`, `test_many_wyscout_ids_matching_one_statsbomb_id_is_
+unresolved_ambiguous`) that each assert exactly `== 1` for their own
+tiny 2-match unit-test scenario -- correct and expected for those unit
+tests, which exist specifically to prove the ambiguity-detection code
+path works, but unrelated to and never derived from the real 36-match
+ESP_LL production data. The earlier summary's "1/1" almost certainly
+conflated those unit-test fixture assertions with the real-data audit
+output; no committed documentation in this repository ever stated "1
+one-to-many ambiguity" as a real-data finding, so no doc text required
+correction here beyond this explicit reconciliation.
+
+**Deferred to Block 20D.4, unchanged by this pass**: Reconciliation V2
+itself, granularity-aware reconciliation grouping, semantic comparability/
+tolerance policy, DB V2 persistence migration, the deferred
+cross-source date-tolerance clustering integration into V2, canonical
+football-player promotion (including how/whether `overlap-player-v2`
+keys ever map to a real `football.players` id), any user-facing StatsBomb
+exposure, and any change to `STATSBOMB_INTERNAL_ONLY` (remains `True`) or
+the `MetricGranularityNotPersistableError` fail-closed boundary.

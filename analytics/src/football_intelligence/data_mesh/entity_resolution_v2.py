@@ -41,12 +41,20 @@ identity a certified V2 adapter actually provides.
   that already has id-to-name evidence from elsewhere (e.g. a provider's
   separate teams/players reference file) -- they never touch
   `entity_source_id` either.
-- `PlayerCrosswalkEntry` / `PlayerCrosswalk` / `resolve_player_v2()`: the
-  deterministic player-identity crosswalk **contract**. No entries are
-  populated automatically here -- Block 20D.3's real Wyscout x StatsBomb
-  overlap work builds real entries; this block defines what a valid entry
-  must contain and how lookup/conflict behaves. Without a validated entry,
-  a player stays UNRESOLVED, exactly like V0's `resolve_player()`.
+- `PlayerTeamContextEvidence` / `PlayerCrosswalkEntry` / `PlayerCrosswalk` /
+  `resolve_player_v2()`: the deterministic player-identity crosswalk
+  **contract**. Block 20D.3's real Wyscout x StatsBomb overlap work builds
+  real entries; this block defines what a valid entry must contain and how
+  lookup/conflict behaves. Without a validated entry, a player stays
+  UNRESOLVED, exactly like V0's `resolve_player()`. One
+  `PlayerCrosswalkEntry` supports N>=1 `PlayerTeamContextEvidence` team
+  contexts for the same real (source_code, provider_player_id) -- Block
+  20D.3's Option C redesign, which replaced an earlier single-team-context
+  shape once real evidence (4 genuine mid-season transfers in the ESP_LL
+  2017/18 overlap) proved one team per entry was insufficient. The
+  registry key stays `(source_code, provider_player_id)`: one provider
+  player id still resolves to exactly one player identity, never one
+  identity per club.
 """
 
 from __future__ import annotations
@@ -424,9 +432,63 @@ def resolve_match_v2(
 
 
 class PlayerCrosswalkValidationError(ValueError):
-    """A `PlayerCrosswalkEntry` was constructed without meeting the
-    documented minimum evidence bar -- never silently accepted with weaker
-    evidence than the contract requires."""
+    """A `PlayerCrosswalkEntry` or `PlayerTeamContextEvidence` was
+    constructed without meeting the documented minimum evidence bar --
+    never silently accepted with weaker evidence than the contract
+    requires."""
+
+
+def _require_non_blank(value: str, field_name: str, *, owner: str = "PlayerCrosswalkEntry") -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise PlayerCrosswalkValidationError(
+            f"{owner}.{field_name} must be a non-blank string, got {value!r}"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerTeamContextEvidence:
+    """One resolved team context a provider player id was evidenced under,
+    plus the exact real shared matches that specific evidence rests on.
+
+    A `PlayerCrosswalkEntry` holds one or more of these: exactly one for a
+    player who never changed clubs within the overlap scope, more than one
+    for a genuine mid-season transfer -- Block 20D.3's real diagnosed cases
+    (Guidetti Celta Vigo->Alavés, Gálvez Eibar->Las Palmas, Moyà Atlético
+    Madrid->Real Sociedad, Fuego Espanyol->Villarreal). Each context's own
+    `shared_match_keys` are the matches that specifically evidence THAT
+    team context -- never the pair's full match list -- so the match->team
+    relationship is explicit and never positionally inferred.
+    """
+
+    team_context_key: str
+    shared_match_keys: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        _require_non_blank(
+            self.team_context_key, "team_context_key", owner="PlayerTeamContextEvidence"
+        )
+        if not self.shared_match_keys:
+            raise PlayerCrosswalkValidationError(
+                "PlayerTeamContextEvidence requires at least one non-blank shared_match_key "
+                "-- a team context with zero match evidence is never valid"
+            )
+        seen: set[str] = set()
+        for match_key in self.shared_match_keys:
+            if not isinstance(match_key, str) or not match_key.strip():
+                raise PlayerCrosswalkValidationError(
+                    "PlayerTeamContextEvidence.shared_match_keys must contain only non-blank "
+                    f"strings, got {match_key!r}"
+                )
+            if match_key in seen:
+                # Fail fast rather than silently deduplicating: a duplicate
+                # match key inside one team context means the caller's own
+                # evidence-collection logic double-counted a match, a real
+                # bug worth surfacing rather than masking.
+                raise PlayerCrosswalkValidationError(
+                    f"PlayerTeamContextEvidence.shared_match_keys contains a duplicate match "
+                    f"key {match_key!r}"
+                )
+            seen.add(match_key)
 
 
 @dataclass(frozen=True, slots=True)
@@ -435,21 +497,32 @@ class PlayerCrosswalkEntry:
     logical player key link, with the audit evidence backing it.
 
     A crosswalk entry is never generated from name similarity alone. The
-    minimum bar (Block 20D.1's design conclusion, to be exercised for real
-    in Block 20D.3) is enforced here, at construction time, not merely
+    minimum bar (Block 20D.1's design conclusion, exercised for real in
+    Block 20D.3) is enforced here, at construction time, not merely
     documented: resolved team context + an exact deterministic normalized
-    player name + at least one genuinely shared resolved match. An entry
-    that does not meet this bar cannot be constructed at all -- it is
-    rejected immediately with `PlayerCrosswalkValidationError`, never
-    stored and never later resolved with positive confidence.
+    player name + at least one genuinely shared resolved match per team
+    context. An entry that does not meet this bar cannot be constructed at
+    all -- it is rejected immediately with `PlayerCrosswalkValidationError`,
+    never stored and never later resolved with positive confidence.
+
+    `team_context_evidence` supports N>=1 team contexts for the SAME real
+    person (Block 20D.3's Option C): a genuine mid-season transfer produces
+    more than one `PlayerTeamContextEvidence`, never a second registry
+    entry and never a forced single-team choice that would silently drop
+    or mis-attribute evidence. Contexts must be in canonical ascending
+    `team_context_key` order (callers sort deterministically before
+    constructing an entry -- this is validated, never silently re-sorted),
+    contain no duplicate team context, and no shared match key may appear
+    under two different team contexts (a single real match can never
+    evidence one player under two different teams for the same provider
+    pair).
     """
 
     source_code: str
     provider_player_id: str
     canonical_player_key: str
     normalized_name_used: str
-    team_context_key: str
-    shared_match_keys: tuple[str, ...] = field(default_factory=tuple)
+    team_context_evidence: tuple[PlayerTeamContextEvidence, ...]
     corroborating_nationality: str | None = None
     corroborating_position: str | None = None
 
@@ -458,25 +531,61 @@ class PlayerCrosswalkEntry:
         _require_non_blank(self.provider_player_id, "provider_player_id")
         _require_non_blank(self.canonical_player_key, "canonical_player_key")
         _require_non_blank(self.normalized_name_used, "normalized_name_used")
-        _require_non_blank(self.team_context_key, "team_context_key")
-        if not self.shared_match_keys or any(
-            not isinstance(key, str) or not key.strip() for key in self.shared_match_keys
-        ):
+        if not self.team_context_evidence:
             raise PlayerCrosswalkValidationError(
-                "PlayerCrosswalkEntry requires at least one non-blank shared_match_key "
-                "-- a crosswalk entry with zero shared-match evidence is never valid"
+                "PlayerCrosswalkEntry requires at least one team_context_evidence entry "
+                "-- an entry with zero team-context evidence is never valid"
             )
+        for evidence in self.team_context_evidence:
+            if not isinstance(evidence, PlayerTeamContextEvidence):
+                raise PlayerCrosswalkValidationError(
+                    "PlayerCrosswalkEntry.team_context_evidence must contain only "
+                    f"PlayerTeamContextEvidence instances, got {evidence!r}"
+                )
+        team_keys = [evidence.team_context_key for evidence in self.team_context_evidence]
+        if team_keys != sorted(team_keys):
+            raise PlayerCrosswalkValidationError(
+                "PlayerCrosswalkEntry.team_context_evidence must be in canonical ascending "
+                "team_context_key order -- callers must sort deterministically before "
+                "constructing an entry, never rely on implicit insertion order"
+            )
+        if len(set(team_keys)) != len(team_keys):
+            raise PlayerCrosswalkValidationError(
+                "PlayerCrosswalkEntry.team_context_evidence contains a duplicate "
+                "team_context_key -- each team context must appear at most once"
+            )
+        match_to_team: dict[str, str] = {}
+        for evidence in self.team_context_evidence:
+            for match_key in evidence.shared_match_keys:
+                existing_team = match_to_team.get(match_key)
+                if existing_team is not None and existing_team != evidence.team_context_key:
+                    raise PlayerCrosswalkValidationError(
+                        f"shared match key {match_key!r} is claimed by more than one team "
+                        f"context ({existing_team!r} and {evidence.team_context_key!r}) -- a "
+                        "single real match can never evidence one player under two different "
+                        "teams for the same provider pair"
+                    )
+                match_to_team[match_key] = evidence.team_context_key
+
+    @property
+    def team_context_keys(self) -> tuple[str, ...]:
+        return tuple(evidence.team_context_key for evidence in self.team_context_evidence)
+
+    @property
+    def shared_match_keys(self) -> tuple[str, ...]:
+        """Deterministic union of every context's matches, sorted. Derived
+        from `team_context_evidence` alone -- never a second stored source
+        of truth -- and never double-counted (a match key can belong to at
+        most one context, enforced in `__post_init__`)."""
+
+        result: set[str] = set()
+        for evidence in self.team_context_evidence:
+            result.update(evidence.shared_match_keys)
+        return tuple(sorted(result))
 
     @property
     def shared_match_count(self) -> int:
         return len(self.shared_match_keys)
-
-
-def _require_non_blank(value: str, field_name: str) -> None:
-    if not isinstance(value, str) or not value.strip():
-        raise PlayerCrosswalkValidationError(
-            f"PlayerCrosswalkEntry.{field_name} must be a non-blank string, got {value!r}"
-        )
 
 
 class PlayerCrosswalkConflictError(RuntimeError):
