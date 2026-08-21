@@ -1,29 +1,30 @@
-"""Unit tests for `db.data_mesh_repository.DataMeshRepository`'s
-`metric_granularity` fail-safe boundary (Block 20D.2 final micro-audit).
+"""Unit tests for `db.data_mesh_repository.DataMeshRepository`'s V2
+`metric_granularity` persistence (Block 20D.4).
 
 Pure unit tests over a fake `Connection` double -- no real Postgres, no
-`DATABASE_URL`, no `@pytest.mark.integration`. They prove the pre-scan
-happens before ANY SQL statement is executed (including the provider-id
-lookup), which is precisely what makes it safe against partial writes
-within one batch. Real end-to-end legacy persistence against a real
-database is already covered by
-`tests/integration/test_data_mesh_pipeline.py::test_observation_persistence_is_idempotent`,
-unaffected by this change (it persists a `metric_granularity=None`
-observation, which this fail-safe never touches).
-"""
+`DATABASE_URL`, no `@pytest.mark.integration`. They prove the SQL this
+repository issues: `metric_granularity` is included in both the column
+list and the `ON CONFLICT` target for `source_observations`/
+`reconciliation_decisions`, and persisting a V2 (non-`None`
+`metric_granularity`) observation no longer raises (the
+`MetricGranularityNotPersistableError` fail-closed guard that used to
+reject every V2 batch here was removed once
+`database/migrations/20260820100000_add_data_mesh_v2_persistence.sql`
+widened both tables' natural keys with `UNIQUE NULLS NOT DISTINCT`).
+
+The actual upsert BEHAVIOR this SQL shape is designed to produce (legacy
+NULL-granularity idempotence, same-identity-same-granularity idempotence,
+cross-granularity coexistence) can only be proven against a real
+PostgreSQL engine -- that proof lives in
+`database/tests/015_data_mesh_v2_contract.sql`, run by CI, not here."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
 
-import pytest
-
-from football_intelligence.data_mesh.models import NormalizedObservation
-from football_intelligence.db.data_mesh_repository import (
-    DataMeshRepository,
-    MetricGranularityNotPersistableError,
-)
+from football_intelligence.data_mesh.models import NormalizedObservation, ReconciliationDecision
+from football_intelligence.db.data_mesh_repository import DataMeshRepository
 
 _NOW = datetime(2026, 8, 22, 18, 30, tzinfo=UTC)
 
@@ -37,9 +38,7 @@ class _FakeCursorResult:
 
 
 class _FakeConnection:
-    """Records every `execute()` call -- never actually touches a database.
-    A test asserting `connection.executed == []` is asserting that not a
-    single SQL statement (not even the provider-id lookup) was issued."""
+    """Records every `execute()` call -- never actually touches a database."""
 
     def __init__(self) -> None:
         self.executed: list[tuple[str, tuple[Any, ...] | None]] = []
@@ -69,35 +68,27 @@ def _observation(*, metric_granularity: str | None, metric_name: str = "home_sco
     )
 
 
-def test_a_a_v2_observation_is_rejected_before_any_insert_occurs() -> None:
-    connection = _FakeConnection()
-    repository = DataMeshRepository(connection)  # type: ignore[arg-type]
-    v2_observation = _observation(metric_granularity="player_match")
-
-    with pytest.raises(MetricGranularityNotPersistableError):
-        repository.persist_observations([v2_observation])
-
-    # Not even the provider-id lookup ran -- the pre-scan happens before
-    # any SQL statement, not merely before the INSERT itself.
-    assert connection.executed == []
-
-
-def test_b_a_mixed_batch_fails_before_partially_persisting_the_legacy_item() -> None:
-    connection = _FakeConnection()
-    repository = DataMeshRepository(connection)  # type: ignore[arg-type]
-    legacy_observation = _observation(metric_granularity=None, metric_name="home_score")
-    v2_observation = _observation(metric_granularity="player_match", metric_name="saves")
-
-    with pytest.raises(MetricGranularityNotPersistableError):
-        repository.persist_observations([legacy_observation, v2_observation])
-
-    # The legacy item, first in the batch, must never be persisted just
-    # because it appears before the V2 item -- the whole batch is scanned
-    # up front, so zero writes happen either way.
-    assert connection.executed == []
+def _decision(
+    *, metric_granularity: str | None, metric_name: str = "saves"
+) -> ReconciliationDecision:
+    return ReconciliationDecision(
+        logical_entity_key="player-match:repo-test-match-1:repo-test-player-1",
+        entity_type="player",
+        metric_name=metric_name,
+        candidate_value=3,
+        status="agreed",
+        confidence=0.6,
+        winning_source_code=None,
+        participating_sources=("statsbomb-open", "wyscout-open"),
+        source_count=2,
+        evidence={"values_by_source": {"statsbomb-open": 3, "wyscout-open": 3}},
+        model_version="data-mesh-reconciliation-v2.0",
+        calculated_at=_NOW,
+        metric_granularity=metric_granularity,  # type: ignore[arg-type]
+    )
 
 
-def test_c_legacy_none_granularity_persistence_behavior_is_unchanged() -> None:
+def test_legacy_none_granularity_observation_persists_unchanged() -> None:
     connection = _FakeConnection()
     repository = DataMeshRepository(connection)  # type: ignore[arg-type]
     legacy_observation = _observation(metric_granularity=None)
@@ -105,26 +96,90 @@ def test_c_legacy_none_granularity_persistence_behavior_is_unchanged() -> None:
     written = repository.persist_observations([legacy_observation])
 
     assert written == 1
-    # Exactly the provider lookup + one INSERT -- the pre-scan adds no
-    # extra SQL for a legacy-only batch.
-    assert len(connection.executed) == 2
+    assert len(connection.executed) == 2  # provider lookup + one INSERT
     insert_sql, insert_params = connection.executed[1]
     assert "insert into ingestion.source_observations" in insert_sql
+    assert "metric_granularity" in insert_sql
     assert insert_params is not None
     assert insert_params[0] == 1  # provider_id resolved from the fake lookup
     assert insert_params[3] == "repo-test-event-1"  # entity_source_id
     assert insert_params[5] == "home_score"  # metric_name
+    assert insert_params[6] is None  # metric_granularity
 
 
-def test_error_message_names_a_real_offending_identity() -> None:
+def test_v2_observation_persists_without_raising() -> None:
+    """The old MetricGranularityNotPersistableError guard rejected every
+    batch containing a non-None metric_granularity -- removed once the V2
+    schema migration widened the natural key. This must no longer raise."""
+
     connection = _FakeConnection()
     repository = DataMeshRepository(connection)  # type: ignore[arg-type]
     v2_observation = _observation(metric_granularity="goalkeeper_match", metric_name="saves")
 
-    with pytest.raises(MetricGranularityNotPersistableError) as excinfo:
-        repository.persist_observations([v2_observation])
+    written = repository.persist_observations([v2_observation])
 
-    message = str(excinfo.value)
-    assert "goalkeeper_match" in message
-    assert "saves" in message
-    assert "ingestion.source_observations" in message
+    assert written == 1
+    insert_sql, insert_params = connection.executed[1]
+    assert insert_params is not None
+    assert insert_params[6] == "goalkeeper_match"
+
+
+def test_observation_on_conflict_target_includes_metric_granularity() -> None:
+    connection = _FakeConnection()
+    repository = DataMeshRepository(connection)  # type: ignore[arg-type]
+    repository.persist_observations([_observation(metric_granularity="player_match")])
+
+    insert_sql, _params = connection.executed[1]
+    on_conflict_target = insert_sql.split("on conflict (")[1].split(")")[0]
+    assert "metric_granularity" in on_conflict_target
+    assert "observed_at" in on_conflict_target
+
+
+def test_mixed_legacy_and_v2_batch_persists_every_item() -> None:
+    connection = _FakeConnection()
+    repository = DataMeshRepository(connection)  # type: ignore[arg-type]
+    legacy_observation = _observation(metric_granularity=None, metric_name="home_score")
+    v2_observation = _observation(metric_granularity="player_match", metric_name="saves")
+
+    written = repository.persist_observations([legacy_observation, v2_observation])
+
+    assert written == 2
+
+
+def test_legacy_decision_persists_with_null_granularity() -> None:
+    connection = _FakeConnection()
+    repository = DataMeshRepository(connection)  # type: ignore[arg-type]
+    legacy_decision = _decision(metric_granularity=None)
+
+    written = repository.replace_decisions([legacy_decision])
+
+    assert written == 1
+    insert_sql, insert_params = connection.executed[0]
+    assert "insert into ingestion.reconciliation_decisions" in insert_sql
+    assert "metric_granularity" in insert_sql
+    assert insert_params is not None
+    assert insert_params[3] is None  # metric_granularity
+
+
+def test_v2_decision_persists_with_explicit_granularity() -> None:
+    connection = _FakeConnection()
+    repository = DataMeshRepository(connection)  # type: ignore[arg-type]
+    v2_decision = _decision(metric_granularity="goalkeeper_match")
+
+    written = repository.replace_decisions([v2_decision])
+
+    assert written == 1
+    insert_sql, insert_params = connection.executed[0]
+    assert insert_params is not None
+    assert insert_params[3] == "goalkeeper_match"
+
+
+def test_decision_on_conflict_target_includes_metric_granularity() -> None:
+    connection = _FakeConnection()
+    repository = DataMeshRepository(connection)  # type: ignore[arg-type]
+    repository.replace_decisions([_decision(metric_granularity="player_match")])
+
+    insert_sql, _params = connection.executed[0]
+    on_conflict_target = insert_sql.split("on conflict (")[1].split(")")[0]
+    assert "metric_granularity" in on_conflict_target
+    assert "model_version" in on_conflict_target

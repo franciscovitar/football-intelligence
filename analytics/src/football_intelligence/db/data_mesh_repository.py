@@ -1,33 +1,35 @@
-"""PostgreSQL persistence for Block 13 multi-source data mesh evidence.
+"""PostgreSQL persistence for the multi-source data mesh evidence (Block 13,
+V2 persistence added Block 20D.4).
 
 Writes only to the `ingestion` schema (raw/audit evidence + reconciliation
-decisions). This repository never writes to `football.*` canonical tables --
-the PoC proves reconciliation without feeding production data.
+decisions) -- this repository never writes to `football.*`/`intelligence.*`
+canonical tables.
 
-## Temporary persistence boundary: `metric_granularity` (Block 20D.2)
+## `metric_granularity` persistence (Block 20D.4)
 
-`ingestion.source_observations` is Block 13's original persistence
-contract. Its columns and natural key (`provider_id, entity_type,
-entity_source_id, metric_name, observed_at`) predate Metric Catalog V2's
-`metric_granularity` field and have no column or natural-key component for
-it. A certified V2 observation's `metric_granularity` genuinely
-distinguishes two different real facts that would otherwise collide on
-this table's own natural key -- e.g. `saves`/`player_match` and
-`saves`/`goalkeeper_match` for the same match/player share the same
-`entity_type` ("player") and the same `entity_source_id`, so persisting
-both here would silently upsert one over the other, destroying real
-evidence rather than merely mislabeling it.
+`ingestion.source_observations`/`ingestion.reconciliation_decisions` (Block
+13) predated Metric Catalog V2's `metric_granularity` field: their natural
+keys had no column or key component for it, so a certified V2 observation's
+`metric_granularity` -- which genuinely distinguishes two different real
+facts (e.g. `saves`/`player_match` and `saves`/`goalkeeper_match` for the
+same match/player, sharing the same `entity_type`/`entity_source_id`) --
+could not be persisted without silently upserting one over the other.
+`persist_observations()` fenced this off with `MetricGranularityNotPersist
+ableError` since Block 20D.2, refusing any batch containing a non-`None`
+`metric_granularity` before any SQL executed.
 
-Rather than silently dropping `metric_granularity`, serializing it into
-`entity_identity_hints` as an undocumented workaround, or attempting a
-schema migration as part of this block, `persist_observations()` refuses
-the entire batch up front -- before any SQL statement executes -- the
-moment any observation in it carries a non-`None` `metric_granularity`.
-Legacy (pre-Metric-Catalog-V2) observations, which always have
-`metric_granularity=None`, are completely unaffected and persist exactly
-as before. Real V2-aware persistence (a genuine schema change: a new
-column and a widened natural key) is deferred to the Reconciliation V2 /
-Block 20D.4 work, not implemented here.
+`database/migrations/20260820100000_add_data_mesh_v2_persistence.sql` (Block
+20D.4) closes that gap: both tables gained a nullable `metric_granularity`
+column and their natural keys were widened to include it, using `UNIQUE
+NULLS NOT DISTINCT` (PostgreSQL 15+; this repository targets PostgreSQL 17)
+so legacy rows (`metric_granularity IS NULL`) still collide/upsert exactly
+as before, while rows with different non-NULL `metric_granularity` values
+coexist as distinct facts. `database/tests/015_data_mesh_v2_contract.sql`
+proves both invariants against a real database. With the schema proven
+safe, `MetricGranularityNotPersistableError`'s fail-closed guard is removed
+here -- `persist_observations()`/`replace_decisions()` now persist V2
+observations/decisions directly, with `ON CONFLICT` targets widened to
+match the new natural keys.
 """
 
 from __future__ import annotations
@@ -39,16 +41,6 @@ from typing import Any
 from psycopg import Connection
 
 from football_intelligence.data_mesh.models import NormalizedObservation, ReconciliationDecision
-
-
-class MetricGranularityNotPersistableError(RuntimeError):
-    """A batch contained an observation with an explicit `metric_granularity`,
-    but `ingestion.source_observations` (Block 13's legacy pre-V2
-    persistence contract) has no column or natural key to preserve it.
-    Persisting it anyway would risk silently collapsing distinct catalog
-    identities onto the same row. Real V2 DB persistence/schema support is
-    deferred to the Reconciliation V2 / Block 20D.4 work -- see this
-    module's docstring."""
 
 
 class DataMeshRepository:
@@ -71,23 +63,6 @@ class DataMeshRepository:
         return provider_id
 
     def persist_observations(self, observations: Sequence[NormalizedObservation]) -> int:
-        # Fail the whole batch before any INSERT -- see this module's
-        # docstring ("Temporary persistence boundary: metric_granularity").
-        non_persistable = [obs for obs in observations if obs.metric_granularity is not None]
-        if non_persistable:
-            first = non_persistable[0]
-            raise MetricGranularityNotPersistableError(
-                f"refusing to persist a batch of {len(observations)} observation(s): "
-                f"{len(non_persistable)} carry an explicit metric_granularity (e.g. "
-                f"{first.metric_granularity!r} for {first.source_code}:{first.entity_type}:"
-                f"{first.entity_source_id}:{first.metric_name}). "
-                "ingestion.source_observations is a legacy pre-V2 persistence contract with "
-                "no column or natural key for metric_granularity -- persisting would risk "
-                "silently collapsing distinct catalog identities (e.g. saves/player_match "
-                "and saves/goalkeeper_match) onto the same row. V2 DB persistence/schema "
-                "support is deferred to the Reconciliation V2 / Block 20D.4 work."
-            )
-
         written = 0
         for item in observations:
             provider_id = self.lookup_provider_id(item.source_code)
@@ -95,12 +70,15 @@ class DataMeshRepository:
                 """
                 insert into ingestion.source_observations (
                     provider_id, source_type, entity_type, entity_source_id,
-                    entity_identity_hints, metric_name, value,
+                    entity_identity_hints, metric_name, metric_granularity, value,
                     observed_at, source_timestamp, source_reference,
                     ingestion_run_id, semantic_version
                 )
-                values (%s, %s, %s, %s, %s::jsonb, %s, %s::jsonb, %s, %s, %s, %s, %s)
-                on conflict (provider_id, entity_type, entity_source_id, metric_name, observed_at)
+                values (%s, %s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s, %s, %s, %s, %s)
+                on conflict (
+                    provider_id, entity_type, entity_source_id, metric_name,
+                    metric_granularity, observed_at
+                )
                 do update set
                     value = excluded.value,
                     entity_identity_hints = excluded.entity_identity_hints,
@@ -116,6 +94,7 @@ class DataMeshRepository:
                     item.entity_source_id,
                     json.dumps(dict(item.entity_identity_hints), sort_keys=True),
                     item.metric_name,
+                    item.metric_granularity,
                     json.dumps(item.value),
                     item.observed_at,
                     item.source_timestamp,
@@ -138,12 +117,12 @@ class DataMeshRepository:
             self._connection.execute(
                 """
                 insert into ingestion.reconciliation_decisions (
-                    logical_entity_key, entity_type, metric_name, candidate_value,
-                    status, confidence, winning_provider_id, source_count,
+                    logical_entity_key, entity_type, metric_name, metric_granularity,
+                    candidate_value, status, confidence, winning_provider_id, source_count,
                     participating_sources, evidence, model_version, calculated_at
                 )
-                values (%s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)
-                on conflict (logical_entity_key, metric_name, model_version)
+                values (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)
+                on conflict (logical_entity_key, metric_name, metric_granularity, model_version)
                 do update set
                     candidate_value = excluded.candidate_value,
                     status = excluded.status,
@@ -158,6 +137,7 @@ class DataMeshRepository:
                     decision.logical_entity_key,
                     decision.entity_type,
                     decision.metric_name,
+                    decision.metric_granularity,
                     (
                         json.dumps(decision.candidate_value)
                         if decision.candidate_value is not None

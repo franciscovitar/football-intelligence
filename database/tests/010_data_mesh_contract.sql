@@ -55,7 +55,10 @@ begin
         '2025-08-22T18:30:00+00', '2025-08-22T18:30:00+00',
         'eventsseason.php?id=4331', 'data-mesh-v0.1'
     )
-    on conflict (provider_id, entity_type, entity_source_id, metric_name, observed_at)
+    on conflict (
+        provider_id, entity_type, entity_source_id, metric_name,
+        metric_granularity, observed_at
+    )
     do update set value = excluded.value;
 
     select count(*) into observation_count_after

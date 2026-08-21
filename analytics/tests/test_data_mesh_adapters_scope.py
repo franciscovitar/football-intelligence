@@ -180,3 +180,93 @@ def test_statsbomb_mixed_scope_batch_is_rejected() -> None:
         statsbomb_open.parse_match_observations(
             [esp_bundle, eng_bundle], scope=statsbomb_open.ESP_LL_SCOPE
         )
+
+
+# ---------------------------------------------------------------------------
+# Block 20D.4: season_scope_complete -- a genuinely incomplete real scope
+# (StatsBomb's real ESP_LL Open Data scope: 36 of one club's 38 real league
+# matches) must never emit player_season/goalkeeper_season facts, since
+# those would silently look identical to a real full-season aggregate.
+# ---------------------------------------------------------------------------
+
+
+def test_wyscout_esp_ll_scope_is_declared_season_complete() -> None:
+    # Wyscout's real ESP_LL Open Data scope IS a genuinely complete
+    # 380/380-match season (docs/BLOCK20_MULTI_SOURCE.md) -- must keep the
+    # default True, never suppress its genuinely-supported season facts.
+    assert wyscout_open.ESP_LL_SCOPE.season_scope_complete is True
+
+
+def test_statsbomb_esp_ll_scope_is_declared_season_incomplete() -> None:
+    # StatsBomb's real ESP_LL Open Data scope is genuinely only 36 of one
+    # club's 38 real league matches -- never a full season for any player.
+    assert statsbomb_open.ESP_LL_SCOPE.season_scope_complete is False
+
+
+def test_statsbomb_default_eng_pl_scope_remains_season_complete() -> None:
+    # The certified full ENG_PL 2015/16 scope IS a genuinely complete
+    # 380/380-match season -- must be completely unaffected by the ESP_LL
+    # fix.
+    assert statsbomb_open.DEFAULT_SCOPE.season_scope_complete is True
+
+
+def _statsbomb_lineup_payload_with_one_starter(
+    *, team_id: int = 1, player_id: int = 501, player_name: str = "Test Player"
+) -> list[dict]:
+    return [
+        {
+            "team_id": team_id,
+            "lineup": [
+                {
+                    "player_id": player_id,
+                    "player_name": player_name,
+                    "jersey_number": 9,
+                    "cards": [],
+                    "positions": [{"position": "Center Forward", "start_reason": "Starting XI"}],
+                }
+            ],
+        }
+    ]
+
+
+def test_statsbomb_incomplete_scope_suppresses_season_level_identities() -> None:
+    bundle = statsbomb_open.MatchBundle(
+        match_id=9101,
+        match_summary=_statsbomb_esp_match_summary(),
+        events_payload=[],
+        lineups_payload=_statsbomb_lineup_payload_with_one_starter(),
+    )
+    observations = statsbomb_open.parse_premier_league_season(
+        [bundle], scope=statsbomb_open.ESP_LL_SCOPE
+    )
+    season_granularities = {
+        obs.metric_granularity
+        for obs in observations
+        if obs.metric_granularity in ("player_season", "goalkeeper_season")
+    }
+    assert season_granularities == set()
+    # The equivalent player_appearance/match-level facts for the SAME real
+    # participant are still emitted -- only the season-level aggregate is
+    # suppressed, nothing else about this scope's real per-match evidence.
+    assert any(obs.metric_name == "started" for obs in observations)
+
+
+def test_statsbomb_complete_scope_still_emits_season_level_identities() -> None:
+    # Regression guard: the fix must not accidentally suppress season-level
+    # facts for a genuinely complete scope (e.g. the certified ENG_PL
+    # baseline).
+    bundle = statsbomb_open.MatchBundle(
+        match_id=1,
+        match_summary=_statsbomb_esp_match_summary(9999, competition_id=2, season_id=27),
+        events_payload=[],
+        lineups_payload=_statsbomb_lineup_payload_with_one_starter(),
+    )
+    observations = statsbomb_open.parse_premier_league_season(
+        [bundle], scope=statsbomb_open.DEFAULT_SCOPE
+    )
+    season_granularities = {
+        obs.metric_granularity
+        for obs in observations
+        if obs.metric_granularity in ("player_season", "goalkeeper_season")
+    }
+    assert "player_season" in season_granularities

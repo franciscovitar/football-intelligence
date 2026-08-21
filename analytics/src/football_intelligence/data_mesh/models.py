@@ -79,7 +79,27 @@ class EntityResolution:
     reason: str
 
 
-ReconciliationStatus = Literal["agreed", "single_source", "conflict", "unresolved"]
+# "not_comparable" / "methodology_pending" added Block 20D.4: a granularity-
+# aware, provider-pair-scoped comparability policy (see
+# `data_mesh/comparability_policy.py`) can now determine that two sources'
+# values for the same logical fact are known NOT to measure the same thing
+# ("not_comparable"), or that no reviewed policy exists yet for this
+# provider-pair/semantic-version/metric combination ("methodology_pending").
+# Both are distinct from "conflict" (which asserts the sources ARE
+# comparable but genuinely disagree) and from "unresolved" (no objective
+# observations at all) -- collapsing either into "conflict" would silently
+# claim two provider methodologies agree to measure the same fact when this
+# repository has no evidence they do. Deliberately NOT adding a
+# "tolerated_agreement" status in this block: numeric tolerance
+# reconciliation is out of scope for 20D.4 (see `comparability_policy.py`).
+ReconciliationStatus = Literal[
+    "agreed",
+    "single_source",
+    "conflict",
+    "unresolved",
+    "not_comparable",
+    "methodology_pending",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,3 +116,10 @@ class ReconciliationDecision:
     evidence: Mapping[str, object]
     model_version: str
     calculated_at: datetime
+    # None for V0 decisions (unchanged, pre-Metric-Catalog-V2 behavior). A
+    # certified V2 decision (Block 20D.4) always sets this explicitly --
+    # mirrors `NormalizedObservation.metric_granularity` exactly, so a
+    # decision for `saves`/player_match and one for `saves`/goalkeeper_match
+    # are never information-theoretically indistinguishable downstream of
+    # reconciliation, the same risk Block 20D.2 closed for observations.
+    metric_granularity: MetricGranularity | None = None

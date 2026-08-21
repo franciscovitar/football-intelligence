@@ -92,7 +92,7 @@ SOURCE_TYPE: SourceType = "objective_structured"
 # `player_external_id`/`player_name`, `home_team_*`/`away_team_*`,
 # `kickoff_date`). Old and new observations must not share a provenance
 # version.
-SEMANTIC_VERSION = "statsbomb-open-v0.3"
+SEMANTIC_VERSION = "statsbomb-open-v0.4"
 COMPETITION_CODE = "ENG_PL"
 SEASON_LABEL = "2015/16"
 
@@ -114,12 +114,21 @@ DEFAULT_SCOPE = AdapterScope(
 # `season_id=1`), discovered live during Block 20D.1's investigation. This
 # is the real "Barcelona 2017/18" open-data scope (36 of Barcelona's 38
 # league matches), never the whole real La Liga season -- see
-# `docs/ENTITY_RESOLUTION_V2.md`.
+# `docs/ENTITY_RESOLUTION_V2.md`. `season_scope_complete=False` (Block
+# 20D.4): this scope is genuinely a subset even of Barcelona's own real
+# season (36/38), and drastically incomplete for any non-Barcelona
+# player (whose real `player_season`/`goalkeeper_season` universe would
+# only ever be "however many of these 36 matches they happened to play
+# against Barcelona") -- a real correctness defect found during 20D.4's
+# real-data reconciliation certification, where this scope's season-level
+# facts were silently indistinguishable from Wyscout's genuinely complete
+# 380-match ESP_LL season aggregates.
 ESP_LL_SCOPE = AdapterScope(
     canonical_competition_code="ESP_LL",
     season_label="2017/18",
     provider_competition_id=11,
     provider_season_id=1,
+    season_scope_complete=False,
 )
 
 _STARTING_XI_REASON = "Starting XI"
@@ -1035,10 +1044,23 @@ def parse_lineup_participation_observations(
     source_revision: str = DEFAULT_PINNED_REVISION,
     scope: AdapterScope = DEFAULT_SCOPE,
     ingestion_run_id: int | None = None,
+    include_season: bool = True,
 ) -> list[NormalizedObservation]:
     """`started`/`shirt_number`/`listed_position` (player_appearance) +
-    season `matches`/`appearances`/`starts`/`sub_appearances`
-    (player_season)."""
+    (when `include_season`) season `matches`/`appearances`/`starts`/
+    `sub_appearances` (player_season).
+
+    **`include_season` must be `False` for any `scope` whose real bundle
+    set is not the whole real competition/season** (`scope.
+    season_scope_complete is False`, e.g. StatsBomb's real ESP_LL Open Data
+    scope -- 36 of one club's 38 real league matches, never a full season
+    for any player) -- a `player_season` fact is a season-total claim, and
+    aggregating over a genuinely partial match set would silently produce
+    a number indistinguishable from a real full-season total. This
+    function itself does not decide that (it just honors the flag) --
+    `parse_premier_league_season()` is the one call site that derives it
+    from `scope.season_scope_complete`, never a per-provider conditional
+    scattered elsewhere."""
 
     observations: list[NormalizedObservation] = []
     seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
@@ -1085,6 +1107,9 @@ def parse_lineup_participation_observations(
             season_appearances[player_id] += 1
             if player_id in roster.starters:
                 season_starts[player_id] += 1
+
+    if not include_season:
+        return observations
 
     season_reference = f"statsbomb/open-data@{source_revision}/data/lineups/*.json"
     for player_id, matches_count in season_matches.items():
@@ -1951,10 +1976,21 @@ def parse_premier_league_season(
     predates Block 20D.3's generalization and every existing caller still
     gets Premier League 2015/16 behavior by default), it is now the single
     certified season-level entry point for any declared `scope` -- never a
-    second, copy-pasted per-scope function. This is the only path that
-    correctly computes player_season/goalkeeper_season identities (they
-    require every match, not one) -- see `adapt_match_bundle` for the
-    single-match subset."""
+    second, copy-pasted per-scope function.
+
+    `player_season`/`goalkeeper_season` identities are only emitted when
+    `scope.season_scope_complete` is `True` (the default -- every scope
+    declared before Block 20D.4 genuinely is a complete real season). A
+    scope whose real bundle set is a genuine subset of the real
+    competition/season (e.g. StatsBomb's real ESP_LL Open Data scope --
+    36 of one club's 38 real league matches) must never have its
+    partial-window match/appearance/start/clean-sheet counts silently
+    presented as if they were the real season total -- see
+    `AdapterScope.season_scope_complete` and `parse_lineup_participation_
+    observations`. This is the one call site that derives `include_season`
+    from the declared scope; no other reconciliation/pipeline code needs
+    to know about this distinction at all. See `adapt_match_bundle` for
+    the single-match subset (which never includes season-level facts)."""
 
     if not STATSBOMB_INTERNAL_ONLY:
         raise AssertionError(
@@ -1963,6 +1999,7 @@ def parse_premier_league_season(
             "under that state change unreviewed."
         )
 
+    include_season = scope.season_scope_complete
     observations: list[NormalizedObservation] = []
     observations.extend(
         parse_match_observations(
@@ -1971,7 +2008,11 @@ def parse_premier_league_season(
     )
     observations.extend(
         parse_lineup_participation_observations(
-            bundles, source_revision=source_revision, scope=scope, ingestion_run_id=ingestion_run_id
+            bundles,
+            source_revision=source_revision,
+            scope=scope,
+            ingestion_run_id=ingestion_run_id,
+            include_season=include_season,
         )
     )
     observations.extend(
@@ -1981,7 +2022,11 @@ def parse_premier_league_season(
     )
     observations.extend(
         parse_goalkeeper_observations(
-            bundles, source_revision=source_revision, scope=scope, ingestion_run_id=ingestion_run_id
+            bundles,
+            source_revision=source_revision,
+            scope=scope,
+            ingestion_run_id=ingestion_run_id,
+            include_season=include_season,
         )
     )
     observations.extend(
