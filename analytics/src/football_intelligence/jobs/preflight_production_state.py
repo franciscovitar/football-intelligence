@@ -19,12 +19,28 @@ enforced here -- inspecting the real production database read-only is
 exactly the point -- but the target is only ever reported as a safe
 `postgresql://<host>[:<port>]/<dbname>` string
 (`db.production_write_guard.safe_target_description`, resolved through the
-same libpq-aware `db.target_parsing.parse_database_target` the write-capable
-jobs use), never the full DSN, user, password, or query string. Because this
-command never writes, it does not require (and does not accept) the
-production-write confirmation flags the write-capable jobs use -- but its
-reported `target` is exactly the value a human should later copy into one of
-those jobs' `--confirm-database-target`.
+same libpq-aware, environment-fallback-aware `db.target_parsing.parse_database_target`
+the write-capable jobs use), never the full DSN, user, password, or query
+string. Because this command never writes, it does not require (and does
+not accept) the production-write confirmation flags the write-capable jobs
+use -- but its reported `target` is exactly the value a human should later
+copy into one of those jobs' `--confirm-database-target`, and the printed
+target is guaranteed to equal the actually-connected target (see
+"Post-connection verification" below), never merely a pre-connect guess.
+
+## Post-connection verification (defense in depth)
+
+After actually connecting, this command asks libpq itself -- via psycopg's
+`Connection.info` (`PQhost`/`PQhostaddr`/`PQdb`) -- what target it really
+used, and compares that against what `parse_database_target` validated
+before connecting. A disagreement raises immediately rather than silently
+printing a target that may not be the one actually reached. This is
+defense in depth only, for the read-only preflight specifically (where a
+mismatch is merely reported and this command was never going to write
+anyway) -- it is deliberately NOT relied on as a substitute for the
+write-capable jobs' pre-connect fail-closed validation, since by the time a
+post-connect check could run there, a connection to an unintended database
+would already have happened.
 """
 
 from __future__ import annotations
@@ -39,6 +55,7 @@ from football_intelligence.db.production_write_guard import (
     validate_database_url_scheme,
 )
 from football_intelligence.db.provider_repository import connect
+from football_intelligence.db.target_parsing import ParsedDatabaseTarget, parse_database_target
 
 COMPETITION_CODE = "ENG_PL"
 SEASON_LABEL = "2025/26"
@@ -203,21 +220,56 @@ def _inspect_data_mesh(connection: Any) -> dict[str, Any]:
     }
 
 
+def _verify_connected_target_matches(connection: Any, expected: ParsedDatabaseTarget) -> None:
+    """Defense in depth: compare what libpq actually connected to
+    (`Connection.info`, backed by `PQhost`/`PQhostaddr`/`PQdb`) against what
+    `parse_database_target` validated pre-connect. Only meaningful for a
+    remote target -- a local Unix-socket connection's `PQhost()` returns
+    the socket directory path, not `"localhost"`, so comparing it here
+    would be a false-positive trap, not a real check."""
+
+    if expected.is_local:
+        return
+
+    info = connection.info
+    connected_host = info.hostaddr or info.host
+    if connected_host != expected.effective_host:
+        raise RuntimeError(
+            "Post-connection verification failed: pre-connect validation expected host "
+            f"{expected.effective_host!r} but libpq actually connected to "
+            f"{connected_host!r}. Do not trust this preflight's printed target -- "
+            "investigate before using it for --confirm-database-target."
+        )
+    if expected.dbname is not None and info.dbname != expected.dbname:
+        raise RuntimeError(
+            "Post-connection verification failed: pre-connect validation expected dbname "
+            f"{expected.dbname!r} but libpq actually connected to {info.dbname!r}. Do not "
+            "trust this preflight's printed target."
+        )
+
+
 def run_preflight(database_url: str) -> dict[str, Any]:
+    expected_target = parse_database_target(database_url)
     report: dict[str, Any] = {
         "target": safe_target_description(database_url),
+        "ambient_env_vars_used": list(expected_target.ambient_env_vars_used),
         "competition_code": COMPETITION_CODE,
         "season_label": SEASON_LABEL,
         "writes_performed": False,
     }
     with connect(database_url) as connection:
         try:
-            # The FIRST statement in the transaction, before any inspection
-            # query: PostgreSQL itself now refuses any INSERT/UPDATE/DELETE/
-            # DDL for the remainder of this transaction, regardless of what a
-            # future inspection query added here might accidentally attempt --
-            # a database-enforced guarantee, not merely an application-level
-            # "we only SELECT" convention.
+            # `connection.info` is pure libpq client-side metadata
+            # (PQhost/PQhostaddr/PQdb) already known from the connection
+            # handshake -- it sends no SQL statement to the server, so
+            # `SET TRANSACTION READ ONLY` immediately below remains
+            # genuinely the FIRST statement of the transaction.
+            _verify_connected_target_matches(connection, expected_target)
+            # PostgreSQL itself now refuses any INSERT/UPDATE/DELETE/DDL for
+            # the remainder of this transaction, regardless of what a
+            # future inspection query added here might accidentally
+            # attempt -- a database-enforced guarantee, not merely an
+            # application-level "we only SELECT" convention.
             connection.execute("SET TRANSACTION READ ONLY")
             report["canonical"] = _inspect_canonical(connection)
             report["v2_product"] = _inspect_v2_product(connection)
@@ -241,6 +293,13 @@ def main() -> None:
     )
 
     print(f"PRODUCTION PREFLIGHT (read-only, no writes): target={report['target']}")
+    if report["ambient_env_vars_used"]:
+        print(
+            "NOTE: this target was partly resolved from ambient environment variables "
+            f"({', '.join(report['ambient_env_vars_used'])}), not entirely from "
+            "--database-url itself. A write-capable job's remote path requires a fully "
+            "explicit --database-url and will reject this target as-is."
+        )
     print(json.dumps(report, indent=2, sort_keys=True))
     print(f"REPORT: {args.report_path}")
     print(

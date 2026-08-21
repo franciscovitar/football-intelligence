@@ -264,3 +264,118 @@ def test_database_target_resolution_safe_description_matches_standalone_function
     target = resolve_database_target(_REMOTE_URL, **_fully_confirmed())
     assert target is not None
     assert target.safe_description == safe_target_description(_REMOTE_URL)
+
+
+def test_safe_target_description_incorporates_ambient_env_vars(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PGPORT", "6543")
+    description = safe_target_description("postgresql://real-prod-host.example.com/db")
+    assert description == "postgresql://real-prod-host.example.com:6543/db"
+
+
+# ---------------------------------------------------------------------------
+# A remote write requires a FULLY explicit target -- no ambient PG*
+# environment fallback, and no implicit default port/dbname either.
+# ---------------------------------------------------------------------------
+
+
+def test_remote_write_rejected_when_port_is_ambient(monkeypatch: pytest.MonkeyPatch) -> None:
+    """3/4. Even with all four confirmation signals present and matching
+    the resolved target exactly, a remote write must still be refused if
+    the port only exists because PGPORT filled it in -- a production write
+    must never depend on ambient shell state at all."""
+
+    monkeypatch.setenv("PGPORT", "5432")
+    url = "postgresql://prod_user:secret@real-prod-host.neon.tech/football_intelligence"
+    resolved_description = safe_target_description(url)
+    assert resolved_description == _REMOTE_TARGET_DESCRIPTION  # port WAS resolved correctly...
+
+    with pytest.raises(SystemExit):
+        # ...but the write path must still reject it, because that port
+        # came from the environment, not from --database-url itself.
+        resolve_database_target(
+            url, **_fully_confirmed(confirm_database_target=resolved_description)
+        )
+
+
+def test_remote_write_rejected_when_dbname_is_ambient(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PGDATABASE", "football_intelligence")
+    url = "postgresql://prod_user:secret@real-prod-host.neon.tech:5432/"
+    resolved_description = safe_target_description(url)
+
+    with pytest.raises(SystemExit):
+        resolve_database_target(
+            url, **_fully_confirmed(confirm_database_target=resolved_description)
+        )
+
+
+def test_remote_write_rejected_when_port_is_entirely_unset() -> None:
+    """A production write must not silently rely on libpq's compiled-in
+    default port either -- the port must be typed explicitly, not merely
+    resolvable."""
+
+    url = "postgresql://prod_user:secret@real-prod-host.neon.tech/football_intelligence"
+    with pytest.raises(SystemExit):
+        resolve_database_target(
+            url,
+            **_fully_confirmed(
+                confirm_database_target="postgresql://real-prod-host.neon.tech/football_intelligence"
+            ),
+        )
+
+
+def test_remote_write_rejected_when_dbname_is_entirely_unset() -> None:
+    url = "postgresql://prod_user:secret@real-prod-host.neon.tech:5432/"
+    with pytest.raises(SystemExit):
+        resolve_database_target(
+            url,
+            **_fully_confirmed(
+                confirm_database_target="postgresql://real-prod-host.neon.tech:5432/(default)"
+            ),
+        )
+
+
+def test_remote_write_accepted_with_fully_explicit_target_and_no_ambient_env() -> None:
+    """The baseline positive case: `_REMOTE_URL` already specifies host,
+    port, and dbname explicitly, and no PG* environment variable is set
+    (`conftest.py`'s autouse fixture guarantees a clean slate) -- the
+    remote write is accepted."""
+
+    target = resolve_database_target(_REMOTE_URL, **_fully_confirmed())
+    assert target is not None
+    assert target.is_local is False
+
+
+def test_local_write_path_is_unaffected_by_the_fully_explicit_requirement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The "no ambient environment" restriction applies only to the
+    remote-write confirmation path -- local invocation (e.g. ordinary local
+    development, where PGPORT/PGDATABASE conveniences are common) is
+    unaffected."""
+
+    monkeypatch.setenv("PGPORT", "5432")
+    monkeypatch.setenv("PGDATABASE", "football_intelligence_test")
+    target = resolve_database_target("postgresql://localhost/")
+    assert target is not None
+    assert target.is_local is True
+
+
+def test_confirm_database_target_cannot_become_stale_via_ambient_env_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """9. A confirmation copied from an earlier preflight run stops
+    matching the moment an ambient PG* variable changes what the DSN
+    resolves to, even if --database-url itself is untouched. Rejected here
+    for two independent, reinforcing reasons: the confirmation no longer
+    matches the newly-resolved target, AND the target is (still) partly
+    ambient -- either alone is sufficient to fail closed."""
+
+    url = "postgresql://prod_user:secret@real-prod-host.neon.tech/football_intelligence"
+    monkeypatch.setenv("PGPORT", "5432")
+    old_confirmation = safe_target_description(url)  # captures :5432
+
+    monkeypatch.setenv("PGPORT", "6543")  # ambient state silently changed
+    with pytest.raises(SystemExit):
+        resolve_database_target(url, **_fully_confirmed(confirm_database_target=old_confirmation))

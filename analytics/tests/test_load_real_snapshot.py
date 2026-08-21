@@ -80,11 +80,11 @@ def test_remote_database_url_with_full_confirmation_passes_target_resolution(
     from football_intelligence.db.production_write_guard import resolve_database_target
 
     target = resolve_database_target(
-        "postgresql://user:pass@prod.example.com/db",
+        "postgresql://user:pass@prod.example.com:5432/db",
         allow_remote_write=True,
         confirm_target="production",
         production_write_confirmation=PRODUCTION_WRITE_CONFIRMATION_PHRASE,
-        confirm_database_target="postgresql://prod.example.com/db",
+        confirm_database_target="postgresql://prod.example.com:5432/db",
     )
     assert target is not None
     assert target.is_local is False

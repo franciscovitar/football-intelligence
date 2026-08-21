@@ -48,6 +48,40 @@ multi-port DSN (this bootstrap tooling only ever targets exactly one
 database). Ordinary single-host Neon-style URLs with `sslmode`/similar
 options, and ordinary local URLs, are unaffected.
 
+## Ambient libpq environment variables (a second hardening pass)
+
+`psycopg.conninfo.conninfo_to_dict` is a pure string parser -- it never
+consults the process environment. Real libpq does, for any of
+`host`/`hostaddr`/`port`/`dbname` a connection string leaves unset: it
+falls back to `PGHOST`/`PGHOSTADDR`/`PGPORT`/`PGDATABASE` before its own
+compiled-in default. Two concrete gaps this closed: a host-less
+`postgresql:///db` with `PGHOST=remote.example.com` set would previously
+have been assumed to be an always-local Unix socket, when real libpq opens
+a TCP connection to `remote.example.com`; and `postgresql://expected.example.com/db`
+with `PGHOSTADDR=<other-ip>` set would actually reach `<other-ip>`, not
+`expected.example.com`. `parse_database_target` now reproduces libpq's
+exact, documented environment-variable precedence for those four
+parameters (never a heuristic guess), so bootstrap commands' target
+classification and reported target always match what libpq will really
+do -- they never silently rely on ambient `PGHOST`/`PGHOSTADDR`/`PGPORT`/
+`PGDATABASE`/`PGSERVICE` defaults for their answer.
+
+`PGSERVICE`/`PGSERVICEFILE` are handled more strictly: either one being set
+fails closed (`SystemExit`) unconditionally, because a `pg_service.conf`
+entry can supply its own host/port/dbname that this lightweight parser has
+no way to inspect.
+
+**A remote production write goes one step further than general
+classification**: it also requires a target with *zero* ambient
+environment involvement -- every one of host/hostaddr, port, and dbname
+must come from `--database-url` itself, not from a `PG*` fallback, and
+`port`/`dbname` may not be silently left to libpq's own compiled-in
+default either. A one-time production write must never depend on ambient
+shell state at all. (Local classification and the read-only preflight stay
+libpq-accurate and environment-aware as described above -- this extra
+restriction applies only to the highest-stakes remote-write confirmation
+path.)
+
 ## The shared safety contract
 
 A **local** effective target (`localhost`/`127.0.0.1`/`::1`, or a host-less
@@ -88,10 +122,18 @@ The read-only preflight command below (Step 0 / Step 4) requires none of
 this -- it never writes, so it accepts a remote `--database-url` directly.
 It only ever reports the same safe `postgresql://<host>[:<port>]/<dbname>`
 string, never the full DSN, user, password, or query string -- and prints
-it in a form that can be copied directly into `--confirm-database-target`.
-Its own inspection transaction is additionally put into PostgreSQL's
-`READ ONLY` mode as its first statement, so the database engine itself --
-not just application discipline -- refuses any accidental write.
+it in a form that can be copied directly into `--confirm-database-target`
+(along with which, if any, `PG*` environment variables contributed to it,
+so a `--confirm-database-target` copied from the preflight can never be
+built from a write-capable job's own rejected, partly-ambient target).
+After connecting, it additionally asks libpq itself (via psycopg's
+`Connection.info`, backed by `PQhost`/`PQhostaddr`/`PQdb`) what target it
+really reached and fails loudly on any disagreement with what was
+validated pre-connect, so the printed target is guaranteed to be the one
+actually used, not merely a pre-connect guess. Its own inspection
+transaction is additionally put into PostgreSQL's `READ ONLY` mode as its
+first SQL statement, so the database engine itself -- not just application
+discipline -- refuses any accidental write.
 
 ## Expected certified invariants
 

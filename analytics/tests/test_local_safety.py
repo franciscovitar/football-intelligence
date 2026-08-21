@@ -64,3 +64,35 @@ def test_hostaddr_that_is_itself_local_is_still_accepted() -> None:
         validate_local_database_url("postgresql://real-host.example.com/db?hostaddr=127.0.0.1")
         is not None
     )
+
+
+# ---------------------------------------------------------------------------
+# Ambient libpq environment variables must also never let a genuinely
+# remote target through as "local" here -- the same regression the
+# hostaddr/query-host cases above cover, but for PG* environment fallback
+# instead of DSN query-string tricks. `conftest.py`'s autouse fixture
+# clears all relevant PG* vars before every test.
+# ---------------------------------------------------------------------------
+
+
+def test_host_less_dsn_with_remote_pghost_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PGHOST", "remote.example.com")
+    with pytest.raises(SystemExit):
+        validate_local_database_url("postgresql:///db")
+
+
+def test_localhost_dsn_with_remote_pghostaddr_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PGHOSTADDR", "203.0.113.9")
+    with pytest.raises(SystemExit):
+        validate_local_database_url("postgresql://localhost/db")
+
+
+def test_host_less_dsn_with_local_pghost_is_still_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression guard: a benign PGHOST=localhost (this repository's own
+    Database CI job sets exactly this) must not turn into a false
+    rejection merely because some PG* variable is present."""
+
+    monkeypatch.setenv("PGHOST", "localhost")
+    assert validate_local_database_url("postgresql:///db") is not None

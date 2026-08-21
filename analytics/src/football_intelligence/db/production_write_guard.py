@@ -45,10 +45,24 @@ possess the real `--database-url`, which is never read from a `DATABASE_URL`
 environment variable by any of these jobs." This module never reads any
 environment variable itself.
 
+## A remote write additionally requires a FULLY explicit target
+
+Beyond the four signals above, a remote target is also rejected if
+`db.target_parsing.parse_database_target` had to fall back to any ambient
+`PG*` environment variable for host/hostaddr/port/dbname
+(`ParsedDatabaseTarget.ambient_env_vars_used`), or if `port`/`dbname` are
+still unset even after that fallback (meaning libpq's own compiled-in
+default would apply silently). A one-time production write must never
+depend on ambient shell state at all -- every target parameter must be
+typed explicitly into `--database-url` itself. (Local classification and
+the read-only preflight remain libpq-accurate and environment-aware, as
+`target_parsing`'s own docstring explains -- this extra restriction applies
+only to the remote-write confirmation path, where the stakes are highest.)
+
 A local target (`localhost`/`127.0.0.1`/`::1`, or a host-less DSN resolving
 to a local Unix socket) is always accepted, exactly like
-`validate_local_database_url`, regardless of these four flags -- local
-invocation never requires any of them.
+`validate_local_database_url`, regardless of any of the above -- local
+invocation never requires any of it.
 """
 
 from __future__ import annotations
@@ -132,6 +146,24 @@ def resolve_database_target(
             f"{safe_description!r} (run the read-only preflight first and copy its "
             "reported target deliberately -- a stale confirmation from a different "
             "host/database is rejected, not silently accepted)"
+        )
+    if parsed.ambient_env_vars_used:
+        missing.append(
+            "--database-url must not rely on ambient environment variables for its "
+            f"target ({', '.join(parsed.ambient_env_vars_used)} currently supply part of "
+            "it) -- a production write requires every target parameter (host/hostaddr, "
+            "port, dbname) typed explicitly into --database-url itself, never inherited "
+            "from the shell environment"
+        )
+    if parsed.port is None:
+        missing.append(
+            "--database-url must specify an explicit port (e.g. :5432) for a production "
+            "write -- an implicit default port is not deterministic enough for this "
+            "confirmation"
+        )
+    if parsed.dbname is None:
+        missing.append(
+            "--database-url must specify an explicit database name for a production write"
         )
     if missing:
         raise SystemExit(

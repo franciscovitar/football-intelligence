@@ -11,6 +11,8 @@ from football_intelligence.jobs.preflight_production_state import (
     run_preflight,
 )
 
+_REMOTE_URL = "postgresql://user:pass@real-prod-host.example.com/db"
+
 
 def test_database_url_is_a_required_cli_argument() -> None:
     with pytest.raises(SystemExit):
@@ -27,10 +29,8 @@ def test_remote_url_is_accepted_without_any_confirmation_flags() -> None:
     """This command is read-only, so a remote target needs no production-write
     confirmation -- unlike the write-capable jobs."""
 
-    args = build_parser().parse_args(
-        ["--database-url", "postgresql://user:pass@real-prod-host.example.com/db"]
-    )
-    assert args.database_url == "postgresql://user:pass@real-prod-host.example.com/db"
+    args = build_parser().parse_args(["--database-url", _REMOTE_URL])
+    assert args.database_url == _REMOTE_URL
 
 
 def test_parser_accepts_any_scheme_string_scheme_validation_happens_in_main() -> None:
@@ -51,15 +51,27 @@ class _FakeCursor:
         return self._value
 
 
+class _FakeConnectionInfo:
+    """Stands in for psycopg's `Connection.info` (`PQhost`/`PQhostaddr`/
+    `PQdb`) -- pure client-side metadata, never a query. Defaults to
+    exactly matching `_REMOTE_URL`'s parsed target."""
+
+    def __init__(self, *, host: str = "real-prod-host.example.com", dbname: str = "db") -> None:
+        self.host = host
+        self.hostaddr = ""  # empty when the connection was made by hostname, not hostaddr
+        self.dbname = dbname
+
+
 class _FakeConnection:
     """A minimal fake standing in for a psycopg connection: every query this
     job could issue against a completely empty (freshly migrated, never
     bootstrapped) database returns "nothing found", and `commit()` raises --
     the preflight must never call it, on any code path."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, info: _FakeConnectionInfo | None = None) -> None:
         self.executed: list[str] = []
         self.rolled_back = False
+        self.info = info if info is not None else _FakeConnectionInfo()
 
     def __enter__(self) -> _FakeConnection:
         return self
@@ -82,13 +94,15 @@ class _FakeConnection:
         raise AssertionError("preflight must never commit")
 
 
-def test_transaction_is_set_read_only_as_the_very_first_statement(
+def test_transaction_is_set_read_only_as_the_very_first_sql_statement(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """13. Before any inspection query runs, PostgreSQL itself is told to
     put the transaction in READ ONLY mode -- proven here by asserting it is
-    literally the first statement executed, not merely documented in a
-    comment."""
+    literally the first SQL statement executed (the post-connection target
+    verification that now runs just before it issues no SQL at all -- see
+    the module's own comment on `connection.info` being pure client-side
+    metadata)."""
 
     fake_connection = _FakeConnection()
     monkeypatch.setattr(
@@ -96,7 +110,7 @@ def test_transaction_is_set_read_only_as_the_very_first_statement(
         lambda database_url: fake_connection,
     )
 
-    run_preflight("postgresql://user:pass@real-prod-host.example.com/db")
+    run_preflight(_REMOTE_URL)
 
     assert fake_connection.executed[0] == "SET TRANSACTION READ ONLY"
 
@@ -110,7 +124,7 @@ def test_preflight_never_writes_and_reports_expected_shape_against_an_empty_data
         lambda database_url: fake_connection,
     )
 
-    report = run_preflight("postgresql://user:pass@real-prod-host.example.com/db")
+    report = run_preflight(_REMOTE_URL)
 
     # 14. inspection then rolls back -- never commits, on the success path.
     assert fake_connection.rolled_back is True
@@ -124,6 +138,7 @@ def test_preflight_never_writes_and_reports_expected_shape_against_an_empty_data
     assert report["competition_code"] == COMPETITION_CODE
     assert report["season_label"] == SEASON_LABEL
     assert report["target"] == "postgresql://real-prod-host.example.com/db"
+    assert report["ambient_env_vars_used"] == []
     assert report["canonical"]["eng_pl_competition_exists"] is False
     assert report["canonical"]["eng_pl_2025_26_season_exists"] is False
     assert report["v2_product"]["active_team_scope"] is None
@@ -146,6 +161,87 @@ def test_preflight_rolls_back_even_when_a_query_raises(monkeypatch: pytest.Monke
     )
 
     with pytest.raises(RuntimeError):
-        run_preflight("postgresql://user:pass@real-prod-host.example.com/db")
+        run_preflight(_REMOTE_URL)
 
     assert fake_connection.rolled_back is True
+
+
+# ---------------------------------------------------------------------------
+# 10. Post-connection verification: the printed target cannot disagree with
+# what libpq actually connected to.
+# ---------------------------------------------------------------------------
+
+
+def test_preflight_raises_when_connected_host_disagrees_with_validated_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_connection = _FakeConnection(
+        info=_FakeConnectionInfo(host="a-completely-different-host.example.com", dbname="db")
+    )
+    monkeypatch.setattr(
+        "football_intelligence.jobs.preflight_production_state.connect",
+        lambda database_url: fake_connection,
+    )
+
+    with pytest.raises(RuntimeError, match="Post-connection verification failed"):
+        run_preflight(_REMOTE_URL)
+
+    # Never even reaches SET TRANSACTION READ ONLY -- the mismatch is fatal
+    # before any SQL is sent.
+    assert fake_connection.executed == []
+    assert fake_connection.rolled_back is True
+
+
+def test_preflight_raises_when_connected_dbname_disagrees_with_validated_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_connection = _FakeConnection(
+        info=_FakeConnectionInfo(host="real-prod-host.example.com", dbname="a_different_db")
+    )
+    monkeypatch.setattr(
+        "football_intelligence.jobs.preflight_production_state.connect",
+        lambda database_url: fake_connection,
+    )
+
+    with pytest.raises(RuntimeError, match="Post-connection verification failed"):
+        run_preflight(_REMOTE_URL)
+
+
+def test_preflight_skips_post_connect_check_for_a_local_socket_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A local Unix-socket connection's PQhost() returns a socket directory
+    path, not "localhost" -- comparing it would be a false-positive trap,
+    so the check is skipped entirely for a local target."""
+
+    fake_connection = _FakeConnection(
+        info=_FakeConnectionInfo(host="/var/run/postgresql", dbname="football_intelligence_test")
+    )
+    monkeypatch.setattr(
+        "football_intelligence.jobs.preflight_production_state.connect",
+        lambda database_url: fake_connection,
+    )
+
+    report = run_preflight("postgresql:///football_intelligence_test")
+    assert report["target"] == "postgresql://(local socket)/football_intelligence_test"
+
+
+# ---------------------------------------------------------------------------
+# Ambient environment variables are reported, never silently hidden.
+# ---------------------------------------------------------------------------
+
+
+def test_preflight_reports_ambient_env_vars_used(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PGDATABASE", "db")
+    fake_connection = _FakeConnection(
+        info=_FakeConnectionInfo(host="real-prod-host.example.com", dbname="db")
+    )
+    monkeypatch.setattr(
+        "football_intelligence.jobs.preflight_production_state.connect",
+        lambda database_url: fake_connection,
+    )
+
+    report = run_preflight("postgresql://real-prod-host.example.com/")
+
+    assert report["ambient_env_vars_used"] == ["PGDATABASE"]
+    assert report["target"] == "postgresql://real-prod-host.example.com/db"
