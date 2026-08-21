@@ -50,11 +50,27 @@ An adapter's `SEMANTIC_VERSION` bump (e.g. Wyscout `v0.1 -> v0.2`, Block
 comparability policy reviewed against `wyscout-open-v0.2`/
 `statsbomb-open-v0.4`'s real output says nothing about whether a future
 `wyscout-open-v0.3` still agrees the same way -- so every entry is keyed on
-the exact semantic versions its evidence was gathered against, imported
-directly from each certified adapter's own `SEMANTIC_VERSION` constant
-(never a hard-coded guess) so a future adapter version bump automatically
-and silently stops matching any existing entry, rather than requiring
-someone to remember to invalidate this registry by hand.
+the exact semantic versions its evidence was gathered against.
+
+**Those versions are pinned LITERAL string constants
+(`WYSCOUT_CERTIFIED_POLICY_VERSION`, `STATSBOMB_CERTIFIED_POLICY_VERSION`
+below), never imported/aliased from either adapter's live `SEMANTIC_
+VERSION` constant.** Building the registry's own `SourceRef`s from a live
+import would be exactly backwards: re-importing this module after a future
+adapter version bump would silently carry the OLD, already-reviewed
+policies forward onto the NEW, never-reviewed version -- the opposite of
+what "semantic-version-scoped" is supposed to guarantee. Pinning literals
+instead means the registry never moves on its own: a real observation's
+own `semantic_version` (read from the observation itself at reconciliation
+time -- see `pipeline.resolve_and_reconcile_v2()`'s `_semantic_versions_
+by_source()`) is what changes the moment an adapter is bumped, and it
+simply stops matching these fixed pins -- falling through to `methodology_
+pending` -- until a human explicitly reviews the new version's real output
+and updates the pin as a deliberate, reviewed action. The live `SEMANTIC_
+VERSION` constants may still be imported elsewhere (e.g. a test asserting
+the current pin still matches, as an early warning the moment someone
+bumps a version without re-certifying) but must never feed the registry
+itself.
 
 ## What this module deliberately does NOT do
 
@@ -71,13 +87,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from football_intelligence.data_mesh.adapters.statsbomb_open import (
-    SEMANTIC_VERSION as STATSBOMB_OPEN_SEMANTIC_VERSION,
-)
-from football_intelligence.data_mesh.adapters.statsbomb_open import (
     SOURCE_CODE as STATSBOMB_OPEN_SOURCE_CODE,
-)
-from football_intelligence.data_mesh.adapters.wyscout_open import (
-    SEMANTIC_VERSION as WYSCOUT_OPEN_SEMANTIC_VERSION,
 )
 from football_intelligence.data_mesh.adapters.wyscout_open import (
     SOURCE_CODE as WYSCOUT_OPEN_SOURCE_CODE,
@@ -85,6 +95,16 @@ from football_intelligence.data_mesh.adapters.wyscout_open import (
 from football_intelligence.metric_catalog.types import MetricGranularity
 
 ComparisonMode = Literal["exact", "not_comparable", "methodology_pending"]
+
+# Pinned evidence versions (Block 20D.4) -- the EXACT certified adapter
+# semantic versions the real ESP_LL 2017/18 comparability evidence below was
+# gathered against. Deliberately literal string constants, NEVER imported
+# from either adapter's live `SEMANTIC_VERSION` -- see this module's
+# docstring ("Why this is ALSO scoped by each source's semantic_version")
+# for why a live import here would be exactly backwards. Only an explicit,
+# reviewed future re-certification may change these two lines.
+WYSCOUT_CERTIFIED_POLICY_VERSION = "wyscout-open-v0.2"
+STATSBOMB_CERTIFIED_POLICY_VERSION = "statsbomb-open-v0.4"
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -162,19 +182,21 @@ def _policy(
 
 # ---------------------------------------------------------------------------
 # The one certified provider pair for Block 20D.4: Wyscout Open x StatsBomb
-# Open, at exactly the semantic versions the real ESP_LL 2017/18 evidence
-# below was gathered against. Read directly from each certified adapter's
-# own constant -- never a guessed/hard-coded version string -- so a future
-# adapter SEMANTIC_VERSION bump silently and automatically invalidates
-# every entry here (they simply stop matching any real observation's
-# semantic_version, falling through to methodology_pending).
+# Open, at exactly the PINNED certified semantic versions the real ESP_LL
+# 2017/18 evidence below was gathered against. Built from the literal
+# WYSCOUT_CERTIFIED_POLICY_VERSION / STATSBOMB_CERTIFIED_POLICY_VERSION
+# constants above -- NOT from either adapter's live SEMANTIC_VERSION -- so a
+# future adapter version bump does nothing to these two lines; only a real
+# observation's own (now-different) semantic_version stops matching them,
+# falling through to methodology_pending until an explicit re-certification
+# updates the pins.
 # ---------------------------------------------------------------------------
 
 _WYSCOUT_OPEN = SourceRef(
-    source_code=WYSCOUT_OPEN_SOURCE_CODE, semantic_version=WYSCOUT_OPEN_SEMANTIC_VERSION
+    source_code=WYSCOUT_OPEN_SOURCE_CODE, semantic_version=WYSCOUT_CERTIFIED_POLICY_VERSION
 )
 _STATSBOMB_OPEN = SourceRef(
-    source_code=STATSBOMB_OPEN_SOURCE_CODE, semantic_version=STATSBOMB_OPEN_SEMANTIC_VERSION
+    source_code=STATSBOMB_OPEN_SOURCE_CODE, semantic_version=STATSBOMB_CERTIFIED_POLICY_VERSION
 )
 
 # EXACT (10) -- real 100% agreement across every paired entity in the
