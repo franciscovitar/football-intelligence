@@ -1083,4 +1083,168 @@ methodology divergence; the newly-found `player_season`/`goalkeeper_season`
 overlap identities; any additional provider pair; canonical
 `football.players` promotion; product exposure; the StatsBomb
 compliance/`STATSBOMB_INTERNAL_ONLY` decision; and production
-scheduling/automation.
+scheduling/automation. Block 20D.5's own closure review (below) determined
+none of this list blocks Block 20 -- see
+["Block 20D.5 -- Final Closure Checkpoint"](#block-20d5----final-closure-checkpoint)
+for the disposition of each item.
+
+## Block 20D.5 -- Final Closure Checkpoint
+
+**Block 20 status: CLOSED / CERTIFIED.**
+
+This is a documentation-only checkpoint. No adapter, reconciliation,
+pipeline, or database code changed in Block 20D.5, and none was needed:
+Block 20D.4's real ESP_LL 2017/18 certification (below) already satisfies
+Block 20's actual objective -- proving the Data Mesh can acquire,
+normalize, resolve, and reconcile evidence from multiple independent
+historical/deep providers without disturbing the existing current/recent
+V0 pipeline, without inventing unreviewed methodology, and without ever
+silently promoting unvetted or restricted evidence to canonical/product
+status.
+
+Closing Block 20 does **not** claim the overall product is finished, that
+every provider is product-enabled, or that every methodology question is
+solved. It closes exactly the scope Block 20 set out to prove.
+
+### Block 20 exit contract
+
+**Supported**:
+
+- multiple independent historical/deep providers supported through the
+  Data Mesh;
+- Wyscout Open + StatsBomb Open adapters certified against real evidence;
+- exact `metric_granularity` preserved end-to-end, including through
+  reconciliation grouping;
+- team/match identity convergence certified via the id-based V2 index;
+- deterministic `PlayerCrosswalk` certified on real overlap -- 434
+  accepted player pairs / 868 entries, all 4 genuine mid-season transfer
+  cases preserved via multi-team-context evidence;
+- Reconciliation V2 certified for exactly the Wyscout Open v0.2 x
+  StatsBomb Open v0.4 provider pair, at those pinned semantic versions;
+- PostgreSQL V2 persistence certified (`UNIQUE NULLS NOT DISTINCT`,
+  legacy rows unaffected);
+- the V0 current/recent pipeline preserved and re-verified unchanged
+  (`resolve_and_reconcile()`, `entity_resolution.py`,
+  `MODEL_VERSION = "data-mesh-reconciliation-v0.1"`, the Football-Data.co.uk
+  x OpenFootball ENG_PL 2025/26 baseline).
+
+**Real ESP_LL certification** (canonical figures -- do not conflate with
+the separate ENG_PL adapter-audit totals of 412,609 Wyscout / 644,396
+StatsBomb observations cited earlier in this document, which are a
+different scope):
+
+| | Wyscout ESP_LL 2017/18 | StatsBomb ESP_LL 2017/18 (partial Open Data scope) |
+| --- | --- | --- |
+| Observations | **416,407** | **61,247** |
+| Adapter-safe identities in the full contract | 77/77 | 110/110 |
+| Identities legitimately emit-capable for this scope | 77 | **104** (110 minus the 6 season-level identities intentionally suppressed by `season_scope_complete=False`) |
+
+Overlap:
+
+- 36/36 shared canonical matches, 20/20 teams, 0 date mismatches;
+- 434 accepted player pairs, 868 crosswalk entries, 4/4 real transfer
+  players preserved with correct multi-team-context evidence;
+- 65 legitimate shared match-scoped `(metric_name, metric_granularity)`
+  identities;
+- 0 legitimate shared season-level identities (StatsBomb's incomplete
+  ESP_LL scope correctly emits none -- see "already safely resolved"
+  below).
+
+Reconciliation (`resolve_and_reconcile_v2()`, full real batch, byte-
+identical on re-run):
+
+- **403,291** total decisions;
+- **369,153** `single_source`;
+- **3,664** `agreed` (all within the 10 `exact`-policy identities, zero
+  leakage);
+- **6,376** `not_comparable` (all within the 12 `not_comparable`-policy
+  identities, zero leakage);
+- **24,098** `methodology_pending`;
+- zero cross-granularity collapse (`saves`/player_match and
+  `saves`/goalkeeper_match remain distinct decision groups throughout).
+
+**Fail-closed contract** (structural, not a promise pending future work):
+
+- an unknown or unreviewed cross-source comparison resolves to
+  `methodology_pending`, never a guessed value;
+- an unsupported source pair or semantic version falls through to
+  `methodology_pending` by construction (the registry is keyed on pinned
+  `(source_code, semantic_version)` pairs, never a live/auto-updating
+  import);
+- a known semantic divergence between providers is certified
+  `not_comparable`, never averaged or silently picked;
+- more than 2 objective sources fails closed to `methodology_pending`
+  unconditionally -- N>2-provider semantics are not invented in Block 20;
+- an incomplete season scope (`season_scope_complete=False`) cannot emit a
+  full-season aggregate for any player, whether they belong to the
+  under-sampled club or an opponent;
+- a missing player crosswalk entry leaves that player `UNRESOLVED` --
+  never a name-only or fuzzy fallback;
+- no cross-source comparison ever produces a guessed consensus value.
+
+**Research backlog -- not Block 20 blockers.** The following remain real,
+legitimate future work, but none of them is required for Block 20 to be
+considered correct or complete, and none is promised to be implemented on
+any particular schedule:
+
+- numeric tolerance reconciliation for the 25 identities currently
+  `methodology_pending` on high-but-not-perfect empirical agreement, and
+  a possible `tolerated_agreement` status to express it;
+- re-auditing the 6 thin-evidence rare-event identities
+  (`penalties_attempted`, `penalty_goals`, `penalties_missed`, `red_cards`
+  player_match/team_match, `second_yellow_cards`) against a larger real
+  sample for possible `exact` promotion;
+- `status` vocabulary, `kickoff_at` timezone, and `venue_name`
+  representational normalization;
+- further `passes`/`duels` methodology research, should a future,
+  independently reviewed reconciliation approach ever want to attempt it;
+- any additional provider pair beyond the certified Wyscout Open x
+  StatsBomb Open ESP_LL 2017/18 pair.
+
+**Already safely resolved -- not open Block 20 defects.** Two items that
+earlier Block 20D.4 text described as deferred were, in fact, already
+closed by evidence and code already on `main`:
+
+- the `passes`/`duels` provider-methodology divergence is not an
+  unresolved gap -- it is already correctly and permanently represented as
+  `not_comparable` in `comparability_policy.py`, backed by concrete real
+  evidence (e.g. a real sampled pair of 253 vs. 291 passes for the same
+  team in the same match), with zero leakage proven in the full real ESP_LL
+  certification;
+- the partial-StatsBomb-ESP_LL `player_season`/`goalkeeper_season` defect
+  (a 36-of-38-match club-only Open Data window silently aggregating as if
+  it were a genuine full season) was already found and fixed in Block
+  20D.4 via `AdapterScope.season_scope_complete=False` -- verified by real
+  re-run, not merely asserted.
+
+**Product future -- explicitly out of Block 20's scope**, moved to the
+global product closure track:
+
+- canonical `football.players` promotion (including whether/how
+  `overlap-player-v2` crosswalk keys ever map to an independent canonical
+  player identity);
+- user-facing Wyscout/StatsBomb exposure;
+- production scheduling/automation for either historical/deep provider.
+
+**Externally blocked**: the StatsBomb product/commercial-use compliance
+question remains unresolved outside this repository.
+`providers.statsbomb_open_policy.STATSBOMB_INTERNAL_ONLY` stays `True`;
+Block 20 makes and claims no StatsBomb product-rights determination.
+
+**Explicitly not claimed by Block 20**:
+
+- cross-league strength calibration;
+- current-season (e.g. 2026/27) player-depth coverage from either
+  historical/deep provider;
+- product rights for StatsBomb Open Data;
+- a canonical, global player identity;
+- user-facing multi-provider product exposure;
+- full semantic equivalence across providers for any metric outside the
+  10 identities certified `exact`.
+
+An unrelated, pre-existing scheduled-job failure in the current/recent V0
+sync lane (`ApiFootballResponseError: Your account is suspended`, an
+external API-Football account/billing condition) was observed during the
+Block 20D.5 closure review. It is not a Block 20 historical/deep
+correctness regression and is out of scope for this checkpoint; it belongs
+to the later global product/runtime closure review.
