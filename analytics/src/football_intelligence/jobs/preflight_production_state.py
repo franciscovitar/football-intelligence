@@ -34,10 +34,24 @@ After actually connecting, this command asks libpq itself -- via psycopg's
 `Connection.info` (`PQhost`/`PQhostaddr`/`PQdb`) -- what target it really
 used, and compares that against what `parse_database_target` validated
 before connecting. A disagreement raises immediately rather than silently
-printing a target that may not be the one actually reached. This is
-defense in depth only, for the read-only preflight specifically (where a
-mismatch is merely reported and this command was never going to write
-anyway) -- it is deliberately NOT relied on as a substitute for the
+printing a target that may not be the one actually reached.
+
+The comparison follows real `PQhost`/`PQhostaddr` semantics, not a single
+collapsed "connected host" value: `PQhost()` returns the host name/
+parameter that was SUPPLIED (identity/SNI), while `PQhostaddr()` returns
+the real resolved server IP -- and libpq populates `PQhostaddr()` with a
+real DNS-resolved IP even for an ordinary hostname-only connection where
+`hostaddr` was never supplied at all. Comparing that resolved IP against
+the hostname string would therefore fail every normal DNS-based
+connection; the check instead verifies `host` against `host` when no
+explicit `hostaddr` was ever part of the target, and verifies `hostaddr`
+against `hostaddr` (plus `host` as a separate identity check) only when
+`hostaddr` genuinely was part of the resolved target. Port and dbname are
+compared directly.
+
+This is defense in depth only, for the read-only preflight specifically
+(where a mismatch is merely reported and this command was never going to
+write anyway) -- it is deliberately NOT relied on as a substitute for the
 write-capable jobs' pre-connect fail-closed validation, since by the time a
 post-connect check could run there, a connection to an unintended database
 would already have happened.
@@ -226,19 +240,66 @@ def _verify_connected_target_matches(connection: Any, expected: ParsedDatabaseTa
     `parse_database_target` validated pre-connect. Only meaningful for a
     remote target -- a local Unix-socket connection's `PQhost()` returns
     the socket directory path, not `"localhost"`, so comparing it here
-    would be a false-positive trap, not a real check."""
+    would be a false-positive trap, not a real check.
+
+    The comparison must follow real libpq/PQ* semantics, not a naive single
+    "connected host" value:
+
+    - `PQhost()` returns the host name/parameter that was SUPPLIED (for
+      identity/TLS verification/SNI), not the resolved network address.
+    - `PQhostaddr()` returns the real server IP address libpq connects
+      to. Critically, when only `host` was supplied (the ordinary
+      DNS-hostname case -- no explicit `hostaddr`), libpq still resolves
+      and reports a real IP via `PQhostaddr()` even though `hostaddr` was
+      never part of the connection string. Comparing that DNS-resolved IP
+      against the hostname string would fail EVERY ordinary DNS-based
+      connection -- a false-positive trap, not a real check.
+
+    So the check branches on which of `expected.host`/`expected.hostaddr`
+    was actually part of the resolved target (DSN or environment):
+
+    - `expected.hostaddr` was supplied: libpq was explicitly routed by
+      `hostaddr` -- verify `info.hostaddr` matches it exactly, and (as a
+      separate identity/SNI sanity check) `info.host` matches
+      `expected.host` when that was also supplied.
+    - Only `expected.host` was supplied (no `hostaddr`): verify `info.host`
+      matches it. `info.hostaddr` is deliberately NOT compared here -- it
+      is DNS's resolved IP doing its normal job, not a discrepancy.
+    """
 
     if expected.is_local:
         return
 
     info = connection.info
-    connected_host = info.hostaddr or info.host
-    if connected_host != expected.effective_host:
+
+    if expected.hostaddr is not None:
+        if info.hostaddr != expected.hostaddr:
+            raise RuntimeError(
+                "Post-connection verification failed: pre-connect validation expected "
+                f"hostaddr {expected.hostaddr!r} but libpq actually connected to "
+                f"hostaddr {info.hostaddr!r}. Do not trust this preflight's printed target "
+                "-- investigate before using it for --confirm-database-target."
+            )
+        if expected.host is not None and info.host != expected.host:
+            raise RuntimeError(
+                "Post-connection verification failed: pre-connect validation expected host "
+                f"{expected.host!r} but libpq actually connected with host {info.host!r} "
+                "(hostaddr matched, but the host/SNI identity did not). Do not trust this "
+                "preflight's printed target."
+            )
+    elif expected.host is not None and info.host != expected.host:
         raise RuntimeError(
             "Post-connection verification failed: pre-connect validation expected host "
-            f"{expected.effective_host!r} but libpq actually connected to "
-            f"{connected_host!r}. Do not trust this preflight's printed target -- "
-            "investigate before using it for --confirm-database-target."
+            f"{expected.host!r} but libpq actually connected to {info.host!r}. Do not "
+            "trust this preflight's printed target -- investigate before using it for "
+            "--confirm-database-target."
+        )
+
+    if expected.port is not None and str(info.port) != expected.port:
+        raise RuntimeError(
+            "Post-connection verification failed: pre-connect validation expected port "
+            f"{expected.port!r} but libpq actually connected on port {info.port!r}. Do not "
+            "trust this preflight's printed target."
         )
     if expected.dbname is not None and info.dbname != expected.dbname:
         raise RuntimeError(

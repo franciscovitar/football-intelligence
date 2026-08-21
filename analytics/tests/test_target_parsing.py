@@ -37,6 +37,8 @@ def test_localhost_with_remote_hostaddr_is_not_local() -> None:
 
     target = parse_database_target("postgresql://localhost/db?hostaddr=203.0.113.5")
     assert target == ParsedDatabaseTarget(
+        host="localhost",
+        hostaddr="203.0.113.5",
         effective_host="203.0.113.5",
         port=None,
         dbname="db",
@@ -53,6 +55,27 @@ def test_hostaddr_that_is_itself_local_is_accepted() -> None:
     target = parse_database_target("postgresql://real-host.neon.tech/db?hostaddr=127.0.0.1")
     assert target.is_local is True
     assert target.effective_host == "127.0.0.1"
+
+
+def test_dns_hostname_only_dsn_keeps_host_and_hostaddr_separate() -> None:
+    """`host` and `hostaddr` are exposed as two separate fields precisely so
+    a caller (the read-only preflight's post-connection check) can tell
+    "no hostaddr was ever part of this target" apart from "hostaddr was
+    part of this target and happened to match" -- collapsing them into one
+    value here would make that distinction impossible to make correctly
+    downstream."""
+
+    target = parse_database_target("postgresql://ep-example.neon.tech/db")
+    assert target.host == "ep-example.neon.tech"
+    assert target.hostaddr is None
+    assert target.effective_host == "ep-example.neon.tech"
+
+
+def test_explicit_host_and_hostaddr_dsn_keeps_both_fields() -> None:
+    target = parse_database_target("postgresql://db.example.com/db?hostaddr=203.0.113.10")
+    assert target.host == "db.example.com"
+    assert target.hostaddr == "203.0.113.10"
+    assert target.effective_host == "203.0.113.10"
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +152,8 @@ def test_ordinary_remote_neon_style_url_with_sslmode_parses_correctly() -> None:
         "football_intelligence?sslmode=require&channel_binding=require"
     )
     assert target == ParsedDatabaseTarget(
+        host="real-prod-host.neon.tech",
+        hostaddr=None,
         effective_host="real-prod-host.neon.tech",
         port="5432",
         dbname="football_intelligence",

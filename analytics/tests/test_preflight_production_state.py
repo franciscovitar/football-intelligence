@@ -53,13 +53,26 @@ class _FakeCursor:
 
 class _FakeConnectionInfo:
     """Stands in for psycopg's `Connection.info` (`PQhost`/`PQhostaddr`/
-    `PQdb`) -- pure client-side metadata, never a query. Defaults to
-    exactly matching `_REMOTE_URL`'s parsed target."""
+    `PQdb`/`PQport`) -- pure client-side metadata, never a query. Defaults
+    to exactly matching `_REMOTE_URL`'s parsed target. `hostaddr` defaults
+    to a real DNS-resolved-looking IP (never empty) -- this is what real
+    libpq reports even for an ordinary hostname-only connection where
+    `hostaddr` was never part of the connection string, which is exactly
+    the case the DNS-hostname regression tests below exist to prove is
+    handled correctly."""
 
-    def __init__(self, *, host: str = "real-prod-host.example.com", dbname: str = "db") -> None:
+    def __init__(
+        self,
+        *,
+        host: str = "real-prod-host.example.com",
+        hostaddr: str = "203.0.113.10",
+        dbname: str = "db",
+        port: int = 5432,
+    ) -> None:
         self.host = host
-        self.hostaddr = ""  # empty when the connection was made by hostname, not hostaddr
+        self.hostaddr = hostaddr
         self.dbname = dbname
+        self.port = port
 
 
 class _FakeConnection:
@@ -168,13 +181,17 @@ def test_preflight_rolls_back_even_when_a_query_raises(monkeypatch: pytest.Monke
 
 # ---------------------------------------------------------------------------
 # 10. Post-connection verification: the printed target cannot disagree with
-# what libpq actually connected to.
+# what libpq actually connected to -- following real PQhost/PQhostaddr
+# semantics, not a naive single "connected host" value.
 # ---------------------------------------------------------------------------
 
 
 def test_preflight_raises_when_connected_host_disagrees_with_validated_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """DNS-hostname case, host wrong -> FAIL. `_REMOTE_URL` has no explicit
+    `hostaddr`, so this exercises the host-only comparison branch."""
+
     fake_connection = _FakeConnection(
         info=_FakeConnectionInfo(host="a-completely-different-host.example.com", dbname="db")
     )
@@ -205,6 +222,131 @@ def test_preflight_raises_when_connected_dbname_disagrees_with_validated_target(
 
     with pytest.raises(RuntimeError, match="Post-connection verification failed"):
         run_preflight(_REMOTE_URL)
+
+
+# --- 1. DNS host success: the critical regression this fix exists for.
+# libpq resolves and reports a real IP via PQhostaddr() even for an
+# ordinary hostname-only connection where hostaddr was never part of the
+# connection string -- that resolved IP textually differing from the
+# hostname is DNS doing its normal job, not a mismatch.
+def test_dns_hostname_connection_with_resolved_hostaddr_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = "postgresql://user:pass@ep-example.neon.tech/db"
+    fake_connection = _FakeConnection(
+        info=_FakeConnectionInfo(
+            host="ep-example.neon.tech",  # matches the DSN's host
+            hostaddr="203.0.113.10",  # DNS-resolved IP; NOT part of the DSN
+            dbname="db",
+        )
+    )
+    monkeypatch.setattr(
+        "football_intelligence.jobs.preflight_production_state.connect",
+        lambda database_url: fake_connection,
+    )
+
+    report = run_preflight(url)  # must not raise
+    assert report["target"] == "postgresql://ep-example.neon.tech/db"
+
+
+# --- 2. DNS host wrong -> FAIL.
+def test_dns_hostname_connection_with_wrong_connected_host_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = "postgresql://user:pass@ep-example.neon.tech/db"
+    fake_connection = _FakeConnection(
+        info=_FakeConnectionInfo(host="other.neon.tech", hostaddr="203.0.113.10", dbname="db")
+    )
+    monkeypatch.setattr(
+        "football_intelligence.jobs.preflight_production_state.connect",
+        lambda database_url: fake_connection,
+    )
+
+    with pytest.raises(RuntimeError, match="Post-connection verification failed"):
+        run_preflight(url)
+
+
+# --- 3. explicit host + hostaddr, both matching -> PASS.
+def test_explicit_hostaddr_connection_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    url = "postgresql://user:pass@db.example.com/db?hostaddr=203.0.113.10"
+    fake_connection = _FakeConnection(
+        info=_FakeConnectionInfo(host="db.example.com", hostaddr="203.0.113.10", dbname="db")
+    )
+    monkeypatch.setattr(
+        "football_intelligence.jobs.preflight_production_state.connect",
+        lambda database_url: fake_connection,
+    )
+
+    report = run_preflight(url)  # must not raise
+    assert report["target"] == "postgresql://203.0.113.10/db"
+
+
+# --- 4. explicit hostaddr wrong -> FAIL.
+def test_explicit_hostaddr_connection_wrong_hostaddr_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = "postgresql://user:pass@db.example.com/db?hostaddr=203.0.113.10"
+    fake_connection = _FakeConnection(
+        info=_FakeConnectionInfo(host="db.example.com", hostaddr="203.0.113.11", dbname="db")
+    )
+    monkeypatch.setattr(
+        "football_intelligence.jobs.preflight_production_state.connect",
+        lambda database_url: fake_connection,
+    )
+
+    with pytest.raises(RuntimeError, match="Post-connection verification failed"):
+        run_preflight(url)
+
+
+def test_explicit_hostaddr_connection_wrong_host_identity_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Even with a matching `hostaddr`, a disagreeing `host` (the identity/
+    SNI sanity check) must still fail -- hostaddr matching alone is not
+    sufficient."""
+
+    url = "postgresql://user:pass@db.example.com/db?hostaddr=203.0.113.10"
+    fake_connection = _FakeConnection(
+        info=_FakeConnectionInfo(
+            host="a-different-host.example.com", hostaddr="203.0.113.10", dbname="db"
+        )
+    )
+    monkeypatch.setattr(
+        "football_intelligence.jobs.preflight_production_state.connect",
+        lambda database_url: fake_connection,
+    )
+
+    with pytest.raises(RuntimeError, match="Post-connection verification failed"):
+        run_preflight(url)
+
+
+# --- 6. port mismatch -> FAIL.
+def test_port_mismatch_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    url = "postgresql://user:pass@real-prod-host.example.com:5432/db"
+    fake_connection = _FakeConnection(
+        info=_FakeConnectionInfo(host="real-prod-host.example.com", dbname="db", port=6543)
+    )
+    monkeypatch.setattr(
+        "football_intelligence.jobs.preflight_production_state.connect",
+        lambda database_url: fake_connection,
+    )
+
+    with pytest.raises(RuntimeError, match="Post-connection verification failed"):
+        run_preflight(url)
+
+
+def test_matching_port_passes(monkeypatch: pytest.MonkeyPatch) -> None:
+    url = "postgresql://user:pass@real-prod-host.example.com:5432/db"
+    fake_connection = _FakeConnection(
+        info=_FakeConnectionInfo(host="real-prod-host.example.com", dbname="db", port=5432)
+    )
+    monkeypatch.setattr(
+        "football_intelligence.jobs.preflight_production_state.connect",
+        lambda database_url: fake_connection,
+    )
+
+    report = run_preflight(url)  # must not raise
+    assert report["target"] == "postgresql://real-prod-host.example.com:5432/db"
 
 
 def test_preflight_skips_post_connect_check_for_a_local_socket_target(

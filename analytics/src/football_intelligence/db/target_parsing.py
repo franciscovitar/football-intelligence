@@ -111,11 +111,26 @@ class ParsedDatabaseTarget:
     actually use for a given connection string, INCLUDING any ambient
     `PG*` environment-variable fallback libpq itself would apply.
 
+    `host` and `hostaddr` are kept as two SEPARATE fields (not collapsed
+    into one) because they answer different questions and a post-connection
+    check needs to know which was actually supplied: `PQhost()` returns the
+    hostname/parameter that was supplied (for identity/SNI purposes),
+    `PQhostaddr()` returns the real server IP address libpq connects to --
+    and when only `host` was given (the ordinary DNS-hostname case), libpq
+    still resolves and reports a real IP via `PQhostaddr()` even though
+    `hostaddr` was never part of the connection string. Comparing that
+    DNS-resolved IP against the hostname string would be a false-positive
+    trap, not a real check -- exactly the bug this dataclass shape exists
+    to make impossible to write by accident.
+
     `effective_host` is `hostaddr` when present (libpq uses it for the real
     network connection; `host` becomes verification/SNI-only in that case),
     otherwise `host`; `None` means a local Unix-domain socket
     (e.g. `postgresql:///dbname` with no relevant environment override),
-    which is always local.
+    which is always local. It remains the single value used for local/
+    remote CLASSIFICATION and for `safe_target_description`/
+    `--confirm-database-target` -- only the post-connection verification
+    needs `host`/`hostaddr` kept apart.
 
     `ambient_env_vars_used` names every `PG*` environment variable (if any)
     that actually supplied a target-identity parameter this connection
@@ -126,6 +141,8 @@ class ParsedDatabaseTarget:
     typed into `--database-url` itself.
     """
 
+    host: str | None
+    hostaddr: str | None
     effective_host: str | None
     port: str | None
     dbname: str | None
@@ -242,6 +259,8 @@ def parse_database_target(database_url: str) -> ParsedDatabaseTarget:
     is_local = effective_host is None or effective_host.lower() in LOCAL_DATABASE_HOSTS
 
     return ParsedDatabaseTarget(
+        host=host,
+        hostaddr=hostaddr,
         effective_host=effective_host,
         port=port,
         dbname=dbname,
