@@ -4,9 +4,13 @@ Personal football intelligence app that combines quantitative performance, conte
 
 ## Current status
 
-**Block 1 — Foundation (in progress)**
+**Blocks 1-20 complete and certified.** Block 20 (multi-source Data Mesh expansion: Wyscout Open + StatsBomb Open historical/deep adapters, entity resolution V2, granularity-safe reconciliation V2) is closed -- see `docs/BLOCK20_MULTI_SOURCE.md`'s exit contract.
 
-The source/configuration foundation is established. Dependency-backed web/Python quality gates remain pending because the current execution environment cannot reach package registries. Football data ingestion starts in Block 2/3 according to `docs/ROADMAP.md`.
+**Current phase: V1 Product Closure / Production Readiness.** The Global Product Closure Review found the app itself ready (honest empty states, secure defaults, green CI, correct deployment) but production database population still pending explicit authorization -- see `docs/PRODUCTION_BOOTSTRAP.md`.
+
+**Known V1 limitation**: the permitted real snapshot is ENG_PL 2025/26 (the latest **completed** season, not a live/current feed), with no approved rich domestic player dataset -- see `docs/REAL_DATA_SNAPSHOT_V2.md`. Team-level intelligence is the real V1 value; player-level surfaces stay honestly unavailable until a compliant source exists.
+
+Detailed per-block history remains in `docs/ROADMAP.md`.
 
 ## Architecture at a glance
 

@@ -24,7 +24,7 @@ export default async function HomePage() {
     <main className="page-shell">
       <section className="hero product-hero">
         <div>
-          <p className="eyebrow">FOOTBALL INTELLIGENCE · AHORA</p>
+          <p className="eyebrow">FOOTBALL INTELLIGENCE · ÚLTIMA TEMPORADA COMPLETA</p>
           <h1>Entendé el partido largo.</h1>
           <p className="hero-copy">Una lectura rápida de rendimiento, proceso y evidencia real. Cada score publica su muestra, confianza y límites.</p>
           <div className="hero-actions"><Link className="button button-primary" href="/rankings">Explorar jugadores</Link><Link className="button button-secondary" href="/team-rankings">Explorar equipos</Link></div>
