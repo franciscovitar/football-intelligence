@@ -661,15 +661,27 @@ Summary of what changed here specifically:
   excluded from grouping), never silently folded into a legacy-shaped
   group.
 
-## Deferred to Block 20D.5
+## Block 20D.5 -- closure disposition of items previously "deferred to Block 20D.5"
 
-Numeric tolerance reconciliation and a `tolerated_agreement` status; the 6
-thin-evidence rare-event identities' possible promotion to `exact` against
-a larger real sample; `status` vocabulary / `kickoff_at` timezone /
-`venue_name` normalization; the `passes`/`duels` methodology divergence;
-the newly-found real `player_season`/`goalkeeper_season` overlap
-identities (see `BLOCK20_MULTI_SOURCE.md`); any additional provider pair;
-whether/how `overlap-player-v2` crosswalk keys ever map to an independent,
-canonical `football.players` identity; any user-facing StatsBomb exposure
-or change to `STATSBOMB_INTERNAL_ONLY` (remains `True`); and production
-scheduling/automation.
+Block 20D.5's closure review determined that none of the items below block
+Block 20. This is a documentation-only checkpoint (no code changed in
+Block 20D.5); the full exit contract and real certification figures live
+in [`BLOCK20_MULTI_SOURCE.md`](BLOCK20_MULTI_SOURCE.md#block-20d5----final-closure-checkpoint)
+and are not duplicated here. Disposition of each previously-deferred item:
+
+- numeric tolerance reconciliation, the `tolerated_agreement` status, the
+  6 thin-evidence rare-event identities' possible `exact` promotion, and
+  `status`/`kickoff_at`/`venue_name` representational normalization ->
+  research backlog, not required for Block 20 to be correct or complete;
+- the `passes`/`duels` methodology divergence -> intentionally, permanently
+  `not_comparable`, already correctly resolved, not an open gap;
+- the newly-found `player_season`/`goalkeeper_season` overlap identities'
+  partial-scope defect -> already fixed in Block 20D.4 via
+  `AdapterScope.season_scope_complete=False`, verified by real re-run;
+- any additional provider pair, and whether/how `overlap-player-v2`
+  crosswalk keys ever map to an independent canonical `football.players`
+  identity -> product-future work, out of Block 20's scope;
+- any user-facing StatsBomb exposure or change to `STATSBOMB_INTERNAL_ONLY`
+  (remains `True`) -> externally blocked on an unresolved product/legal
+  compliance question, not resolved by this repository;
+- production scheduling/automation -> product-future work.
