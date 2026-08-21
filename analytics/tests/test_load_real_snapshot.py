@@ -4,13 +4,16 @@ import os
 
 import pytest
 
-from football_intelligence.jobs.execute_real_intelligence_v2 import build_parser
+from football_intelligence.db.production_write_guard import PRODUCTION_WRITE_CONFIRMATION_PHRASE
+from football_intelligence.jobs.load_real_snapshot import build_parser
 
 
 def test_database_url_is_a_required_cli_argument() -> None:
     """No `DATABASE_URL` environment fallback exists at all: `--database-url`
     is a required argparse argument, so omitting it is a hard CLI error
-    before any job logic (or database connection) ever runs.
+    before any job logic (or database connection) ever runs. This closes the
+    prior inconsistency where this loader alone accepted a bare
+    `os.environ.get("DATABASE_URL")` fallback.
     """
 
     with pytest.raises(SystemExit):
@@ -35,45 +38,33 @@ def test_explicit_local_database_url_is_accepted_by_the_parser() -> None:
     assert args.production_write_confirmation is None
 
 
-# ---------------------------------------------------------------------------
-# V1 Closure Pass A/B preparation: remote (production) execution requires the
-# full explicit production-write confirmation, never a plain remote URL.
-# ---------------------------------------------------------------------------
-
-
-def test_remote_database_url_without_confirmation_is_rejected_at_runtime(
+def test_remote_database_url_without_confirmation_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
         "sys.argv",
-        [
-            "execute_real_intelligence_v2",
-            "--database-url",
-            "postgresql://user:pass@real-prod-host.example.com/db",
-        ],
+        ["load_real_snapshot", "--database-url", "postgresql://user:pass@prod.example.com/db"],
     )
-    from football_intelligence.jobs.execute_real_intelligence_v2 import main
+    from football_intelligence.jobs.load_real_snapshot import main
 
     with pytest.raises(SystemExit):
         main()
 
 
-def test_remote_database_url_with_partial_confirmation_is_rejected_at_runtime(
+def test_remote_database_url_with_full_confirmation_passes_target_resolution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "execute_real_intelligence_v2",
-            "--database-url",
-            "postgresql://user:pass@real-prod-host.example.com/db",
-            "--allow-remote-write",
-            "--confirm-target",
-            "production",
-            # --production-write-confirmation deliberately omitted
-        ],
-    )
-    from football_intelligence.jobs.execute_real_intelligence_v2 import main
+    """Full confirmation resolves the target successfully (the job then
+    proceeds to actually connect, which this unit test does not exercise --
+    covered by the shared `db.production_write_guard` tests instead)."""
 
-    with pytest.raises(SystemExit):
-        main()
+    from football_intelligence.db.production_write_guard import resolve_database_target
+
+    target = resolve_database_target(
+        "postgresql://user:pass@prod.example.com/db",
+        allow_remote_write=True,
+        confirm_target="production",
+        production_write_confirmation=PRODUCTION_WRITE_CONFIRMATION_PHRASE,
+    )
+    assert target is not None
+    assert target.is_local is False

@@ -9,18 +9,37 @@ deliberately simpler and standalone, matching the collector job it pairs
 with.
 
 Idempotent: safe to re-run against the same JSON files.
+
+## Database safety (V1 Closure Pass A/B preparation)
+
+This job used to accept a bare `DATABASE_URL` environment variable as a
+fallback for `--database-url` -- unlike every other real-data write job in
+this repository (`build_real_snapshot_v2.py`, `execute_real_intelligence_v2.py`),
+which never read `DATABASE_URL` implicitly and always required a clearly
+local `--database-url`. That inconsistency meant this loader alone could
+silently target any remote database a shell happened to have `DATABASE_URL`
+set to. Fixed: `--database-url` is now a required, explicit CLI argument,
+`DATABASE_URL` is never consulted, and the same shared target-resolution
+contract as the other two jobs applies -- a local URL is accepted as before;
+a remote URL requires the full explicit production-write confirmation
+(`--allow-remote-write` + `--confirm-target production` +
+`--production-write-confirmation <exact phrase>`), never a single flag or an
+environment variable. See `db.production_write_guard` for the shared
+contract and `docs/PRODUCTION_BOOTSTRAP.md` for the intended one-time
+sequence this loader participates in.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 import psycopg
 from psycopg import Connection
+
+from football_intelligence.db.production_write_guard import resolve_database_target
 
 COMPETITION_CODE = "ENG_PL"
 SEASON_LABEL = "2025/26"
@@ -34,15 +53,34 @@ def build_parser() -> argparse.ArgumentParser:
         description="Load the collected real ENG_PL 2025/26 snapshot JSON into Postgres."
     )
     parser.add_argument("--input-dir", type=Path, default=DEFAULT_INPUT_DIR)
-    parser.add_argument("--database-url", type=str, default=None)
+    parser.add_argument(
+        "--database-url",
+        type=str,
+        required=True,
+        help=(
+            "Explicit PostgreSQL URL. Never read from the DATABASE_URL environment "
+            "variable. A local URL (localhost/127.0.0.1/::1, or a host-less local-socket "
+            "DSN) is accepted as before. A remote URL additionally requires "
+            "--allow-remote-write, --confirm-target production, and "
+            "--production-write-confirmation with the exact required phrase."
+        ),
+    )
+    parser.add_argument("--allow-remote-write", action="store_true")
+    parser.add_argument("--confirm-target", default=None)
+    parser.add_argument("--production-write-confirmation", default=None)
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
-    database_url = args.database_url or os.environ.get("DATABASE_URL")
-    if not database_url:
-        raise SystemExit("DATABASE_URL is required (env var or --database-url)")
+    target = resolve_database_target(
+        args.database_url,
+        allow_remote_write=args.allow_remote_write,
+        confirm_target=args.confirm_target,
+        production_write_confirmation=args.production_write_confirmation,
+    )
+    assert target is not None  # --database-url is a required argument
+    database_url = target.database_url
 
     with psycopg.connect(database_url, autocommit=False) as connection:
         season_id = _ensure_season(connection)
