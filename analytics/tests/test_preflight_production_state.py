@@ -82,6 +82,25 @@ class _FakeConnection:
         raise AssertionError("preflight must never commit")
 
 
+def test_transaction_is_set_read_only_as_the_very_first_statement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """13. Before any inspection query runs, PostgreSQL itself is told to
+    put the transaction in READ ONLY mode -- proven here by asserting it is
+    literally the first statement executed, not merely documented in a
+    comment."""
+
+    fake_connection = _FakeConnection()
+    monkeypatch.setattr(
+        "football_intelligence.jobs.preflight_production_state.connect",
+        lambda database_url: fake_connection,
+    )
+
+    run_preflight("postgresql://user:pass@real-prod-host.example.com/db")
+
+    assert fake_connection.executed[0] == "SET TRANSACTION READ ONLY"
+
+
 def test_preflight_never_writes_and_reports_expected_shape_against_an_empty_database(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -93,6 +112,7 @@ def test_preflight_never_writes_and_reports_expected_shape_against_an_empty_data
 
     report = run_preflight("postgresql://user:pass@real-prod-host.example.com/db")
 
+    # 14. inspection then rolls back -- never commits, on the success path.
     assert fake_connection.rolled_back is True
     assert not any(
         keyword in " ".join(sql.split()).lower()

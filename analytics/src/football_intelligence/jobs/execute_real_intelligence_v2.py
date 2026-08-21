@@ -29,10 +29,11 @@ persistence and diagnostic-findings persistence are both delete-then-insert
 for the exact scope being replaced, so row counts are stable across reruns.
 
 Remote (production) execution additionally requires `--allow-remote-write`,
-`--confirm-target production`, and `--production-write-confirmation` with
-the exact required phrase (`db.production_write_guard`) -- a plain remote
+`--confirm-target production`, `--production-write-confirmation` with the
+exact required phrase, and `--confirm-database-target` with the exact
+parsed target (`db.production_write_guard`) -- a plain remote
 `--database-url` alone is refused before any connection is attempted, and
-no environment variable can supply any of these three confirmations.
+no environment variable can supply any of these four confirmations.
 """
 
 from __future__ import annotations
@@ -101,14 +102,16 @@ def build_parser() -> argparse.ArgumentParser:
             "Explicit PostgreSQL URL. Never read from the DATABASE_URL environment "
             "variable. A local URL (localhost/127.0.0.1/::1, or a host-less local-socket "
             "DSN) is accepted directly. A remote (production) URL additionally requires "
-            "--allow-remote-write, --confirm-target production, and "
-            "--production-write-confirmation with the exact required phrase -- see "
-            "db.production_write_guard."
+            "--allow-remote-write, --confirm-target production, "
+            "--production-write-confirmation with the exact required phrase, and "
+            "--confirm-database-target with the exact parsed target (run the read-only "
+            "preflight first and copy its reported target) -- see db.production_write_guard."
         ),
     )
     parser.add_argument("--allow-remote-write", action="store_true")
     parser.add_argument("--confirm-target", default=None)
     parser.add_argument("--production-write-confirmation", default=None)
+    parser.add_argument("--confirm-database-target", default=None)
     parser.add_argument("--report-path", type=Path, default=DEFAULT_REPORT_PATH)
     return parser
 
@@ -252,6 +255,7 @@ def main() -> None:
         allow_remote_write=args.allow_remote_write,
         confirm_target=args.confirm_target,
         production_write_confirmation=args.production_write_confirmation,
+        confirm_database_target=args.confirm_database_target,
     )
     assert target is not None  # --database-url is required
     database_url = target.database_url
@@ -346,7 +350,7 @@ def main() -> None:
         "db_safety": {
             "implicit_database_url_used": False,
             "remote_db_accepted": not target.is_local,
-            "target": (target.host if target.host is not None else "(local socket)"),
+            "target": target.safe_description,
         },
     }
 

@@ -6,17 +6,25 @@ if anything -- the production bootstrap sequence documented in
 `docs/PRODUCTION_BOOTSTRAP.md` still needs to do, before any write is ever
 authorized.
 
-This command NEVER writes: every statement is a read, and the transaction is
-always rolled back, never committed, even on success.
+This command NEVER writes: PostgreSQL itself is told `SET TRANSACTION READ
+ONLY` as the very first statement of the transaction, before any inspection
+query -- so an accidental INSERT/UPDATE/DELETE/DDL introduced into this
+module later would be refused by the database engine, not merely omitted by
+convention. The transaction is always rolled back, never committed, even on
+success.
 
 Requires an explicit `--database-url`; `DATABASE_URL` is never read from the
 environment. Unlike the write-capable jobs, no local-only restriction is
 enforced here -- inspecting the real production database read-only is
 exactly the point -- but the target is only ever reported as a safe
-scheme+host+port+dbname string (`db.production_write_guard.safe_target_description`),
-never the full DSN, user, password, or query string. Because this command
-never writes, it does not require (and does not accept) the
-production-write confirmation flags the write-capable jobs use.
+`postgresql://<host>[:<port>]/<dbname>` string
+(`db.production_write_guard.safe_target_description`, resolved through the
+same libpq-aware `db.target_parsing.parse_database_target` the write-capable
+jobs use), never the full DSN, user, password, or query string. Because this
+command never writes, it does not require (and does not accept) the
+production-write confirmation flags the write-capable jobs use -- but its
+reported `target` is exactly the value a human should later copy into one of
+those jobs' `--confirm-database-target`.
 """
 
 from __future__ import annotations
@@ -204,6 +212,13 @@ def run_preflight(database_url: str) -> dict[str, Any]:
     }
     with connect(database_url) as connection:
         try:
+            # The FIRST statement in the transaction, before any inspection
+            # query: PostgreSQL itself now refuses any INSERT/UPDATE/DELETE/
+            # DDL for the remainder of this transaction, regardless of what a
+            # future inspection query added here might accidentally attempt --
+            # a database-enforced guarantee, not merely an application-level
+            # "we only SELECT" convention.
+            connection.execute("SET TRANSACTION READ ONLY")
             report["canonical"] = _inspect_canonical(connection)
             report["v2_product"] = _inspect_v2_product(connection)
             report["data_mesh"] = _inspect_data_mesh(connection)
@@ -228,6 +243,10 @@ def main() -> None:
     print(f"PRODUCTION PREFLIGHT (read-only, no writes): target={report['target']}")
     print(json.dumps(report, indent=2, sort_keys=True))
     print(f"REPORT: {args.report_path}")
+    print(
+        "\nIf a write-capable job's remote path is later authorized against this exact "
+        f"target, copy this into --confirm-database-target:\n  {report['target']}"
+    )
 
 
 if __name__ == "__main__":

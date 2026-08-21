@@ -23,8 +23,9 @@ set to. Fixed: `--database-url` is now a required, explicit CLI argument,
 contract as the other two jobs applies -- a local URL is accepted as before;
 a remote URL requires the full explicit production-write confirmation
 (`--allow-remote-write` + `--confirm-target production` +
-`--production-write-confirmation <exact phrase>`), never a single flag or an
-environment variable. See `db.production_write_guard` for the shared
+`--production-write-confirmation <exact phrase>` +
+`--confirm-database-target <exact parsed target>`), never a single flag or
+an environment variable. See `db.production_write_guard` for the shared
 contract and `docs/PRODUCTION_BOOTSTRAP.md` for the intended one-time
 sequence this loader participates in.
 """
@@ -61,13 +62,16 @@ def build_parser() -> argparse.ArgumentParser:
             "Explicit PostgreSQL URL. Never read from the DATABASE_URL environment "
             "variable. A local URL (localhost/127.0.0.1/::1, or a host-less local-socket "
             "DSN) is accepted as before. A remote URL additionally requires "
-            "--allow-remote-write, --confirm-target production, and "
-            "--production-write-confirmation with the exact required phrase."
+            "--allow-remote-write, --confirm-target production, "
+            "--production-write-confirmation with the exact required phrase, and "
+            "--confirm-database-target with the exact parsed target (run the read-only "
+            "preflight first and copy its reported target)."
         ),
     )
     parser.add_argument("--allow-remote-write", action="store_true")
     parser.add_argument("--confirm-target", default=None)
     parser.add_argument("--production-write-confirmation", default=None)
+    parser.add_argument("--confirm-database-target", default=None)
     return parser
 
 
@@ -78,6 +82,7 @@ def main() -> None:
         allow_remote_write=args.allow_remote_write,
         confirm_target=args.confirm_target,
         production_write_confirmation=args.production_write_confirmation,
+        confirm_database_target=args.confirm_database_target,
     )
     assert target is not None  # --database-url is a required argument
     database_url = target.database_url

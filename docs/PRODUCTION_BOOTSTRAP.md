@@ -17,27 +17,62 @@ populate it -- `load_real_snapshot.py`, `build_real_snapshot_v2.py`,
 the actual production database. Two of the three already refused any
 remote database by design; the third (`load_real_snapshot.py`) had an
 inconsistent implicit `DATABASE_URL` fallback. This pass closed that
-inconsistency and added a single shared, explicit, triple-confirmed
+inconsistency and added a single shared, explicit, quadruple-confirmed
 production-write contract (`analytics/src/football_intelligence/db/production_write_guard.py`)
-that all three jobs now use identically for a remote target. Nothing about
-this pass performs a production write itself.
+that all three jobs now use identically for a remote target. A follow-up
+hardening pass then closed a real gap in how "local" was determined (see
+"Target parsing" below) and added the fourth, exact-target confirmation.
+Nothing about either pass performs a production write itself.
+
+## Target parsing: the effective target, not just the authority hostname
+
+The naive `urllib.parse.urlsplit(database_url).hostname` check used before
+this hardening pass could be fooled: PostgreSQL's `hostaddr` connection
+parameter, when present, is the real network address libpq connects to --
+`host` becomes verification/SNI-only -- and a URI query parameter can
+itself be named `host=`, overriding the authority hostname entirely. Both
+are invisible to `urlsplit`. A DSN conceptually like
+`postgresql://localhost/db?hostaddr=<remote-ip>` would previously have
+passed local validation despite genuinely connecting to a remote host.
+
+`db.target_parsing.parse_database_target` (used by both
+`db.local_safety.validate_local_database_url` and
+`db.production_write_guard.resolve_database_target`, so "local" means the
+same thing everywhere) now resolves the connection string through
+psycopg's own libpq-aware conninfo parser (`psycopg.conninfo.conninfo_to_dict`
+-- no new dependency) and classifies `hostaddr` (when present) as the
+effective target, never the bare authority hostname. It also fails closed
+(`SystemExit`) on a `service`/`servicefile` reference (points at external,
+uninspectable connection parameters) and on a comma-separated multi-host/
+multi-port DSN (this bootstrap tooling only ever targets exactly one
+database). Ordinary single-host Neon-style URLs with `sslmode`/similar
+options, and ordinary local URLs, are unaffected.
 
 ## The shared safety contract
 
-A **local** `--database-url` (`localhost`/`127.0.0.1`/`::1`, or a host-less
+A **local** effective target (`localhost`/`127.0.0.1`/`::1`, or a host-less
 local-socket DSN) is always accepted, exactly as before -- no behavior
 change for local/dev usage of any of these jobs.
 
-A **remote** `--database-url` is refused by every write-capable job unless
-**all three** of the following are supplied together on the command line:
+A **remote** effective target is refused by every write-capable job unless
+**all four** of the following are supplied together on the command line:
 
 - `--allow-remote-write`
 - `--confirm-target production`
 - `--production-write-confirmation` with the exact phrase defined in
   `db.production_write_guard.PRODUCTION_WRITE_CONFIRMATION_PHRASE`
-  (`"I UNDERSTAND THIS WRITES TO THE REAL PRODUCTION DATABASE"`)
+  (`"I UNDERSTAND THIS WRITES TO THE REAL PRODUCTION DATABASE"`) -- proves
+  "I intend to write to production."
+- `--confirm-database-target` with the **exact** safe target description
+  (`postgresql://<host>[:<port>]/<dbname>`, no username/password/query
+  string) that the read-only preflight (Step 0) reported for this
+  `--database-url` -- proves "I intend to write to *this* production
+  database." Without this, an unchanged copied confirmation phrase from a
+  previous, different production target would still pass; this flag forces
+  a human to look at, and re-affirm, the real target every time the DSN
+  changes.
 
-None of these three is a secret or a credential, and none is ever read from
+None of these four is a secret or a credential, and none is ever read from
 an environment variable -- they exist to make a production write
 unmistakable and deliberate, never accidental. The actual access boundary
 remains "you must already possess the real production `--database-url`."
@@ -51,8 +86,12 @@ database, so a flag literally named "local" can never silently mean
 
 The read-only preflight command below (Step 0 / Step 4) requires none of
 this -- it never writes, so it accepts a remote `--database-url` directly.
-It only ever reports a safe `scheme://host:port/dbname` string, never the
-full DSN, user, password, or query string.
+It only ever reports the same safe `postgresql://<host>[:<port>]/<dbname>`
+string, never the full DSN, user, password, or query string -- and prints
+it in a form that can be copied directly into `--confirm-database-target`.
+Its own inspection transaction is additionally put into PostgreSQL's
+`READ ONLY` mode as its first statement, so the database engine itself --
+not just application discipline -- refuses any accidental write.
 
 ## Expected certified invariants
 
@@ -106,7 +145,8 @@ uv run football-intelligence-load-real-snapshot \
   --database-url <the real production PostgreSQL URL> \
   --allow-remote-write \
   --confirm-target production \
-  --production-write-confirmation "I UNDERSTAND THIS WRITES TO THE REAL PRODUCTION DATABASE"
+  --production-write-confirmation "I UNDERSTAND THIS WRITES TO THE REAL PRODUCTION DATABASE" \
+  --confirm-database-target "<exact target reported by Step 0>"
 ```
 
 Idempotent (upsert-based, unchanged by this pass). Loads from the
@@ -124,7 +164,8 @@ uv run football-intelligence-build-real-snapshot-v2 \
   --persist-audit-remote-production \
   --allow-remote-write \
   --confirm-target production \
-  --production-write-confirmation "I UNDERSTAND THIS WRITES TO THE REAL PRODUCTION DATABASE"
+  --production-write-confirmation "I UNDERSTAND THIS WRITES TO THE REAL PRODUCTION DATABASE" \
+  --confirm-database-target "<exact target reported by Step 0>"
 ```
 
 Writes only to `ingestion.source_observations` / `ingestion.reconciliation_decisions`
@@ -142,7 +183,8 @@ uv run football-intelligence-execute-real-intelligence-v2 \
   --database-url <the real production PostgreSQL URL> \
   --allow-remote-write \
   --confirm-target production \
-  --production-write-confirmation "I UNDERSTAND THIS WRITES TO THE REAL PRODUCTION DATABASE"
+  --production-write-confirmation "I UNDERSTAND THIS WRITES TO THE REAL PRODUCTION DATABASE" \
+  --confirm-database-target "<exact target reported by Step 0>"
 ```
 
 Idempotent (delete-then-insert for the exact scope being replaced). Writes
@@ -174,3 +216,7 @@ Product Closure Review), not a new implementation pass.
   before retrying; do not repeat a failing write against production.
 - Step 0's `possible_test_smoke_leakage_count` is nonzero -- stop; this
   indicates non-certified data reached production through some other path.
+- A write-capable job's `--confirm-database-target` does not exactly match
+  its own `--database-url`'s parsed target -- fails closed by design; re-run
+  Step 0 and copy its current reported `target` fresh rather than reusing an
+  old one.

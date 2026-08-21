@@ -36,6 +36,25 @@ def test_explicit_local_database_url_is_accepted_by_the_parser() -> None:
     assert args.allow_remote_write is False
     assert args.confirm_target is None
     assert args.production_write_confirmation is None
+    assert args.confirm_database_target is None
+
+
+def test_localhost_url_with_remote_hostaddr_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The loader's effective-target resolution must catch a `hostaddr`
+    override too, not just an authority hostname that says remote."""
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "load_real_snapshot",
+            "--database-url",
+            "postgresql://localhost/db?hostaddr=203.0.113.5",
+        ],
+    )
+    from football_intelligence.jobs.load_real_snapshot import main
+
+    with pytest.raises(SystemExit):
+        main()
 
 
 def test_remote_database_url_without_confirmation_is_rejected(
@@ -65,6 +84,7 @@ def test_remote_database_url_with_full_confirmation_passes_target_resolution(
         allow_remote_write=True,
         confirm_target="production",
         production_write_confirmation=PRODUCTION_WRITE_CONFIRMATION_PHRASE,
+        confirm_database_target="postgresql://prod.example.com/db",
     )
     assert target is not None
     assert target.is_local is False

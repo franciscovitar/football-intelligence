@@ -35,3 +35,32 @@ def test_local_urls_are_accepted(url: str) -> None:
 def test_remote_or_ambiguous_urls_are_rejected(url: str) -> None:
     with pytest.raises(SystemExit):
         validate_local_database_url(url)
+
+
+# ---------------------------------------------------------------------------
+# 12. validate_local_database_url() also rejects the hostaddr/query
+# override case -- the same effective-target resolution
+# db.production_write_guard.resolve_database_target relies on
+# (db.target_parsing.parse_database_target), so "local" cannot mean two
+# different things depending on which caller asks.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql://localhost/db?hostaddr=203.0.113.5",
+        "postgresql://localhost/db?host=evil.example.com",
+        "postgresql:///db?host=evil.example.com",
+    ],
+)
+def test_hostaddr_or_query_host_override_bypass_is_rejected(url: str) -> None:
+    with pytest.raises(SystemExit):
+        validate_local_database_url(url)
+
+
+def test_hostaddr_that_is_itself_local_is_still_accepted() -> None:
+    assert (
+        validate_local_database_url("postgresql://real-host.example.com/db?hostaddr=127.0.0.1")
+        is not None
+    )

@@ -33,6 +33,24 @@ def test_explicit_local_database_url_is_accepted_by_the_parser() -> None:
     assert args.allow_remote_write is False
     assert args.confirm_target is None
     assert args.production_write_confirmation is None
+    assert args.confirm_database_target is None
+
+
+def test_localhost_url_with_remote_hostaddr_is_rejected_at_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "execute_real_intelligence_v2",
+            "--database-url",
+            "postgresql://localhost/db?hostaddr=203.0.113.5",
+        ],
+    )
+    from football_intelligence.jobs.execute_real_intelligence_v2 import main
+
+    with pytest.raises(SystemExit):
+        main()
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +89,33 @@ def test_remote_database_url_with_partial_confirmation_is_rejected_at_runtime(
             "--confirm-target",
             "production",
             # --production-write-confirmation deliberately omitted
+        ],
+    )
+    from football_intelligence.jobs.execute_real_intelligence_v2 import main
+
+    with pytest.raises(SystemExit):
+        main()
+
+
+def test_remote_database_url_with_wrong_database_target_confirmation_is_rejected_at_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """All three generic confirmations correct, but --confirm-database-target
+    names a different host -- must still fail closed."""
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "execute_real_intelligence_v2",
+            "--database-url",
+            "postgresql://user:pass@real-prod-host.example.com/db",
+            "--allow-remote-write",
+            "--confirm-target",
+            "production",
+            "--production-write-confirmation",
+            "I UNDERSTAND THIS WRITES TO THE REAL PRODUCTION DATABASE",
+            "--confirm-database-target",
+            "postgresql://a-different-host.example.com/db",
         ],
     )
     from football_intelligence.jobs.execute_real_intelligence_v2 import main

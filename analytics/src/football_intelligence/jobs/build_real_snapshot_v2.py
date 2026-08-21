@@ -58,9 +58,11 @@ A distinct, separately-named `--persist-audit-remote-production` flag
 meaning) opts in to persisting audit evidence to a REMOTE `--database-url`.
 This additionally requires the full explicit production-write confirmation
 contract from `db.production_write_guard`: `--allow-remote-write`,
-`--confirm-target production`, and `--production-write-confirmation` with
-the exact required phrase. Missing any one of these still fails closed. No
-production write happens merely by supplying a remote `--database-url`.
+`--confirm-target production`, `--production-write-confirmation` with the
+exact required phrase, and `--confirm-database-target` with the exact
+parsed target (`db.production_write_guard.safe_target_description`). Missing
+any one of these four still fails closed. No production write happens
+merely by supplying a remote `--database-url`.
 
 Only ENG_PL 2025/26 is implemented. `--competition`/`--season` exist for an
 honest, explicit contract, not because another combination is actually
@@ -183,13 +185,15 @@ def build_parser() -> argparse.ArgumentParser:
             "a flag literally named 'local' can never be reused to mean 'production'. "
             "Requires --database-url to be remote, plus the full explicit "
             "production-write confirmation: --allow-remote-write, "
-            "--confirm-target production, and --production-write-confirmation with the "
-            "exact required phrase."
+            "--confirm-target production, --production-write-confirmation with the "
+            "exact required phrase, and --confirm-database-target with the exact parsed "
+            "target (run the read-only preflight first and copy its reported target)."
         ),
     )
     parser.add_argument("--allow-remote-write", action="store_true")
     parser.add_argument("--confirm-target", default=None)
     parser.add_argument("--production-write-confirmation", default=None)
+    parser.add_argument("--confirm-database-target", default=None)
     return parser
 
 
@@ -223,6 +227,7 @@ def main() -> None:
             allow_remote_write=args.allow_remote_write,
             confirm_target=args.confirm_target,
             production_write_confirmation=args.production_write_confirmation,
+            confirm_database_target=args.confirm_database_target,
         )
         assert target is not None  # --database-url presence checked above
         if target.is_local:

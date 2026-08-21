@@ -95,6 +95,29 @@ def test_cli_has_no_remote_production_defaults() -> None:
     assert args.allow_remote_write is False
     assert args.confirm_target is None
     assert args.production_write_confirmation is None
+    assert args.confirm_database_target is None
+
+
+def test_persist_audit_remote_production_with_localhost_hostaddr_bypass_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A `hostaddr` override cannot be used to sneak a remote write through
+    as though it were local -- `--persist-audit-remote-production` still
+    correctly classifies the real (remote) effective target and demands the
+    full confirmation contract."""
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build_real_snapshot_v2",
+            "--persist-audit-remote-production",
+            "--database-url",
+            "postgresql://localhost/db?hostaddr=203.0.113.5",
+            # no confirmation flags supplied
+        ],
+    )
+    with pytest.raises(SystemExit):
+        main()
 
 
 def test_persist_audit_local_and_remote_production_are_mutually_exclusive(
@@ -176,6 +199,33 @@ def test_persist_audit_local_with_remote_url_is_rejected(monkeypatch: pytest.Mon
             "--persist-audit-local",
             "--database-url",
             "postgresql://user:pass@real-prod-host.example.com/db",
+        ],
+    )
+    with pytest.raises(SystemExit):
+        main()
+
+
+def test_persist_audit_remote_production_with_wrong_database_target_confirmation_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The three generic confirmations correct, but --confirm-database-target
+    names a different host than the real --database-url -- must still fail
+    closed before any network/database activity."""
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build_real_snapshot_v2",
+            "--persist-audit-remote-production",
+            "--database-url",
+            "postgresql://user:pass@real-prod-host.example.com/db",
+            "--allow-remote-write",
+            "--confirm-target",
+            "production",
+            "--production-write-confirmation",
+            "I UNDERSTAND THIS WRITES TO THE REAL PRODUCTION DATABASE",
+            "--confirm-database-target",
+            "postgresql://a-different-host.example.com/db",
         ],
     )
     with pytest.raises(SystemExit):
