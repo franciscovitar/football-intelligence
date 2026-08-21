@@ -22,8 +22,18 @@ from football_intelligence.data_mesh.models import (
     ObservationValue,
     ReconciliationDecision,
 )
+from football_intelligence.metric_catalog.types import MetricGranularity
 
 MODEL_VERSION = "data-mesh-reconciliation-v0.1"
+
+# Block 20D.4: the V2 orchestration entry point (`pipeline.
+# resolve_and_reconcile_v2`) passes this explicitly to every decision it
+# constructs via `reconcile_metric()`, so V0 and V2 decisions are never
+# conflated under one `model_version` -- `reconciliation_decisions`'
+# natural key includes `model_version` precisely so a re-run under a
+# different reconciliation contract never silently collides with (or
+# masks) an earlier one.
+MODEL_VERSION_V2 = "data-mesh-reconciliation-v2.0"
 
 SINGLE_SOURCE_CONFIDENCE = 0.35
 CONFLICT_CONFIDENCE = 0.20
@@ -40,6 +50,17 @@ def reconcile_metric(
     metric_name: str,
     source_priority: Mapping[str, tuple[str, ...]] | None = None,
     calculated_at: datetime | None = None,
+    # Both new in Block 20D.4, both optional and defaulted to reproduce
+    # exact pre-existing V0 behavior when omitted -- V0's `resolve_and_
+    # reconcile()` calls this function unchanged and gets an identical
+    # `ReconciliationDecision` (metric_granularity=None, model_version=
+    # MODEL_VERSION) to before this block. The V2 orchestrator passes both
+    # explicitly for every certified V2 group. There is deliberately only
+    # ONE agreed/conflict/single_source/unresolved implementation -- V2
+    # does not duplicate this logic, it only supplies two more identity
+    # fields for the decision this same function already builds.
+    metric_granularity: MetricGranularity | None = None,
+    model_version: str = MODEL_VERSION,
 ) -> ReconciliationDecision:
     now = calculated_at or datetime.now(UTC)
     objective = [item for item in observations if item.source_type in OBJECTIVE_SOURCE_TYPES]
@@ -56,8 +77,9 @@ def reconcile_metric(
             participating_sources=(),
             source_count=0,
             evidence={"reason": "no objective observations"},
-            model_version=MODEL_VERSION,
+            model_version=model_version,
             calculated_at=now,
+            metric_granularity=metric_granularity,
         )
 
     # Keep the most recently observed value per source; a source should not
@@ -86,8 +108,9 @@ def reconcile_metric(
             participating_sources=participating_sources,
             source_count=source_count,
             evidence={"values_by_source": values_by_source},
-            model_version=MODEL_VERSION,
+            model_version=model_version,
             calculated_at=now,
+            metric_granularity=metric_granularity,
         )
 
     if len(distinct_values) == 1:
@@ -107,8 +130,9 @@ def reconcile_metric(
             participating_sources=participating_sources,
             source_count=source_count,
             evidence={"values_by_source": values_by_source},
-            model_version=MODEL_VERSION,
+            model_version=model_version,
             calculated_at=now,
+            metric_granularity=metric_granularity,
         )
 
     priority_order = (source_priority or {}).get(metric_name, ())
@@ -134,8 +158,9 @@ def reconcile_metric(
             "values_by_source": values_by_source,
             "priority_rule_applied": winning_source is not None,
         },
-        model_version=MODEL_VERSION,
+        model_version=model_version,
         calculated_at=now,
+        metric_granularity=metric_granularity,
     )
 
 

@@ -61,11 +61,23 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import date
 
 from football_intelligence.data_mesh.entity_resolution import resolve_match, resolve_team
 from football_intelligence.data_mesh.models import EntityResolution, NormalizedObservation
 from football_intelligence.data_mesh.timeparse import normalize_season_label, parse_date
 from football_intelligence.metric_catalog.types import MetricGranularity
+
+# Same shape as `data_mesh.pipeline.MatchDateClusters` (deliberately not
+# imported from there -- `pipeline.py` is the orchestration layer that
+# composes this module's primitives, never the reverse, so this module
+# stays free of any dependency on it). (competition_code, season_label,
+# home_team_key, away_team_key) -> per-group kickoff-date -> canonical
+# clustered date, exactly as `pipeline.build_match_date_clusters()` already
+# produces it -- structurally identical, so its real output can be passed
+# here directly.
+MatchGroupKeyV2 = tuple[str, str, str, str]
+MatchDateClustersV2 = Mapping[MatchGroupKeyV2, Mapping[date, date]]
 
 # ---------------------------------------------------------------------------
 # Granularity-safe logical fact identities
@@ -292,6 +304,7 @@ def build_match_index_v2_from_observations(
     competition_code: str,
     team_index: SourceLocalIndexV2,
     into: SourceLocalIndexV2 | None = None,
+    match_date_clusters: MatchDateClustersV2 | None = None,
 ) -> SourceLocalIndexV2:
     """Builds a `(source_code, provider_match_id) -> match logical key`
     index directly from real match-scoped observations' `entity_identity_
@@ -303,20 +316,26 @@ def build_match_index_v2_from_observations(
     Never touches `entity_source_id`. Raises `IdentityConflictError` on a
     genuine conflict.
 
-    Each observation's raw `kickoff_date` hint is passed to `resolve_match()`
-    as-is. Cross-source day-level date-tolerance canonicalization
-    (`cluster_match_dates()`/`build_match_date_clusters()` in
-    `data_mesh/pipeline.py`, the correct existing bounded-clustering
-    primitive fixed in Block 20D.2) is NOT applied here -- wiring it in
-    would require re-deriving the exact same `(competition_code,
-    season_label, home_team_key, away_team_key)` grouping
-    `build_match_date_clusters()` computes internally from `resolve_team()`
-    name resolution, and this function's team resolution can instead come
-    from the id-based `team_index`; getting that grouping to agree exactly
-    without becoming a second, parallel clustering algorithm is real
-    integration work, not a one-line change. Left as an explicit, known gap
-    for Block 20D.4's pipeline/Reconciliation V2 wiring rather than risking
-    a subtly-wrong clustering reimplementation here."""
+    **Bounded date-tolerance clustering (Block 20D.4)**: pass
+    `match_date_clusters` -- the real output of `data_mesh.pipeline.
+    build_match_date_clusters()`, computed by the caller over the same
+    observation batch -- to canonicalize each observation's raw
+    `kickoff_date` to its cluster's representative date before calling
+    `resolve_match()`, exactly the same substitution V0's `resolve_
+    logical_key()` already performs. This reuses the existing bounded,
+    order-independent, non-transitive `cluster_match_dates()` primitive
+    unchanged (Block 20D.2's fix) -- no second clustering algorithm. The
+    grouping key this function looks up
+    (`(competition_code, season_label, home_team_key, away_team_key)`) is
+    structurally identical to what `build_match_date_clusters()` computes
+    internally, because both this function's `team_index`-based team
+    resolution and V0's own name-based `resolve_team()` ultimately produce
+    the same `team:{competition}:{normalized_name}` logical key shape --
+    confirmed by construction (`build_team_index_v2_from_observations()`
+    calls the same `resolve_team()` under the hood). Omitting
+    `match_date_clusters` (the default) preserves this function's exact
+    prior behavior: each observation's raw `kickoff_date` passed through
+    unmodified -- unchanged for any existing caller."""
 
     index: SourceLocalIndexV2 = into if into is not None else {}
     for obs in observations:
@@ -352,12 +371,23 @@ def build_match_index_v2_from_observations(
         # at the V2 boundary, rather than changing V0's pure function.
         if _blank(season_label):
             continue
+
+        canonical_date = kickoff_date
+        if (
+            match_date_clusters is not None
+            and kickoff_date is not None
+            and home_key is not None
+            and away_key is not None
+        ):
+            group_key = (competition_code, season_label, home_key, away_key)
+            canonical_date = match_date_clusters.get(group_key, {}).get(kickoff_date, kickoff_date)
+
         resolution = resolve_match(
             competition_code=competition_code,
             season_label=season_label,
             home_team_key=home_key,
             away_team_key=away_key,
-            kickoff_date=kickoff_date,
+            kickoff_date=canonical_date,
         )
         if resolution.status != "resolved" or resolution.logical_key is None:
             continue

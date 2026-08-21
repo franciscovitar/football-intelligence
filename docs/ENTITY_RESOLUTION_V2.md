@@ -626,15 +626,50 @@ already-committed real snapshot files directly and reproduces the exact
 historical baseline with zero network access and zero database
 connection.
 
-## Next step: Block 20D.4
+## Block 20D.4 -- Reconciliation V2 (minimal, exact-only)
 
-Execute the rich multi-source Reconciliation V2 this block deliberately
-did not attempt: granularity-aware reconciliation grouping, semantic
-comparability policy, tolerances, provider-native-vs-derived comparison
-policy, source-independence policy, conflict resolution, how
-`STATSBOMB_INTERNAL_ONLY` propagates through reconciliation, the deferred
-cross-source date-tolerance clustering integration into V2, and a
-decision on whether/how `overlap-player-v2` crosswalk keys ever map to an
-independent, canonical `football.players` identity (the corrective pass
-above resolved the multi-team-context contract shape itself, not this
-separate production-promotion question).
+Wires the V2 primitives this document defines into a real reconciliation
+orchestrator for the first time. Full design, evidence, and real
+certification results: [`BLOCK20_MULTI_SOURCE.md`](BLOCK20_MULTI_SOURCE.md#block-20d4----reconciliation-v2-minimal-exact-only).
+Summary of what changed here specifically:
+
+- **`resolve_player_v2()`/`PlayerCrosswalk` are finally consumed by a real
+  reconciliation entry point** (`data_mesh.pipeline.
+  resolve_and_reconcile_v2()`), injected explicitly by the caller -- never
+  a global singleton, never auto-populated, never name-only resolution.
+  The real 434-pair/868-entry crosswalk (including all 4 mid-season
+  transfers) was proven to resolve correctly through this new path against
+  the full real ESP_LL 2017/18 batch, not merely in isolation.
+- **The deferred date-tolerance clustering integration is closed**:
+  `build_match_index_v2_from_observations()` gained an optional
+  `match_date_clusters` parameter (default `None`, preserving this
+  function's exact prior behavior for any existing caller). When supplied
+  with `pipeline.build_match_date_clusters()`'s real output (the same
+  bounded, order-independent primitive V0 already uses, unchanged), it
+  canonicalizes each observation's raw `kickoff_date` to its cluster's
+  representative date before calling `resolve_match()` -- exactly the
+  substitution V0's `resolve_logical_key()` already performs. No second
+  clustering algorithm was written; the grouping key both paths compute is
+  structurally identical because both ultimately resolve team identity via
+  the same `resolve_team()`.
+- **`logical_fact_key()` is now actually used for reconciliation
+  grouping**, not just available as an unused primitive -- `saves`/
+  player_match and `saves`/goalkeeper_match are proven, against the real
+  batch, to produce two distinct, non-colliding `ReconciliationDecision`s.
+- A certified V2 observation reaching the new orchestrator with
+  `metric_granularity=None` is treated as a diagnostic failure (reported,
+  excluded from grouping), never silently folded into a legacy-shaped
+  group.
+
+## Deferred to Block 20D.5
+
+Numeric tolerance reconciliation and a `tolerated_agreement` status; the 6
+thin-evidence rare-event identities' possible promotion to `exact` against
+a larger real sample; `status` vocabulary / `kickoff_at` timezone /
+`venue_name` normalization; the `passes`/`duels` methodology divergence;
+the newly-found real `player_season`/`goalkeeper_season` overlap
+identities (see `BLOCK20_MULTI_SOURCE.md`); any additional provider pair;
+whether/how `overlap-player-v2` crosswalk keys ever map to an independent,
+canonical `football.players` identity; any user-facing StatsBomb exposure
+or change to `STATSBOMB_INTERNAL_ONLY` (remains `True`); and production
+scheduling/automation.

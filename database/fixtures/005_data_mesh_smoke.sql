@@ -36,7 +36,10 @@ begin
             '2025-08-23T15:30:00+00', '2025-08-23T15:30:00+00',
             'getmatchdata/bl1', 'data-mesh-v0.1'
         )
-    on conflict (provider_id, entity_type, entity_source_id, metric_name, observed_at)
+    on conflict (
+        provider_id, entity_type, entity_source_id, metric_name,
+        metric_granularity, observed_at
+    )
     do update set value = excluded.value;
 
     insert into ingestion.reconciliation_decisions (
@@ -66,7 +69,7 @@ begin
             '{"values_by_source":{"openligadb":13,"thesportsdb":11}}'::jsonb,
             'data-mesh-reconciliation-v0.1', now()
         )
-    on conflict (logical_entity_key, metric_name, model_version)
+    on conflict (logical_entity_key, metric_name, metric_granularity, model_version)
     do update set
         candidate_value = excluded.candidate_value,
         status = excluded.status,

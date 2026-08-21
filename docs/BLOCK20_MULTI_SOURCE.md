@@ -822,3 +822,265 @@ football-player promotion (including how/whether `overlap-player-v2`
 keys ever map to a real `football.players` id), any user-facing StatsBomb
 exposure, and any change to `STATSBOMB_INTERNAL_ONLY` (remains `True`) or
 the `MetricGranularityNotPersistableError` fail-closed boundary.
+
+## Block 20D.4 -- Reconciliation V2 (minimal, exact-only)
+
+Implements the real, granularity-aware Reconciliation V2 the prior blocks
+deliberately deferred -- deliberately minimal: no numeric tolerance
+reconciliation, no cross-provider "best guess" winner selection, and
+certification scoped to exactly one real, certified provider pair
+(Wyscout Open x StatsBomb Open) at exactly the semantic versions this
+block reviewed. Everything V0 already proves (the Football-Data.co.uk x
+OpenFootball ENG_PL 2025/26 baseline: 380 matches, 20 teams, 1,140/1,140
+agreed, 0 unresolved, idempotent) is completely untouched -- `resolve_and_
+reconcile()`, `entity_resolution.py`, and `MODEL_VERSION =
+"data-mesh-reconciliation-v0.1"` keep their exact existing behavior; every
+V2 addition is a new, separate, additive code path.
+
+### Granularity-safe reconciliation
+
+`ReconciliationDecision` gained `metric_granularity: MetricGranularity |
+None = None`, mirroring `NormalizedObservation`'s own field exactly. Without
+it, a decision for `saves`/`player_match` and one for
+`saves`/`goalkeeper_match` were information-theoretically indistinguishable
+downstream of reconciliation -- the same risk Block 20D.2 closed for
+observations, now closed for decisions. `reconcile_metric()` (the single
+shared value-agreement implementation both V0 and V2 use -- never
+duplicated) gained two new optional keyword parameters, `metric_granularity`
+and `model_version`, both defaulted to reproduce V0's exact existing
+behavior when omitted: `MODEL_VERSION` unchanged, `metric_granularity`
+stays `None`. V2 passes both explicitly.
+
+### `resolve_and_reconcile_v2()` -- the V2 entry point
+
+A new, purely additive function in `data_mesh/pipeline.py`. It composes:
+
+- `build_team_index_v2_from_observations()` / `build_match_index_v2_from_
+  observations()` (Block 20D.2) for id-based team/match resolution --
+  never requiring a `team.name` observation neither certified adapter
+  emits.
+- Bounded cross-source date-tolerance clustering, wired in for the first
+  time: `build_match_date_clusters()`/`cluster_match_dates()` (the same
+  primitive V0 already uses, Block 20D.2's bounded-span fix, reused
+  unchanged) is computed once over the batch and threaded into `build_
+  match_index_v2_from_observations()` (which gained an optional
+  `match_date_clusters` parameter) so two providers reporting the same
+  real fixture on adjacent dates converge on one canonical match, exactly
+  like V0.
+- `resolve_player_v2()` against an explicitly injected `PlayerCrosswalk` --
+  never a global singleton, never name-only resolution. A missing
+  crosswalk entry leaves that player `UNRESOLVED`, exactly like V0's
+  interface-only `resolve_player()`.
+- `logical_fact_key()` (Block 20D.2) for the grouping identity, so facts
+  from different matches, seasons, or **granularities** can never collapse
+  into one group merely because they share an entity or metric name.
+
+A certified observation reaching this function with `metric_granularity=
+None` is treated as a diagnostic failure (counted, reported, excluded from
+every group) -- never silently folded into a legacy-shaped group.
+
+### The comparability policy: provider-pair AND semantic-version scoped
+
+`data_mesh/comparability_policy.py` (new): a `MetricComparabilityPolicy`
+registry keyed on `(source_refs, metric_name, metric_granularity)`, where
+`source_refs` is a canonically-ordered pair of `SourceRef(source_code,
+semantic_version)`. Both the provider pair AND each source's exact
+`semantic_version` (imported directly from each certified adapter's own
+`SEMANTIC_VERSION` constant, never hard-coded) participate in the key --
+comparability is a claim about how two *specific* providers' methodologies
+relate to each other at exactly the emission semantics this block reviewed
+real evidence against; a future adapter version bump automatically and
+silently invalidates every entry (they stop matching), and a different
+provider pair has zero entries by construction. Lookup is order-
+independent (`comparability_policy(a, b, ...) ==
+comparability_policy(b, a, ...)`).
+
+Only three modes exist in this block: `exact`, `not_comparable`,
+`methodology_pending`. No `tolerated_agreement`, no numeric tolerance, no
+averaging, no approximate-disagreement winner selection -- all explicitly
+deferred to Block 20D.5.
+
+A dedicated real-data comparability audit (diagnosis-only, not committed)
+measured actual per-entity value agreement across the certified 36-match
+ESP_LL overlap for all 65 previously-inventoried identities, then this
+block's implementation re-derived real per-source value distributions
+(nonzero/true rates, not just the "100% empirical agreement" flag) before
+seeding the registry -- "same catalog identity" and even "100% observed
+agreement" are not by themselves sufficient evidence, especially for
+sparse, mostly-zero metrics.
+
+**10 identities certified `exact`** (real 100%-agreement across every
+paired entity in the sample, backed by independent semantic evidence --
+native/authoritative source fields or an explicitly verified derivation,
+never the empirical count alone): `home_score`/match, `away_score`/match,
+`round_name`/match, `started`/player_appearance, `goals`/player_match,
+`non_penalty_goals`/player_match, `goals_for`/team_match,
+`goals_against`/team_match, `home_away`/team_match,
+`clean_sheets`/goalkeeper_match.
+
+**6 identities deliberately withheld from `exact` despite 100% empirical
+agreement**, because that agreement rested on only 1-6 real positive
+examples in the certified sample -- too thin an evidentiary base to
+certify, even though nothing contradicts it: `penalties_attempted`,
+`penalty_goals`, `penalties_missed`, `red_cards` (player_match),
+`red_cards` (team_match), `second_yellow_cards`. These remain
+`methodology_pending`, available for promotion once a larger real sample
+provides stronger evidence.
+
+**12 identities certified `not_comparable`**: real, substantial, and/or
+systematically one-directional disagreement (majority of real paired
+entities disagree, and the disagreement is not random noise) indicating
+the two providers measure genuinely different things under the same
+catalog name -- the `passes_total`/`passes_accurate`/`pass_completion_pct`/
+`pass_accuracy_pct` family (a known, documented StatsBomb-vs-Wyscout
+pass-counting-scope divergence, present at both player and team
+granularity and for goalkeeper `passes`/`distribution_accuracy_pct`),
+`duels_total`/`ground_duels` (Wyscout consistently counts more "duels"),
+`touches` (near-total disagreement), and `offsides` (systematically
+one-directional).
+
+**Everything else fails closed to `methodology_pending`**: the 25
+identities with high-but-not-perfect empirical agreement (a real numeric-
+tolerance question, deferred to 20D.5), representational (not factual)
+mismatches (`status`'s vocabulary, `kickoff_at`'s timezone offset,
+`venue_name`'s formatting), and any `(metric_name, metric_granularity)`
+combination with no reviewed entry at all.
+
+### Single-source facts are never gated by pairwise policy
+
+A resolved fact group with only one objective source calls `reconcile_
+metric()` directly -- `single_source`, exactly like V0 -- regardless of
+whether that metric happens to be `not_comparable`/`methodology_pending`
+for this provider pair. "No supported cross-provider comparison" is not
+the same claim as "this source's observation is invalid" -- a lone
+`touches` observation is still real, valid audit evidence even though
+`touches` itself is certified `not_comparable` between these two
+providers. Comparability policy is consulted **only** when an actual
+cross-source comparison is being attempted (exactly 2 objective sources).
+More than 2 sources fails closed to `methodology_pending` unconditionally
+in this block -- N>2-provider comparison semantics are not invented here,
+since only one certified two-provider pair exists.
+
+`not_comparable`/`methodology_pending` decisions never call `reconcile_
+metric()` at all (no value comparison is attempted); `candidate_value` is
+always `None`, and raw per-source values plus semantic versions and the
+policy lookup context are preserved in `evidence` for audit. If a single
+source's observations within one resolved group carry inconsistent
+`semantic_version` values (a real batch-composition anomaly, not expected
+in practice), the group fails closed to `methodology_pending` with the
+inconsistency recorded in `evidence` rather than silently picking one
+version.
+
+### Database: `UNIQUE NULLS NOT DISTINCT`
+
+`database/migrations/20260820100000_add_data_mesh_v2_persistence.sql` adds
+a nullable `metric_granularity` column to both `ingestion.
+source_observations` and `ingestion.reconciliation_decisions`, and widens
+both natural keys to include it. A plain `UNIQUE` constraint would have
+broken legacy upsert idempotence the moment `metric_granularity` (nullable,
+`NULL` for every legacy row) joined the key -- standard SQL treats `NULL`
+as distinct from `NULL`. `UNIQUE NULLS NOT DISTINCT` (PostgreSQL 15+; this
+repository targets PostgreSQL 17) is used instead: two legacy rows collide
+exactly as before, while two rows with different non-`NULL`
+`metric_granularity` values coexist as distinct facts.
+`reconciliation_decisions`' `status` check constraint widened to include
+`not_comparable`/`methodology_pending`. No backfill, no destructive
+rewrite -- every existing row keeps `metric_granularity = NULL`, its
+correct legacy value. `database/tests/015_data_mesh_v2_contract.sql`
+proves both invariants (and cross-granularity coexistence) against a real
+database; two pre-existing files whose `ON CONFLICT` targets predated this
+widening (`database/tests/010_data_mesh_contract.sql`,
+`database/fixtures/005_data_mesh_smoke.sql`) were updated to match the new
+natural key, or they would have failed against the new schema.
+`db.data_mesh_repository.MetricGranularityNotPersistableError` -- the
+Block 20D.2 fail-closed guard that refused to persist any V2 observation
+at all -- is removed now that the schema safely supports it.
+
+### Real ESP_LL 2017/18 certification
+
+`resolve_and_reconcile_v2()` was run against the full real certified
+overlap (Wyscout ESP_LL: 416,407 observations, StatsBomb ESP_LL: 61,247
+observations) with a real, freshly-rebuilt `PlayerCrosswalk` (434 accepted
+pairs, 868 entries, all 4 real mid-season transfers -- Guidetti, Gálvez,
+Moyà, Fuego -- each resolving both providers to one identical canonical
+key across their 2 team contexts). All 36 shared matches and all 20 shared
+teams resolved; zero date mismatches. `saves`/player_match and
+`saves`/goalkeeper_match produced distinct, non-colliding decision groups,
+proving the granularity-safe grouping holds under real data, not just
+synthetic fixtures.
+
+Across the full real batch, **403,291 total decisions**: 369,153
+single-source, and for the 34,138 real two-source groups -- 3,664
+`agreed` (every one of them one of the 10 exact-policy identities, zero
+leakage), 6,376 `not_comparable` (every one of them one of the 12
+not_comparable-policy identities, zero leakage), and 24,098
+`methodology_pending`. This exact internal-consistency property (the real
+`agreed` count sums precisely across the 10 exact identities' own real
+paired-entity counts, and the real `not_comparable` count sums precisely
+across the 12 not_comparable identities' own counts) is itself evidence
+the policy gate has zero leakage in either direction. Re-running the same
+batch twice produced byte-identical decisions (excluding `calculated_at`).
+`STATSBOMB_INTERNAL_ONLY` remained `True` throughout; zero writes to
+`football.*`/`intelligence.*` -- `resolve_and_reconcile_v2()` is a pure
+in-memory function, exactly like V0.
+
+**A real correctness defect found and fixed during this certification**:
+the real run initially surfaced 6 additional overlapping `(metric_name,
+metric_granularity)` identities at `player_season`/`goalkeeper_season`
+granularity (`matches`, `appearances`, `starts`, `sub_appearances`,
+`clean_sheets`/goalkeeper_season, `save_pct`/goalkeeper_season) that Block
+20D.3's original 65-identity inventory never counted (that inventory's
+counting method required a `match_external_id` hint, which season-level
+facts structurally never carry). Investigating why revealed a real defect,
+not just an uncatalogued identity: `statsbomb_open.parse_premier_league_
+season()` -- despite its own docstring's stated assumption "requires every
+match, not one" -- had no actual check that its `bundles` argument
+genuinely covered a complete season, so it silently aggregated
+`ESP_LL_SCOPE`'s real 36-of-38-match Barcelona-only Open Data window as if
+it were a real full season for every player who appeared in it (both
+Barcelona's own players, missing 2 real matches, and every opponent
+player, whose true full 2017/18 season the 36-match cache barely samples
+at all) -- structurally indistinguishable from Wyscout's genuinely
+complete 380-match ESP_LL season aggregate for the same real person, with
+no hint or provenance field recording the difference.
+
+**Fix**: `AdapterScope` gained `season_scope_complete: bool = True`
+(default preserves every previously-declared scope's exact behavior --
+Wyscout ENG_PL/ESP_LL and StatsBomb ENG_PL are all genuinely complete
+seasons). StatsBomb's `ESP_LL_SCOPE` -- the one genuinely incomplete scope
+-- now declares `season_scope_complete=False`. `parse_lineup_
+participation_observations()` gained an `include_season` parameter
+(mirroring the identical existing pattern already used by `parse_
+goalkeeper_observations()`), and `parse_premier_league_season()` derives
+`include_season=scope.season_scope_complete` for both season-emitting
+sub-calls -- the one call site that knows about this distinction; no
+provider-specific conditional was added to reconciliation/pipeline code.
+No match is faked as zero, no value is extrapolated, and no partial
+aggregate is renamed as a full season -- the fact is simply never emitted
+for an incomplete scope. `SEMANTIC_VERSION` bumped `statsbomb-open-v0.3 ->
+v0.4` (a real observable-emission-semantics change, per this repository's
+established convention), which automatically invalidates the
+comparability-policy registry's `SourceRef` for any decision built from
+the pre-fix adapter version.
+
+After the fix: StatsBomb emits **zero** `player_season`/`goalkeeper_season`
+observations for `ESP_LL_SCOPE` (down from the pre-fix 63,063 total
+observations to 61,247); every real season-level decision in the ESP_LL
+certification is now `single_source`, sourced exclusively from Wyscout's
+genuinely complete season -- verified by real re-run, not asserted. The
+certified full ENG_PL StatsBomb adapter audit (a genuinely complete
+380/380-match scope, `season_scope_complete` stays `True`) is unaffected --
+its 110/110 adapter-safe identity baseline is preserved exactly, since
+`DEFAULT_SCOPE` keeps the default `True` and nothing about ENG_PL emission
+changed.
+
+**Deferred to Block 20D.5**: numeric tolerance reconciliation and a
+`tolerated_agreement` status for the 25 deferred identities; re-auditing
+the 6 thin-evidence rare-event identities against a larger real sample for
+possible `exact` promotion; the `status` vocabulary / `kickoff_at`
+timezone / `venue_name` normalization gaps; resolving the `passes`/`duels`
+methodology divergence; the newly-found `player_season`/`goalkeeper_season`
+overlap identities; any additional provider pair; canonical
+`football.players` promotion; product exposure; the StatsBomb
+compliance/`STATSBOMB_INTERNAL_ONLY` decision; and production
+scheduling/automation.

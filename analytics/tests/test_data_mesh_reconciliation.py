@@ -6,6 +6,8 @@ from football_intelligence.data_mesh.models import NormalizedObservation
 from football_intelligence.data_mesh.reconciliation import (
     AGREEMENT_BASE_CONFIDENCE,
     CONFLICT_CONFIDENCE,
+    MODEL_VERSION,
+    MODEL_VERSION_V2,
     SINGLE_SOURCE_CONFIDENCE,
     reconcile_metric,
 )
@@ -184,3 +186,62 @@ def test_only_the_latest_observation_per_source_counts() -> None:
     )
     assert decision.status == "single_source"
     assert decision.candidate_value == 2
+
+
+def test_v0_call_shape_is_completely_unchanged_by_block_20d4() -> None:
+    """A caller that never passes `metric_granularity`/`model_version`
+    (every existing V0 caller, e.g. `resolve_and_reconcile()`) must get
+    back an identical decision to before Block 20D.4: `metric_granularity`
+    defaults to `None` and `model_version` defaults to the unchanged
+    `MODEL_VERSION` constant -- never `MODEL_VERSION_V2`."""
+
+    observations = [
+        _observation(source_code="thesportsdb", value=2),
+        _observation(source_code="openligadb", value=2),
+    ]
+    decision = reconcile_metric(
+        observations,
+        logical_entity_key="match:1",
+        entity_type="match",
+        metric_name="home_score",
+    )
+    assert decision.metric_granularity is None
+    assert decision.model_version == MODEL_VERSION
+    assert decision.model_version != MODEL_VERSION_V2
+
+
+def test_v2_caller_can_pass_explicit_metric_granularity_and_model_version() -> None:
+    observations = [
+        _observation(source_code="wyscout-open", value=2),
+        _observation(source_code="statsbomb-open", value=2),
+    ]
+    decision = reconcile_metric(
+        observations,
+        logical_entity_key="player-match:1",
+        entity_type="player",
+        metric_name="saves",
+        metric_granularity="goalkeeper_match",
+        model_version=MODEL_VERSION_V2,
+    )
+    assert decision.status == "agreed"
+    assert decision.metric_granularity == "goalkeeper_match"
+    assert decision.model_version == MODEL_VERSION_V2
+
+
+def test_v2_single_source_still_uses_reconcile_metric_directly() -> None:
+    """Confirms `reconcile_metric()` itself needs no comparability-policy
+    awareness -- a single-source group is `single_source` regardless of
+    which granularity/model_version is passed, exactly like V0."""
+
+    observations = [_observation(source_code="wyscout-open", value=3)]
+    decision = reconcile_metric(
+        observations,
+        logical_entity_key="player-match:1",
+        entity_type="player",
+        metric_name="touches",
+        metric_granularity="player_match",
+        model_version=MODEL_VERSION_V2,
+    )
+    assert decision.status == "single_source"
+    assert decision.metric_granularity == "player_match"
+    assert decision.model_version == MODEL_VERSION_V2

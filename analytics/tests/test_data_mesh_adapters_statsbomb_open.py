@@ -555,7 +555,15 @@ def test_semantic_version_is_bumped_from_the_pre_review_fix_pass_adapter() -> No
     # materially enriched identity hints) -- the Block 20C.2b version
     # ("statsbomb-open-v0.2") must not be shared with these new semantics.
     assert statsbomb_open.SEMANTIC_VERSION != "statsbomb-open-v0.2"
-    assert statsbomb_open.SEMANTIC_VERSION == "statsbomb-open-v0.3"
+
+
+def test_semantic_version_is_bumped_for_the_season_scope_completeness_fix() -> None:
+    # Block 20D.4's fix (season-level identities are only emitted for a
+    # scope declared season_scope_complete=True) changed observable
+    # emission semantics for any incomplete scope (e.g. ESP_LL) -- the
+    # pre-fix version ("statsbomb-open-v0.3") must not be shared with it.
+    assert statsbomb_open.SEMANTIC_VERSION != "statsbomb-open-v0.3"
+    assert statsbomb_open.SEMANTIC_VERSION == "statsbomb-open-v0.4"
 
 
 # -- C/D/E/F/G. Lineup-authoritative participant universe --------------------
