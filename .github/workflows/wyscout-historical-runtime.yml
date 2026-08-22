@@ -1,0 +1,143 @@
+name: Wyscout Historical Runtime
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/wyscout-historical-runtime.yml"
+      - "analytics/**"
+      - "database/**"
+
+permissions:
+  contents: read
+
+jobs:
+  real-wyscout-local-postgres:
+    if: github.event.pull_request.head.ref == 'historical-wyscout-player-v2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: football_intelligence_wyscout_runtime
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      RUNTIME_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_wyscout_runtime
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Apply migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            echo "Applying $migration"
+            psql "$RUNTIME_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+          done
+
+      - name: Apply core seeds
+        run: >-
+          psql "$RUNTIME_DATABASE_URL" -v ON_ERROR_STOP=1
+          -f database/seeds/001_core_catalog.sql
+
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install analytics dependencies
+        working-directory: analytics
+        run: uv sync --dev --locked
+
+      - name: Load certified real Wyscout ENG_PL 2017/18
+        working-directory: analytics
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run football-intelligence-load-wyscout-historical \
+            --cache-dir "$RUNNER_TEMP/wyscout-open-cache" \
+            --database-url "$RUNTIME_DATABASE_URL" \
+            --report "$RUNNER_TEMP/wyscout-historical-load.json"
+
+      - name: Verify real-source runtime report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report_path = Path(os.environ["RUNNER_TEMP"]) / "wyscout-historical-load.json"
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+
+          assert report["status"] == "PASS", report
+          assert report["source"] == "wyscout-open", report["source"]
+          assert report["scope"] == {
+              "competition": "ENG_PL",
+              "season": "2017/18",
+              "role": "historical_deep",
+          }, report["scope"]
+
+          probe = report["source_probe"]
+          assert probe["matches"] == 380, probe
+          assert probe["events"] == 643150, probe
+          assert probe["roster_players"] == 603, probe
+          assert probe["counts_verified"] is True, probe
+
+          adapter = report["adapter"]
+          assert adapter["observations"] > 0, adapter
+          assert adapter["safe_identities"] == 77, adapter
+          assert adapter["all_checks_passed"] is True, adapter
+
+          counts = report["database_scope_counts"]
+          assert counts["matches"] == 380, counts
+          assert counts["teams"] == 20, counts
+          assert counts["players"] > 0, counts
+          assert counts["player_appearances"] > 0, counts
+          assert counts["player_match_stats"] == counts["player_appearances"], counts
+          assert counts["team_match_stats"] == 760, counts
+          assert counts["source_observations"] == adapter["observations"], (counts, adapter)
+
+          product = report["product"]
+          assert product["player_v2_snapshots_published"] is False, product
+          writes = report["writes"]
+          assert writes["database_target"] == "local-only", writes
+          assert writes["production_written"] is False, writes
+
+          print(json.dumps({
+              "status": report["status"],
+              "source_probe": probe,
+              "adapter": adapter,
+              "database_scope_counts": counts,
+              "minutes_policy": report["canonical"]["minutes_policy"],
+              "team_links": report["canonical"]["team_links"],
+              "product": product,
+              "writes": writes,
+          }, indent=2, sort_keys=True))
+          PY
+
+      - name: Verify historical loader did not publish Player V2
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCORE_ROWS=$(psql "$RUNTIME_DATABASE_URL" -Atc "select count(*) from analytics.player_score_snapshots")
+          FEATURE_ROWS=$(psql "$RUNTIME_DATABASE_URL" -Atc "select count(*) from analytics.player_feature_snapshots")
+          test "$SCORE_ROWS" = "0"
+          test "$FEATURE_ROWS" = "0"
+          echo "player_score_snapshots=$SCORE_ROWS"
+          echo "player_feature_snapshots=$FEATURE_ROWS"
