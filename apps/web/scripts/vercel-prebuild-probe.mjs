@@ -81,6 +81,19 @@ async function readProductionState() {
   });
 }
 
+async function ensureWyscoutProviderSeed() {
+  await sql.begin(async (tx) => {
+    await tx`
+      insert into ingestion.providers (code, display_name)
+      values ('wyscout-open', 'Wyscout Open Data')
+      on conflict (code) do update
+      set
+        display_name = excluded.display_name,
+        is_active = true
+    `;
+  });
+}
+
 function requireCondition(condition, message) {
   if (!condition) throw new Error(`HISTORICAL PRODUCTION OPERATOR: ${message}`);
 }
@@ -106,7 +119,7 @@ try {
   requireCondition(before.current.season_rows === 1, "ENG_PL 2025/26 season identity mismatch");
   requireCondition(before.current.matches === EXPECTED.currentMatches, "ENG_PL 2025/26 match count mismatch");
   requireCondition(before.current.team_match_stats === EXPECTED.currentTeamMatchStats, "ENG_PL 2025/26 team stats mismatch");
-  requireCondition(before.safety.wyscout_provider_rows === 1, "Wyscout provider seed missing or duplicated");
+  requireCondition(before.safety.wyscout_provider_rows <= 1, "Wyscout provider seed is duplicated");
   requireCondition(before.safety.test_smoke_rows === 0, "test_smoke evidence found in production");
 
   const freshHistorical =
@@ -130,6 +143,15 @@ try {
     `2017/18 is partial/unexpected: ${JSON.stringify(before.historical)}`,
   );
   console.log(`HISTORICAL PREWRITE STATE: ${freshHistorical ? "fresh" : "certified_complete"}`);
+
+  await ensureWyscoutProviderSeed();
+  const seeded = await readProductionState();
+  requireCondition(seeded.safety.wyscout_provider_rows === 1, "Wyscout provider seed upsert failed");
+  requireCondition(
+    JSON.stringify(seeded.historical) === JSON.stringify(before.historical),
+    "historical scope changed while seeding provider catalog",
+  );
+  console.log("HISTORICAL PROVIDER SEED: PASS");
 
   const analyticsDir = path.resolve(process.cwd(), "../../analytics");
   const cacheDir = "/tmp/football-intelligence-wyscout-open";
