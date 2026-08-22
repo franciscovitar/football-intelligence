@@ -4,9 +4,13 @@ from datetime import UTC, datetime
 
 import pytest
 
-from football_intelligence.data_mesh.adapters.wyscout_open import parse_england_season
+from football_intelligence.data_mesh.adapters.wyscout_open import (
+    parse_england_season,
+)
 from football_intelligence.data_mesh.models import NormalizedObservation
-from football_intelligence.jobs.load_wyscout_historical import _apply_safe_minutes_policy
+from football_intelligence.jobs.load_wyscout_historical import (
+    _apply_safe_minutes_policy,
+)
 from football_intelligence.normalization.models import (
     NormalizedFixtureBatch,
     PlayerAppearanceRecord,
@@ -110,9 +114,7 @@ def test_wyscout_historical_normalization_preserves_supported_vs_missing() -> No
     assert result.batch.matches[0].status == "finished"
     assert len(result.batch.team_match_stats) == 2
 
-    appearances = {
-        item.player_external_id: item for item in result.batch.appearances
-    }
+    appearances = {item.player_external_id: item for item in result.batch.appearances}
     assert appearances["11"].minutes == 90
     assert appearances["12"].minutes == 60
     assert appearances["13"].minutes == 30
