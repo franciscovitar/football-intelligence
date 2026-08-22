@@ -6,6 +6,7 @@ values
     ('thesportsdb', 'TheSportsDB'),
     ('openligadb', 'OpenLigaDB'),
     ('statsbomb-open', 'StatsBomb Open Data'),
+    ('wyscout-open', 'Wyscout Open Data'),
     ('football-data-org', 'football-data.org'),
     ('football-data-uk', 'Football-Data.co.uk'),
     ('openfootball', 'OpenFootball (football.json)')

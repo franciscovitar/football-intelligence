@@ -23,9 +23,11 @@ from football_intelligence.player_analytics.engine_v2 import (
     MODEL_VERSION as V2_MODEL_VERSION,
 )
 from football_intelligence.player_analytics.engine_v2 import (
+    PlayerAnalyticsResultV2,
     PlayerScoreV2,
     calculate_player_analytics_v2_result,
 )
+from football_intelligence.player_analytics.models import PlayerAnalyticsResult
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -74,20 +76,11 @@ def main() -> None:
         )
         v2_scores = v2_result.scores
 
-        # Preserve the established V1 snapshots for downstream blocks that
-        # explicitly version-pin them, then publish V2 through the same table
-        # and product read path with explicit real/evidence context.
-        repository.replace_snapshots(
-            v2_result,
+        _persist_versioned_snapshots(
+            repository,
+            v1_result=result,
+            v2_result=v2_result,
             scope_key=scope_key,
-            model_version=V1_MODEL_VERSION,
-        )
-        repository.replace_snapshots(
-            result,
-            scope_key=scope_key,
-            model_version=V2_MODEL_VERSION,
-            v2_scores=v2_scores,
-            data_context="real",
         )
         counts = repository.snapshot_counts(
             scope_key=scope_key,
@@ -112,6 +105,35 @@ def main() -> None:
         f"({len(v2_scores)} score snapshots, {len(v2_result.features)} feature snapshots)"
     )
     print(f"REPORT: {args.report}")
+
+
+def _persist_versioned_snapshots(
+    repository: PlayerAnalyticsRepository,
+    *,
+    v1_result: PlayerAnalyticsResult,
+    v2_result: PlayerAnalyticsResultV2,
+    scope_key: str,
+) -> None:
+    """Persist each engine under its own model version.
+
+    This intentionally keeps V1 compatibility snapshots separate from the
+    evidence-aware V2 feature set. In particular, a nullable unsupported raw
+    metric may participate in V1's legacy zero-event compatibility semantics,
+    while V2 must keep it absent and expose the resulting evidence gap.
+    """
+
+    repository.replace_snapshots(
+        v1_result,
+        scope_key=scope_key,
+        model_version=V1_MODEL_VERSION,
+        data_context="real",
+    )
+    repository.replace_snapshots(
+        v2_result,
+        scope_key=scope_key,
+        model_version=V2_MODEL_VERSION,
+        data_context="real",
+    )
 
 
 def _build_report(
