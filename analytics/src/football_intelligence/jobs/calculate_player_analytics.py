@@ -56,7 +56,8 @@ def resolve_analysis_scope(
             league_by_code(normalized_competition)
         except KeyError as exc:
             raise ValueError(
-                f"Unsupported --competition {normalized_competition!r}; use a configured core league code"
+                "Unsupported --competition "
+                f"{normalized_competition!r}; use a configured core league code"
             ) from exc
         competition_codes = (normalized_competition,)
         default_scope = f"competition:{normalized_competition}:{normalized_season}"
