@@ -16,7 +16,6 @@ from football_intelligence.normalization.wyscout_historical import (
     normalize_england_2017_18,
 )
 
-
 PLAYERS = [
     {"wyId": 11, "shortName": "H. Keeper", "role": {"code2": "GK"}},
     {"wyId": 12, "shortName": "H. Forward", "role": {"code2": "FW"}},
