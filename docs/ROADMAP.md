@@ -15,7 +15,9 @@ Each block ends with focused verification and a checkpoint. A block is not compl
 - [x] **Block 9 — Perception Intelligence** — PASS
 - [x] **Block 10 — Overrated / Underrated Intelligence** — PASS
 - [x] **Block 11 — Tactical Intelligence** — PASS
-- [ ] **Block 12 — World Radar + Calibration + V1 Hardening**
+- [x] **Block 12 — World Radar + Calibration + V1 Hardening**
+- [x] **Blocks 13-20 — Data Mesh, real-data snapshots, multi-source expansion, entity resolution V2, reconciliation V2** — see `docs/BLOCK20_MULTI_SOURCE.md`'s exit contract (Block 20 = CLOSED / CERTIFIED / MERGED)
+- [ ] **V1 Product Closure / Production Readiness** (current phase) — see `docs/PRODUCTION_BOOTSTRAP.md`; the Global Product Closure Review verdict is `CONDITIONAL` pending production data population authorization
 
 ## Block 1 — Foundation
 
@@ -99,3 +101,25 @@ team-detail tactical context; PR and merged-main PostgreSQL CI passed.
 ## Block 12 — World Radar + Calibration + V1 Hardening
 
 Detect outliers outside core leagues, validate predictive features and model weights, harden costs/security/observability/UX, and complete V1 end-to-end validation.
+
+## Blocks 13-20 and current phase
+
+Work continued past Block 12 into the Data Mesh / real-data-snapshot /
+multi-source-expansion track (Blocks 13-20): real ENG_PL 2025/26 evidence
+(`docs/REAL_DATA_SNAPSHOT_V2.md`), Product Experience V2
+(`docs/PRODUCT_EXPERIENCE_V2.md`), and Wyscout Open + StatsBomb Open
+historical/deep adapters with entity resolution V2 and granularity-safe
+reconciliation V2 (`docs/BLOCK20_MULTI_SOURCE.md`). Block 20 is the last of
+that track and is **CLOSED / CERTIFIED / MERGED** -- see its exit contract
+for the full supported/fail-closed/deferred/externally-blocked breakdown
+rather than a per-block PASS entry here.
+
+The current phase is **V1 Product Closure / Production Readiness**, not a
+new numbered block. The Global Product Closure Review verdict is
+`CONDITIONAL`: the application itself (code, security, CI, deployment) is
+ready, but real production data has not yet been populated -- see
+`docs/PRODUCTION_BOOTSTRAP.md` for the prepared (not yet executed) sequence
+and its required explicit authorization. Known V1 limitation: the real
+snapshot is ENG_PL 2025/26, the latest **completed** season, with no
+approved rich domestic player dataset -- never presented as live/current
+coverage.

@@ -38,15 +38,31 @@ count from this snapshot).
 ## Database safety
 
 This job NEVER connects to a database implicitly. `DATABASE_URL` in the
-environment is never read. Connecting at all requires an explicit
-`--database-url` naming a clearly local PostgreSQL instance
+environment is never read. By default, connecting at all requires an
+explicit `--database-url` naming a clearly local PostgreSQL instance
 (`localhost`/`127.0.0.1`/`::1`, or a host-less DSN resolving to a local Unix
 socket) -- anything else is rejected before any connection is attempted.
 Writing audit evidence additionally requires the explicit `--persist-audit-local`
-flag; `--database-url` alone only enables a read-only canonical-state check.
-This job never writes to `football.*` canonical tables itself in any case --
-reconciled evidence is audit-only, persisted only to the `ingestion` schema,
-the same boundary the Block 13 PoC and Zero-Cost Coverage Lab already use.
+flag, which is (and remains) strictly local-only: passing it together with a
+remote `--database-url` is rejected, never silently upgraded to a remote
+write. `--database-url` alone (local) only enables a read-only
+canonical-state check. This job never writes to `football.*` canonical
+tables itself in any case -- reconciled evidence is audit-only, persisted
+only to the `ingestion` schema, the same boundary the Block 13 PoC and
+Zero-Cost Coverage Lab already use.
+
+## Remote/production audit persistence (V1 Closure Pass A/B preparation)
+
+A distinct, separately-named `--persist-audit-remote-production` flag
+(never `--persist-audit-local`, which keeps its exact original local-only
+meaning) opts in to persisting audit evidence to a REMOTE `--database-url`.
+This additionally requires the full explicit production-write confirmation
+contract from `db.production_write_guard`: `--allow-remote-write`,
+`--confirm-target production`, `--production-write-confirmation` with the
+exact required phrase, and `--confirm-database-target` with the exact
+parsed target (`db.production_write_guard.safe_target_description`). Missing
+any one of these four still fails closed. No production write happens
+merely by supplying a remote `--database-url`.
 
 Only ENG_PL 2025/26 is implemented. `--competition`/`--season` exist for an
 honest, explicit contract, not because another combination is actually
@@ -77,6 +93,7 @@ from football_intelligence.data_mesh.pipeline import resolve_and_reconcile
 from football_intelligence.data_mesh.reconciliation import MODEL_VERSION
 from football_intelligence.db.data_mesh_repository import DataMeshRepository
 from football_intelligence.db.local_safety import validate_local_database_url
+from football_intelligence.db.production_write_guard import resolve_database_target
 from football_intelligence.db.provider_repository import connect
 from football_intelligence.jobs.collect_real_snapshot import fetch_football_data_uk_matches
 from football_intelligence.jobs.score_real_snapshot import assess_real_snapshot
@@ -150,12 +167,33 @@ def build_parser() -> argparse.ArgumentParser:
         "--persist-audit-local",
         action="store_true",
         help=(
-            "Opt-in: persist reconciliation evidence to --database-url's ingestion "
-            "schema (audit-only, never football.*). Requires --database-url. "
-            "Without this flag, --database-url (if given) is used only for a "
-            "read-only canonical-state check."
+            "Opt-in: persist reconciliation evidence to a LOCAL --database-url's "
+            "ingestion schema (audit-only, never football.*). Requires --database-url "
+            "to resolve to a local instance -- rejected if --database-url is remote, "
+            "even if the remote production-write confirmation flags are also given; "
+            "use --persist-audit-remote-production for that. Without either persist "
+            "flag, --database-url (if given) is used only for a read-only "
+            "canonical-state check."
         ),
     )
+    parser.add_argument(
+        "--persist-audit-remote-production",
+        action="store_true",
+        help=(
+            "Opt-in: persist reconciliation evidence to a REMOTE (production) "
+            "--database-url's ingestion schema. Distinct from --persist-audit-local so "
+            "a flag literally named 'local' can never be reused to mean 'production'. "
+            "Requires --database-url to be remote, plus the full explicit "
+            "production-write confirmation: --allow-remote-write, "
+            "--confirm-target production, --production-write-confirmation with the "
+            "exact required phrase, and --confirm-database-target with the exact parsed "
+            "target (run the read-only preflight first and copy its reported target)."
+        ),
+    )
+    parser.add_argument("--allow-remote-write", action="store_true")
+    parser.add_argument("--confirm-target", default=None)
+    parser.add_argument("--production-write-confirmation", default=None)
+    parser.add_argument("--confirm-database-target", default=None)
     return parser
 
 
@@ -173,10 +211,37 @@ def main() -> None:
         raise SystemExit(
             f"--request-budget must be between {PLANNED_REQUESTS} and {MAX_REQUEST_BUDGET}"
         )
+    if args.persist_audit_local and args.persist_audit_remote_production:
+        raise SystemExit(
+            "--persist-audit-local and --persist-audit-remote-production are mutually exclusive"
+        )
     if args.persist_audit_local and not args.database_url:
         raise SystemExit("--persist-audit-local requires --database-url")
+    if args.persist_audit_remote_production and not args.database_url:
+        raise SystemExit("--persist-audit-remote-production requires --database-url")
 
-    database_url = _validate_database_url(args.database_url)
+    database_url: str | None
+    if args.persist_audit_remote_production:
+        target = resolve_database_target(
+            args.database_url,
+            allow_remote_write=args.allow_remote_write,
+            confirm_target=args.confirm_target,
+            production_write_confirmation=args.production_write_confirmation,
+            confirm_database_target=args.confirm_database_target,
+        )
+        assert target is not None  # --database-url presence checked above
+        if target.is_local:
+            raise SystemExit(
+                "--persist-audit-remote-production requires a remote --database-url; "
+                "for a local database use --persist-audit-local instead"
+            )
+        database_url = target.database_url
+    else:
+        # Strictly local-only, unchanged from the original contract -- covers both
+        # --persist-audit-local and the bare read-only canonical-state check.
+        database_url = _validate_database_url(args.database_url)
+
+    persist_audit = args.persist_audit_local or args.persist_audit_remote_production
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -189,7 +254,8 @@ def main() -> None:
     decisions, resolution_meta = resolve_and_reconcile(all_observations)
 
     persistence = _persist_audit_evidence(
-        database_url=database_url if args.persist_audit_local else None,
+        database_url=database_url if persist_audit else None,
+        is_remote=args.persist_audit_remote_production,
         all_observations=all_observations,
         decisions=decisions,
     )
@@ -380,6 +446,7 @@ def _build_openfootball_output(
 def _persist_audit_evidence(
     *,
     database_url: str | None,
+    is_remote: bool = False,
     all_observations: list[NormalizedObservation],
     decisions: list[ReconciliationDecision],
 ) -> dict[str, Any]:
@@ -387,8 +454,9 @@ def _persist_audit_evidence(
         return {
             "mode": "not_requested",
             "reason": (
-                "requires both an explicit --database-url resolving to a local "
-                "database and the --persist-audit-local opt-in flag"
+                "requires an explicit --database-url and either --persist-audit-local "
+                "(local database) or --persist-audit-remote-production (remote, with the "
+                "full explicit production-write confirmation)"
             ),
         }
     with connect(database_url) as connection:
@@ -397,7 +465,14 @@ def _persist_audit_evidence(
         decisions_written = mesh_repository.replace_decisions(decisions)
         connection.commit()
     return {
-        "mode": "postgresql_ingestion_schema_audit_only",
+        # "postgresql_ingestion_schema_audit_only" is the exact original value
+        # for the local path -- unchanged, so existing callers/tests keep
+        # working. The remote-production path is a distinct, new value.
+        "mode": (
+            "postgresql_ingestion_schema_audit_only_remote_production"
+            if is_remote
+            else "postgresql_ingestion_schema_audit_only"
+        ),
         "observations_written": observations_written,
         "decisions_written": decisions_written,
         "scope": "ingestion.source_observations / ingestion.reconciliation_decisions only",

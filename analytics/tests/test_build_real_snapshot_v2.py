@@ -83,6 +83,156 @@ def test_persist_flag_without_database_url_is_rejected(monkeypatch: pytest.Monke
 
 
 # ---------------------------------------------------------------------------
+# V1 Closure Pass A/B preparation: remote (production) audit persistence
+# requires its own distinct flag plus the full explicit confirmation --
+# --persist-audit-local keeps its exact original local-only meaning.
+# ---------------------------------------------------------------------------
+
+
+def test_cli_has_no_remote_production_defaults() -> None:
+    args = build_parser().parse_args([])
+    assert args.persist_audit_remote_production is False
+    assert args.allow_remote_write is False
+    assert args.confirm_target is None
+    assert args.production_write_confirmation is None
+    assert args.confirm_database_target is None
+
+
+def test_persist_audit_remote_production_with_localhost_hostaddr_bypass_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A `hostaddr` override cannot be used to sneak a remote write through
+    as though it were local -- `--persist-audit-remote-production` still
+    correctly classifies the real (remote) effective target and demands the
+    full confirmation contract."""
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build_real_snapshot_v2",
+            "--persist-audit-remote-production",
+            "--database-url",
+            "postgresql://localhost/db?hostaddr=203.0.113.5",
+            # no confirmation flags supplied
+        ],
+    )
+    with pytest.raises(SystemExit):
+        main()
+
+
+def test_persist_audit_local_and_remote_production_are_mutually_exclusive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build_real_snapshot_v2",
+            "--persist-audit-local",
+            "--persist-audit-remote-production",
+            "--database-url",
+            "postgresql://postgres:postgres@localhost:5432/db",
+        ],
+    )
+    with pytest.raises(SystemExit):
+        main()
+
+
+def test_persist_audit_remote_production_without_database_url_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("sys.argv", ["build_real_snapshot_v2", "--persist-audit-remote-production"])
+    with pytest.raises(SystemExit):
+        main()
+
+
+def test_persist_audit_remote_production_with_local_url_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A flag literally named 'remote-production' must never accept a local
+    database -- that is what --persist-audit-local is for."""
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build_real_snapshot_v2",
+            "--persist-audit-remote-production",
+            "--database-url",
+            "postgresql://postgres:postgres@localhost:5432/db",
+            "--allow-remote-write",
+            "--confirm-target",
+            "production",
+            "--production-write-confirmation",
+            "I UNDERSTAND THIS WRITES TO THE REAL PRODUCTION DATABASE",
+        ],
+    )
+    with pytest.raises(SystemExit):
+        main()
+
+
+def test_persist_audit_remote_production_without_full_confirmation_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build_real_snapshot_v2",
+            "--persist-audit-remote-production",
+            "--database-url",
+            "postgresql://user:pass@real-prod-host.example.com/db",
+            "--allow-remote-write",
+            # --confirm-target and --production-write-confirmation omitted
+        ],
+    )
+    with pytest.raises(SystemExit):
+        main()
+
+
+def test_persist_audit_local_with_remote_url_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--persist-audit-local must stay strictly local-only, even if a remote
+    URL happens to be well-formed -- use --persist-audit-remote-production
+    for a production target instead."""
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build_real_snapshot_v2",
+            "--persist-audit-local",
+            "--database-url",
+            "postgresql://user:pass@real-prod-host.example.com/db",
+        ],
+    )
+    with pytest.raises(SystemExit):
+        main()
+
+
+def test_persist_audit_remote_production_with_wrong_database_target_confirmation_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The three generic confirmations correct, but --confirm-database-target
+    names a different host than the real --database-url -- must still fail
+    closed before any network/database activity."""
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build_real_snapshot_v2",
+            "--persist-audit-remote-production",
+            "--database-url",
+            "postgresql://user:pass@real-prod-host.example.com/db",
+            "--allow-remote-write",
+            "--confirm-target",
+            "production",
+            "--production-write-confirmation",
+            "I UNDERSTAND THIS WRITES TO THE REAL PRODUCTION DATABASE",
+            "--confirm-database-target",
+            "postgresql://a-different-host.example.com/db",
+        ],
+    )
+    with pytest.raises(SystemExit):
+        main()
+
+
+# ---------------------------------------------------------------------------
 # Blocker 1: temporal coverage semantics
 # ---------------------------------------------------------------------------
 

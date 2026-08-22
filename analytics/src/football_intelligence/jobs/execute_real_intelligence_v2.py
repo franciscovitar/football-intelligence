@@ -3,9 +3,12 @@
 This is the single official entry point that proves the accepted V2 engines
 and the Diagnostic Rule Engine against real (mostly-missing) evidence:
 
-1. verifies the target database is explicitly local (never a bare
-   `DATABASE_URL` environment fallback -- see `db.local_safety`, the same
-   pattern `jobs.build_real_snapshot_v2` established in Block 18);
+1. verifies the target database is either local or an explicitly,
+   triple-confirmed remote production instance (never a bare `DATABASE_URL`
+   environment fallback in either case) -- see
+   `db.production_write_guard.resolve_database_target`, the shared contract
+   `jobs.build_real_snapshot_v2` and `jobs.load_real_snapshot` also use
+   (V1 Closure Pass A/B preparation);
 2. assesses the canonical ENG_PL 2025/26 real state (measured from the
    database every run, never hardcoded);
 3. executes Team V2 on the real team observations already loaded by
@@ -18,11 +21,19 @@ and the Diagnostic Rule Engine against real (mostly-missing) evidence:
    permitted real player-match evidence -- this job never calls the player
    engine when there is nothing to score);
 6. verifies the product-safe views reflect exactly this run;
-7. writes a machine-readable execution report.
+7. writes a machine-readable execution report, including which database
+   target (local/remote) was actually used.
 
 Running this job twice against the same real data is idempotent: Team V2
 persistence and diagnostic-findings persistence are both delete-then-insert
 for the exact scope being replaced, so row counts are stable across reruns.
+
+Remote (production) execution additionally requires `--allow-remote-write`,
+`--confirm-target production`, `--production-write-confirmation` with the
+exact required phrase, and `--confirm-database-target` with the exact
+parsed target (`db.production_write_guard`) -- a plain remote
+`--database-url` alone is refused before any connection is attempted, and
+no environment variable can supply any of these four confirmations.
 """
 
 from __future__ import annotations
@@ -37,7 +48,7 @@ from typing import Any
 from football_intelligence.db.diagnostic_findings_repository import (
     DiagnosticFindingsRepository,
 )
-from football_intelligence.db.local_safety import validate_local_database_url
+from football_intelligence.db.production_write_guard import resolve_database_target
 from football_intelligence.db.provider_repository import connect
 from football_intelligence.db.team_analytics_repository import TeamAnalyticsRepository
 from football_intelligence.diagnostics.models import (
@@ -88,12 +99,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--database-url",
         required=True,
         help=(
-            "Explicit local PostgreSQL URL. Never read from the DATABASE_URL "
-            "environment variable. Must resolve to localhost/127.0.0.1/::1 (or a "
-            "host-less local-socket DSN) -- anything else is rejected before "
-            "connecting."
+            "Explicit PostgreSQL URL. Never read from the DATABASE_URL environment "
+            "variable. A local URL (localhost/127.0.0.1/::1, or a host-less local-socket "
+            "DSN) is accepted directly. A remote (production) URL additionally requires "
+            "--allow-remote-write, --confirm-target production, "
+            "--production-write-confirmation with the exact required phrase, and "
+            "--confirm-database-target with the exact parsed target (run the read-only "
+            "preflight first and copy its reported target) -- see db.production_write_guard."
         ),
     )
+    parser.add_argument("--allow-remote-write", action="store_true")
+    parser.add_argument("--confirm-target", default=None)
+    parser.add_argument("--production-write-confirmation", default=None)
+    parser.add_argument("--confirm-database-target", default=None)
     parser.add_argument("--report-path", type=Path, default=DEFAULT_REPORT_PATH)
     return parser
 
@@ -232,8 +250,15 @@ def _active_scopes(connection: Any) -> dict[str, Any]:
 
 def main() -> None:
     args = build_parser().parse_args()
-    database_url = validate_local_database_url(args.database_url)
-    assert database_url is not None  # --database-url is required
+    target = resolve_database_target(
+        args.database_url,
+        allow_remote_write=args.allow_remote_write,
+        confirm_target=args.confirm_target,
+        production_write_confirmation=args.production_write_confirmation,
+        confirm_database_target=args.confirm_database_target,
+    )
+    assert target is not None  # --database-url is required
+    database_url = target.database_url
 
     calculated_at = datetime.now(UTC)
 
@@ -324,7 +349,8 @@ def main() -> None:
         },
         "db_safety": {
             "implicit_database_url_used": False,
-            "remote_db_accepted": False,
+            "remote_db_accepted": not target.is_local,
+            "target": target.safe_description,
         },
     }
 
