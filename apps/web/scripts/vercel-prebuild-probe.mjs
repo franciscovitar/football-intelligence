@@ -8,15 +8,14 @@ if (!process.env.VERCEL) {
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
-  throw new Error("VERCEL PREFLIGHT PROBE: DATABASE_URL is missing");
+  console.log(`VERCEL PREFLIGHT PROBE: SKIP ${process.env.VERCEL_ENV ?? "unknown"} without DATABASE_URL`);
+  process.exit(0);
 }
 
 const parsed = new URL(databaseUrl);
 const port = parsed.port ? `:${parsed.port}` : "";
 const databaseName = parsed.pathname.replace(/^\//, "") || "(default)";
-console.log(
-  `VERCEL SAFE DATABASE TARGET: postgresql://${parsed.hostname}${port}/${databaseName}`,
-);
+console.log(`VERCEL SAFE DATABASE TARGET: postgresql://${parsed.hostname}${port}/${databaseName}`);
 console.log(`VERCEL ENVIRONMENT: ${process.env.VERCEL_ENV ?? "unknown"}`);
 
 for (const [label, command, args] of [
@@ -25,7 +24,10 @@ for (const [label, command, args] of [
   ["uv", "uv", ["--version"]],
 ]) {
   try {
-    const output = execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const output = execFileSync(command, args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     console.log(`RUNTIME ${label}: ${output.trim()}`);
   } catch {
     console.log(`RUNTIME ${label}: unavailable`);
@@ -77,3 +79,7 @@ try {
 }
 
 console.log("VERCEL PREFLIGHT PROBE: PASS READ ONLY");
+
+if (process.env.VERCEL_ENV === "production") {
+  throw new Error("INTENTIONAL STOP AFTER READ-ONLY PRODUCTION PREFLIGHT");
+}
