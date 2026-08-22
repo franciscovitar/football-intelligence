@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from football_intelligence.config.core_leagues import CORE_LEAGUES
+from football_intelligence.config.core_leagues import CORE_LEAGUES, league_by_code
 from football_intelligence.db.player_analytics_repository import PlayerAnalyticsRepository
 from football_intelligence.db.provider_repository import connect
 from football_intelligence.player_analytics.engine import (
@@ -33,24 +33,60 @@ from football_intelligence.player_analytics.models import PlayerAnalyticsResult
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Calculate evidence-aware V2 player analytics")
     parser.add_argument("--season", required=True)
+    parser.add_argument("--competition")
     parser.add_argument("--scope-key")
     parser.add_argument("--database-url")
     parser.add_argument("--report", type=Path, required=True)
     return parser
 
 
+def resolve_analysis_scope(
+    *,
+    season: str,
+    competition: str | None,
+    scope_key: str | None,
+) -> tuple[tuple[str, ...], str, str | None]:
+    normalized_season = season.strip()
+    if not normalized_season:
+        raise ValueError("--season must not be blank")
+
+    normalized_competition = competition.strip().upper() if competition else None
+    competition_codes: tuple[str, ...]
+    if normalized_competition:
+        try:
+            league_by_code(normalized_competition)
+        except KeyError as exc:
+            raise ValueError(
+                "Unsupported --competition "
+                f"{normalized_competition!r}; use a configured core league code"
+            ) from exc
+        competition_codes = (normalized_competition,)
+        default_scope = f"competition:{normalized_competition}:{normalized_season}"
+    else:
+        competition_codes = tuple(league.code for league in CORE_LEAGUES)
+        default_scope = f"core:{normalized_season}"
+
+    effective_scope = (scope_key or default_scope).strip()
+    if not effective_scope:
+        raise ValueError("--scope-key must not be blank")
+    return competition_codes, effective_scope, normalized_competition
+
+
 def main() -> None:
     args = build_parser().parse_args()
     season = str(args.season).strip()
-    if not season:
-        raise SystemExit("--season must not be blank")
+    try:
+        competition_codes, scope_key, competition = resolve_analysis_scope(
+            season=season,
+            competition=args.competition,
+            scope_key=args.scope_key,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
     database_url = args.database_url or os.environ.get("DATABASE_URL")
     if not database_url:
         raise SystemExit("DATABASE_URL is required")
-
-    scope_key = args.scope_key or f"core:{season}"
-    competition_codes = tuple(league.code for league in CORE_LEAGUES)
 
     with connect(database_url) as connection:
         repository = PlayerAnalyticsRepository(connection)
@@ -59,8 +95,9 @@ def main() -> None:
             competition_codes=competition_codes,
         )
         if not observations:
+            competition_note = competition or "configured core leagues"
             raise SystemExit(
-                f"No finished player observations found for core leagues in season {season}"
+                f"No finished player observations found for {competition_note} in season {season}"
             )
 
         result = calculate_player_analytics(
@@ -90,6 +127,7 @@ def main() -> None:
 
     report = _build_report(
         season=season,
+        competition=competition,
         scope_key=scope_key,
         scores=v2_scores,
         counts=counts,
@@ -139,6 +177,7 @@ def _persist_versioned_snapshots(
 def _build_report(
     *,
     season: str,
+    competition: str | None,
     scope_key: str,
     scores: Sequence[PlayerScoreV2],
     counts: dict[str, int],
@@ -177,6 +216,7 @@ def _build_report(
     return {
         "model_version": V2_MODEL_VERSION,
         "season": season,
+        "competition": competition,
         "scope_key": scope_key,
         "score_snapshot_count": counts["scores"],
         "feature_snapshot_count": counts["features"],

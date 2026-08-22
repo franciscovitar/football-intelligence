@@ -5,27 +5,50 @@ import { connection } from "next/server";
 
 import { PerceptionEvidenceCard } from "@/features/perception/evidence-card";
 import { Confidence, DimensionCard, EmptyState, EvidenceBadge, MetricRow, ScoreBadge, Section } from "@/features/product/product-ui";
+import { selectPlayerContext } from "@/lib/player-context";
 import { metricCategory, PLAYER_DIMENSION_LABELS, WINDOW_LABELS, formatNumber, humanMetric } from "@/lib/product-display";
 import { getEntityDiagnostics } from "@/lib/queries/diagnostics";
 import { getPlayerPerceptionEvidence } from "@/lib/queries/perception";
-import { getProductPlayerDetail, PLAYER_RANKING_DIMENSIONS } from "@/lib/queries/product-intelligence";
+import { PLAYER_RANKING_DIMENSIONS } from "@/lib/queries/product-intelligence";
+import { getScopedPlayerContexts, getScopedPlayerDetail } from "@/lib/queries/scoped-player-intelligence";
 
 export const metadata: Metadata = { title: "Jugador V2" };
+const value = (input: string | string[] | undefined) => Array.isArray(input) ? (input[0] ?? "") : (input ?? "");
 
-export default async function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
-  await connection(); const { id } = await params; const playerId = Number(id); if (!Number.isInteger(playerId) || playerId < 1) notFound();
-  const [result, perceptionResult, diagnosticsResult] = await Promise.all([getProductPlayerDetail(playerId), getPlayerPerceptionEvidence(playerId), getEntityDiagnostics("player", playerId)]);
+export default async function PlayerPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await connection();
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const playerId = Number(id);
+  if (!Number.isInteger(playerId) || playerId < 1) notFound();
+
+  const contextsResult = await getScopedPlayerContexts();
+  const contexts = contextsResult.status === "ready" ? contextsResult.data : [];
+  const selectedContext = selectPlayerContext(contexts, value(query.context));
+  if (!selectedContext) notFound();
+
+  const [result, perceptionResult, diagnosticsResult] = await Promise.all([
+    getScopedPlayerDetail(playerId, selectedContext.scopeKey),
+    getPlayerPerceptionEvidence(playerId),
+    getEntityDiagnostics("player", playerId),
+  ]);
   if (result.status === "ready" && result.data === null) notFound();
-  if (result.status !== "ready") return <main className="page-shell"><EmptyState title="Jugador V2 no disponible" missing={result.message} unlock="Este perfil solo se habilita con una observación real V2; no recurre a V1 ni a datos de prueba." /></main>;
-  const data = result.data; if (data === null) notFound(); const season = data.windows.find((item) => item.window === "season") ?? data.windows[0]; if (!season) notFound();
-  const metrics = data.metrics[season.window]; const grouped = Map.groupBy(metrics, metricCategory);
-  const goals = metrics.find((item) => item.metricName === "goals"); const xg = metrics.find((item) => ["xg", "expected_goals"].includes(item.metricName));
-  const perception = perceptionResult.status === "ready" ? perceptionResult.data : []; const diagnostics = diagnosticsResult.status === "ready" ? diagnosticsResult.data : [];
+  if (result.status !== "ready") return <main className="page-shell"><EmptyState title="Jugador V2 no disponible" missing={result.message} unlock="Este perfil solo se habilita con una observación real V2 dentro del contexto solicitado; no recurre a V1 ni a datos de prueba." /></main>;
+  const data = result.data;
+  if (data === null) notFound();
+  const season = data.windows.find((item) => item.window === "season") ?? data.windows[0];
+  if (!season) notFound();
+  const metrics = data.metrics[season.window];
+  const grouped = Map.groupBy(metrics, metricCategory);
+  const goals = metrics.find((item) => item.metricName === "goals");
+  const xg = metrics.find((item) => ["xg", "expected_goals"].includes(item.metricName));
+  const perception = perceptionResult.status === "ready" ? perceptionResult.data : [];
+  const diagnostics = diagnosticsResult.status === "ready" ? diagnosticsResult.data : [];
+  const contextQuery = encodeURIComponent(selectedContext.scopeKey);
 
   return <main className="page-shell">
-    <section className="player-hero product-detail-hero"><div><p className="eyebrow">PLAYER INTELLIGENCE · V2 REAL</p><h1>{data.player.playerName}</h1><p>{data.player.teamName ?? "Equipo no disponible"} · {data.player.competitionName ?? "Competición no disponible"} · {data.player.seasonLabel ?? "Temporada no disponible"}</p><div className="evidence-chips"><span>{season.positionFamily ?? season.role}</span><span>{season.minutes} min</span><span>{season.appearances} PJ</span><span>{data.context.scopeKey}</span></div></div><div><ScoreBadge score={season.overallScore} state={season.evidenceState} /><Confidence value={season.confidence} coverage={season.evidenceCoveragePct} /></div></section>
+    <section className="player-hero product-detail-hero"><div><p className="eyebrow">PLAYER INTELLIGENCE · V2 REAL {selectedContext.isHistorical ? "· HISTÓRICO" : ""}</p><h1>{data.player.playerName}</h1><p>{data.player.teamName ?? "Equipo no disponible"} · {data.player.competitionName ?? "Competición no disponible"} · {data.player.seasonLabel ?? "Temporada no disponible"}</p><div className="evidence-chips"><span>{season.positionFamily ?? season.role}</span><span>{season.minutes} min</span><span>{season.appearances} PJ</span><span>{data.context.scopeKey}</span></div></div><div><ScoreBadge score={season.overallScore} state={season.evidenceState} /><Confidence value={season.confidence} coverage={season.evidenceCoveragePct} /></div></section>
 
-    <Section eyebrow="PRIMARY VERDICT" title="Qué podemos afirmar"><div className="verdict-copy"><EvidenceBadge state={season.evidenceState} /><p>{season.evidenceState === "ready" ? "El score superó los controles de muestra, cobertura y confianza para esta ventana." : season.evidenceState === "partial" ? "Hay una señal orientativa, pero no alcanza para tratarla como ranking consolidado." : "La entidad real existe, pero su muestra o cobertura todavía no permiten publicar un score."}</p><small>Modelo {data.context.modelVersion} · calculado {new Date(season.calculatedAt).toLocaleDateString("es-AR")}</small></div></Section>
+    <Section eyebrow="PRIMARY VERDICT" title="Qué podemos afirmar"><div className="verdict-copy"><EvidenceBadge state={season.evidenceState} /><p>{season.evidenceState === "ready" ? "El score superó los controles de muestra, cobertura y confianza para esta ventana." : season.evidenceState === "partial" ? "Hay evidencia real útil, pero no alcanza para tratarla como ranking consolidado." : "La entidad real existe, pero su muestra o cobertura todavía no permiten publicar un score overall."}</p><small>Modelo {data.context.modelVersion} · calculado {new Date(season.calculatedAt).toLocaleDateString("es-AR")} · contexto {selectedContext.competitionName} {selectedContext.seasonLabel}</small></div></Section>
 
     <Section eyebrow="RESULTS VS PERFORMANCE" title="Output real y proceso subyacente">{goals && xg && goals.rawValue !== null && xg.rawValue !== null ? <div className="window-grid"><article className="window-card"><span>Goles</span><strong>{formatNumber(goals.rawValue)}</strong><small>Output observado</small></article><article className="window-card"><span>xG</span><strong>{formatNumber(xg.rawValue)}</strong><small>Output esperado</small></article><article className="window-card"><span>Diferencia</span><strong>{formatNumber(goals.rawValue - xg.rawValue)}</strong><small>{goals.rawValue >= xg.rawValue ? "Conversión por encima del output esperado" : "Resultados por debajo del proceso subyacente"}</small></article></div> : <EmptyState title="Comparación de output no disponible" missing="Este snapshot no incluye a la vez goles y xG confiables." unlock="Ambas métricas reales son necesarias para describir la divergencia sin inferir causalidad." compact />}</Section>
 
@@ -39,6 +62,6 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
 
     <Section eyebrow="PERCEPTION · SEPARADA DEL SCORE" title="Data, expertos y fans"><div className="perception-columns">{(["media", "expert", "fan"] as const).map((kind) => { const items = perception.filter((item) => item.sourceKind === kind); return <div key={kind}><h3>{kind === "media" ? "DATA / MEDIA" : kind === "expert" ? "EXPERTOS" : "FANS"}</h3>{items.length ? items.map((item) => <PerceptionEvidenceCard evidence={item} key={item.evidenceId} />) : <EmptyState title={`Sin evidencia de ${kind}`} missing="No hay fuentes vinculadas de forma inequívoca a este jugador." unlock="La percepción aparece aquí y nunca modifica el score objetivo." compact />}</div>; })}</div></Section>
 
-    <p className="ranking-summary"><Link href="/compare">Comparar este jugador →</Link> · fuente/contexto: {data.context.scopeKey} · {data.context.modelVersion}</p>
+    <p className="ranking-summary"><Link href={`/rankings?context=${contextQuery}`}>Volver a jugadores →</Link> · <Link href={`/compare?type=player&context=${contextQuery}&left=${playerId}`}>Comparar este jugador →</Link> · fuente/contexto: {data.context.scopeKey} · {data.context.modelVersion}</p>
   </main>;
 }

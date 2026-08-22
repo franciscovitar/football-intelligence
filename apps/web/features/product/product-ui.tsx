@@ -123,13 +123,18 @@ export function PlayerProductCard({
   player,
   rank,
   prominent = false,
+  contextScopeKey,
 }: {
   player: ProductPlayerRanking;
   rank: number;
   prominent?: boolean;
+  contextScopeKey?: string;
 }) {
+  const href = contextScopeKey
+    ? `/player/${player.playerId}?context=${encodeURIComponent(contextScopeKey)}`
+    : `/player/${player.playerId}`;
   return (
-    <Link className={`product-ranking-card${prominent ? " prominent" : ""}`} href={`/player/${player.playerId}`}>
+    <Link className={`product-ranking-card${prominent ? " prominent" : ""}`} href={href}>
       <span className="rank-number">#{rank}</span>
       <div className="ranking-identity">
         <strong>{player.playerName}</strong>
@@ -138,6 +143,32 @@ export function PlayerProductCard({
         <small>{player.keyEvidence.length ? player.keyEvidence.map(humanMetric).join(" · ") : `Evidencia ${Math.round(player.evidenceCoveragePct)}%`}</small>
       </div>
       <strong className="ranking-score">{formatScore(player.score)}</strong>
+    </Link>
+  );
+}
+
+export function PlayerDirectoryCard({
+  player,
+}: {
+  player: {
+    playerId: number;
+    playerName: string;
+    teamName: string | null;
+    positionFamily: string | null;
+    role: string;
+    minutes: number;
+    appearances: number;
+    evidenceCoveragePct: number;
+    evidenceState: ScoreEvidenceState;
+    contextScopeKey: string;
+  };
+}) {
+  return (
+    <Link href={`/player/${player.playerId}?context=${encodeURIComponent(player.contextScopeKey)}`}>
+      <strong>{player.playerName}</strong>
+      <span>{player.teamName ?? "Equipo no disponible"} · {player.positionFamily ?? player.role}</span>
+      <small>{player.minutes} min · {player.appearances} PJ · evidencia {Math.round(player.evidenceCoveragePct)}%</small>
+      <EvidenceBadge state={player.evidenceState} />
     </Link>
   );
 }
