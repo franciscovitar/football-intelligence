@@ -122,5 +122,5 @@ jobs:
           PY
 
           test "$(psql "$DATABASE_URL" -Atc "select count(*) from analytics.product_player_detail_v2 where scope_key='competition:ENG_PL:2017/18'")" = "2048"
-          test "$(psql "$DATABASE_URL" -Atc "select count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout_open' and o.entity_identity_hints->>'season_label'='2017/18'")" = "412609"
+          test "$(psql "$DATABASE_URL" -Atc "select count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout-open' and o.entity_identity_hints->>'season_label'='2017/18'")" = "412609"
           echo "production_written=false"
