@@ -51,6 +51,7 @@ def resolve_analysis_scope(
         raise ValueError("--season must not be blank")
 
     normalized_competition = competition.strip().upper() if competition else None
+    competition_codes: tuple[str, ...]
     if normalized_competition:
         try:
             league_by_code(normalized_competition)
