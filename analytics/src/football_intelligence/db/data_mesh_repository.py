@@ -42,6 +42,27 @@ from psycopg import Connection
 
 from football_intelligence.data_mesh.models import NormalizedObservation, ReconciliationDecision
 
+_OBSERVATION_UPSERT_SQL = """
+    insert into ingestion.source_observations (
+        provider_id, source_type, entity_type, entity_source_id,
+        entity_identity_hints, metric_name, metric_granularity, value,
+        observed_at, source_timestamp, source_reference,
+        ingestion_run_id, semantic_version
+    )
+    values (%s, %s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s, %s, %s, %s, %s)
+    on conflict (
+        provider_id, entity_type, entity_source_id, metric_name,
+        metric_granularity, observed_at
+    )
+    do update set
+        value = excluded.value,
+        entity_identity_hints = excluded.entity_identity_hints,
+        source_timestamp = excluded.source_timestamp,
+        source_reference = excluded.source_reference,
+        ingestion_run_id = excluded.ingestion_run_id,
+        semantic_version = excluded.semantic_version
+"""
+
 
 class DataMeshRepository:
     def __init__(self, connection: Connection[Any]) -> None:
@@ -62,48 +83,54 @@ class DataMeshRepository:
         self._provider_id_cache[provider_code] = provider_id
         return provider_id
 
+    def _observation_params(self, item: NormalizedObservation) -> tuple[Any, ...]:
+        return (
+            self.lookup_provider_id(item.source_code),
+            item.source_type,
+            item.entity_type,
+            item.entity_source_id,
+            json.dumps(dict(item.entity_identity_hints), sort_keys=True),
+            item.metric_name,
+            item.metric_granularity,
+            json.dumps(item.value),
+            item.observed_at,
+            item.source_timestamp,
+            item.source_reference,
+            item.ingestion_run_id,
+            item.semantic_version,
+        )
+
     def persist_observations(self, observations: Sequence[NormalizedObservation]) -> int:
         written = 0
         for item in observations:
-            provider_id = self.lookup_provider_id(item.source_code)
-            self._connection.execute(
-                """
-                insert into ingestion.source_observations (
-                    provider_id, source_type, entity_type, entity_source_id,
-                    entity_identity_hints, metric_name, metric_granularity, value,
-                    observed_at, source_timestamp, source_reference,
-                    ingestion_run_id, semantic_version
-                )
-                values (%s, %s, %s, %s, %s::jsonb, %s, %s, %s::jsonb, %s, %s, %s, %s, %s)
-                on conflict (
-                    provider_id, entity_type, entity_source_id, metric_name,
-                    metric_granularity, observed_at
-                )
-                do update set
-                    value = excluded.value,
-                    entity_identity_hints = excluded.entity_identity_hints,
-                    source_timestamp = excluded.source_timestamp,
-                    source_reference = excluded.source_reference,
-                    ingestion_run_id = excluded.ingestion_run_id,
-                    semantic_version = excluded.semantic_version
-                """,
-                (
-                    provider_id,
-                    item.source_type,
-                    item.entity_type,
-                    item.entity_source_id,
-                    json.dumps(dict(item.entity_identity_hints), sort_keys=True),
-                    item.metric_name,
-                    item.metric_granularity,
-                    json.dumps(item.value),
-                    item.observed_at,
-                    item.source_timestamp,
-                    item.source_reference,
-                    item.ingestion_run_id,
-                    item.semantic_version,
-                ),
-            )
+            self._connection.execute(_OBSERVATION_UPSERT_SQL, self._observation_params(item))
             written += 1
+        return written
+
+    def persist_observations_batched(
+        self,
+        observations: Sequence[NormalizedObservation],
+        *,
+        batch_size: int = 1_000,
+    ) -> int:
+        """Persist a large observation set with the same upsert semantics.
+
+        The regular method intentionally remains unchanged for small callers.
+        This bounded batch path uses psycopg ``executemany`` so historical
+        production promotion does not pay one network round-trip per evidence
+        row when writing hundreds of thousands of observations to a remote DB.
+        """
+
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+
+        written = 0
+        for offset in range(0, len(observations), batch_size):
+            batch = observations[offset : offset + batch_size]
+            params = [self._observation_params(item) for item in batch]
+            with self._connection.cursor() as cursor:
+                cursor.executemany(_OBSERVATION_UPSERT_SQL, params)
+            written += len(batch)
         return written
 
     def replace_decisions(self, decisions: Sequence[ReconciliationDecision]) -> int:
