@@ -1,0 +1,149 @@
+name: Historical Player V2 Spike
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/historical-player-v2-spike.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wyscout-player-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: football_intelligence_player_v2_spike
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_player_v2_spike
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Apply migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration" >/dev/null
+          done
+
+      - name: Apply core seeds
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/seeds/001_core_catalog.sql >/dev/null
+
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install analytics dependencies
+        working-directory: analytics
+        run: uv sync --dev --locked
+
+      - name: Load certified Wyscout ENG_PL 2017/18
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-load-wyscout-historical
+          --cache-dir "$RUNNER_TEMP/wyscout-open-cache"
+          --database-url "$DATABASE_URL"
+          --report "$RUNNER_TEMP/wyscout-load.json"
+
+      - name: Calculate historical Player V2 in explicit scope
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-player-analytics
+          --season "2017/18"
+          --scope-key "competition:ENG_PL:2017/18"
+          --database-url "$DATABASE_URL"
+          --report "$RUNNER_TEMP/player-v2.json"
+
+      - name: Report historical Player V2 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== player-v2 report ==='
+          cat "$RUNNER_TEMP/player-v2.json"
+          echo '=== product/detail counts ==='
+          psql "$DATABASE_URL" -P pager=off -c "
+            select window_key, evidence_state, count(*) as rows,
+                   count(*) filter (where overall_score is not null) as overall_scores,
+                   count(*) filter (where confidence >= 0.40) as confidence_ge_040
+            from analytics.product_player_detail_v2
+            where scope_key = 'competition:ENG_PL:2017/18'
+            group by window_key, evidence_state
+            order by window_key, evidence_state;
+          "
+          echo '=== ranking candidates ==='
+          psql "$DATABASE_URL" -P pager=off -c "
+            select window_key, count(*) as candidates,
+                   count(*) filter (where evidence_state = 'ready' and overall_score is not null) as overall_publishable
+            from analytics.product_player_ranking_candidates_v2
+            where scope_key = 'competition:ENG_PL:2017/18'
+            group by window_key
+            order by window_key;
+          "
+          echo '=== ready dimensions, season ==='
+          psql "$DATABASE_URL" -P pager=off -c "
+            with dimensions as (
+              select score.player_id, entry.key as dimension,
+                     entry.value ->> 'evidence_state' as evidence_state,
+                     nullif(entry.value ->> 'score', '')::numeric as score
+              from analytics.product_player_detail_v2 as score
+              cross join lateral jsonb_each(score.dimension_evidence) as entry
+              where score.scope_key = 'competition:ENG_PL:2017/18'
+                and score.window_key = 'season'
+            )
+            select dimension,
+                   count(*) filter (where evidence_state = 'ready' and score is not null) as ready_scored,
+                   count(*) filter (where evidence_state = 'partial') as partial,
+                   count(*) filter (where evidence_state = 'insufficient_data') as insufficient
+            from dimensions
+            group by dimension
+            order by dimension;
+          "
+          echo '=== season player population ==='
+          psql "$DATABASE_URL" -P pager=off -c "
+            select count(distinct player_id) as players_with_snapshots,
+                   count(distinct player_id) filter (where minutes >= 450) as players_450_min,
+                   min(minutes) as min_minutes,
+                   max(minutes) as max_minutes
+            from analytics.product_player_detail_v2
+            where scope_key = 'competition:ENG_PL:2017/18'
+              and window_key = 'season';
+          "
+          echo '=== sample players ==='
+          psql "$DATABASE_URL" -P pager=off -c "
+            select p.display_name, s.role, s.minutes, s.appearances,
+                   s.confidence, s.evidence_coverage_pct, s.evidence_state, s.overall_score
+            from analytics.product_player_detail_v2 s
+            join football.players p on p.id = s.player_id
+            where s.scope_key = 'competition:ENG_PL:2017/18'
+              and s.window_key = 'season'
+            order by s.minutes desc, p.display_name
+            limit 12;
+          "
+
+      - name: Assert historical context does not look current
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(psql "$DATABASE_URL" -Atc "select count(*) from analytics.product_player_detail_v2 where scope_key='competition:ENG_PL:2017/18'")" -gt 0
+          test "$(psql "$DATABASE_URL" -Atc "select count(*) from football.seasons s join football.competitions c on c.id=s.competition_id where c.code='ENG_PL' and s.label='2017/18'")" = "1"
