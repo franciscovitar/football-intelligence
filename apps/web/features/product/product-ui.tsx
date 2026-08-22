@@ -12,6 +12,7 @@ import type {
   ProductDimensionEvidence,
   ProductMetric,
   ProductPlayerRanking,
+  ProductTeamDirectoryEntry,
   ProductTeamRanking,
 } from "@/lib/queries/product-intelligence";
 import type { ScoreEvidenceState } from "@/lib/queries/player-analytics";
@@ -152,6 +153,20 @@ export function TeamProductCard({ team, rank }: { team: ProductTeamRanking; rank
         <small>{team.keyEvidence.length ? team.keyEvidence.map(humanMetric).join(" · ") : `Evidencia ${Math.round(team.evidenceCoveragePct)}%`}</small>
       </div>
       <strong className="ranking-score">{formatScore(team.score)}</strong>
+    </Link>
+  );
+}
+
+/**
+ * A single team in the non-ranked directory (`getProductTeamDirectory`):
+ * name + neutral context only -- deliberately no rank number, no score, no
+ * ordering-by-performance implication. Never call this a ranking.
+ */
+export function TeamDirectoryCard({ team }: { team: ProductTeamDirectoryEntry }) {
+  return (
+    <Link href={`/team/${team.teamId}`}>
+      <strong>{team.teamName}</strong>
+      <span>{team.competitionName} · {team.seasonLabel} · {team.matches} PJ</span>
     </Link>
   );
 }
