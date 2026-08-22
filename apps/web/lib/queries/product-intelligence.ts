@@ -719,6 +719,74 @@ export async function getProductTeamRankings(
   }
 }
 
+export interface ProductTeamDirectoryEntry {
+  teamId: number;
+  teamName: string;
+  competitionCode: string;
+  competitionName: string;
+  seasonLabel: string;
+  matches: number;
+}
+
+/**
+ * The real teams with certified Team V2 evidence in the active scope, with
+ * NO confidence/ready-dimension/score gate -- deliberately not a ranking.
+ * Used by `/team-rankings` (and reused by Home) to give a real user a path
+ * into `/team/{id}` when the confidence-gated ranking candidates view
+ * (`product_team_ranking_candidates_v2`) is correctly empty. Reads only
+ * `analytics.product_team_detail_v2` (already scoped to `data_context =
+ * 'real'` and `model_version = 'team-v2.0'` by the view itself -- never
+ * V1/test_smoke), one row per team (`window_key = 'season'`), ordered
+ * alphabetically for a deterministic, non-performance order.
+ */
+export async function getProductTeamDirectory(
+  competitionCode = "",
+  seasonLabel = "",
+): Promise<DataResult<{ context: ProductContext | null; teams: ProductTeamDirectoryEntry[] }>> {
+  const sql = getDatabase();
+  if (!sql) return unconfigured();
+  try {
+    const active = await latestTeamContext(sql, competitionCode, seasonLabel);
+    if (!active) return { status: "ready", data: { context: null, teams: [] } };
+    const rows = await sql<Array<{
+      team_id: string | number;
+      team_name: string;
+      competition_code: string;
+      competition_name: string;
+      season_label: string;
+      matches: string | number | null;
+    }>>`
+      select score.team_id, team.name as team_name,
+             competition.code as competition_code, competition.name as competition_name,
+             season.label as season_label, score.matches
+      from analytics.product_team_detail_v2 as score
+      join football.teams as team on team.id = score.team_id
+      join football.seasons as season on season.id = score.season_id
+      join football.competitions as competition on competition.id = season.competition_id
+      where score.scope_key = ${active.scopeKey}
+        and score.model_version = ${active.modelVersion}
+        and score.window_key = 'season'
+      order by team.name
+    `;
+    return {
+      status: "ready",
+      data: {
+        context: active,
+        teams: rows.map((row) => ({
+          teamId: numberValue(row.team_id),
+          teamName: row.team_name,
+          competitionCode: row.competition_code,
+          competitionName: row.competition_name,
+          seasonLabel: row.season_label,
+          matches: numberValue(row.matches),
+        })),
+      },
+    };
+  } catch {
+    return failed();
+  }
+}
+
 export async function getProductTeamDetail(
   teamId: number,
 ): Promise<DataResult<ProductTeamDetail | null>> {

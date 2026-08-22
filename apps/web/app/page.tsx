@@ -27,17 +27,18 @@ export default async function HomePage() {
           <p className="eyebrow">FOOTBALL INTELLIGENCE · ÚLTIMA TEMPORADA COMPLETA</p>
           <h1>Entendé el partido largo.</h1>
           <p className="hero-copy">Una lectura rápida de rendimiento, proceso y evidencia real. Cada score publica su muestra, confianza y límites.</p>
-          <div className="hero-actions"><Link className="button button-primary" href="/rankings">Explorar jugadores</Link><Link className="button button-secondary" href="/team-rankings">Explorar equipos</Link></div>
+          <div className="hero-actions"><Link className="button button-primary" href="/team-rankings">Explorar equipos</Link><Link className="button button-secondary" href="/compare">Comparar equipos</Link></div>
+          <small><Link href="/rankings">Ranking de jugadores (todavía no disponible) →</Link></small>
         </div>
         <div className="briefing-card"><span>Estado de datos</span><strong>{data?.context ? "Snapshot V2 real activo" : "Cobertura real insuficiente"}</strong><p>{data?.context ? `${data.context.scopeKey} · ${data.context.modelVersion}` : "La experiencia permanece útil y explica qué falta; nunca completa huecos con datos de prueba."}</p><Link href="/sources">Ver cobertura y fuentes →</Link></div>
       </section>
 
       <div className="product-dashboard-grid">
+        <Section eyebrow="TEAMS" title={data?.bestTeams.length ? "Mejores equipos" : "Equipos analizados"} action={<Link href="/team-rankings">{data?.bestTeams.length ? "Ranking completo" : "Explorar equipos"}</Link>}>
+          {data?.bestTeams.length ? data.bestTeams.map((team, index) => <TeamProductCard key={team.teamId} team={team} rank={index + 1} />) : <EmptyState title="Ranking no disponible todavía" missing="El ranking todavía no es publicable, pero hay evidencia real disponible para los 20 equipos." unlock="Explorá el análisis por equipo: dimensiones, métricas y diagnósticos reales." compact />}
+        </Section>
         <Section eyebrow="BEST" title="Mejores jugadores" action={<Link href="/rankings">Ranking completo</Link>}>
           {data?.bestPlayers.length ? data.bestPlayers.map((player, index) => <PlayerProductCard key={player.playerId} player={player} rank={index + 1} prominent />) : <EmptyState title="Insufficient real data for this ranking" {...EMPTY.players} compact />}
-        </Section>
-        <Section eyebrow="BEST · TEAMS" title="Mejores equipos" action={<Link href="/team-rankings">Ranking completo</Link>}>
-          {data?.bestTeams.length ? data.bestTeams.map((team, index) => <TeamProductCard key={team.teamId} team={team} rank={index + 1} />) : <EmptyState title="Ranking de equipos no disponible" missing="Ningún equipo real V2 supera todavía los controles de publicación." unlock="Se habilita con cobertura lista en la dimensión seleccionada." compact />}
         </Section>
       </div>
 

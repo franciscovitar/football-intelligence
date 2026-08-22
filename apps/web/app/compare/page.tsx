@@ -5,11 +5,13 @@ import { ComparisonRow, EmptyState, MetricComparisonRow, Section } from "@/featu
 import { PLAYER_DIMENSION_LABELS, TEAM_DIMENSION_LABELS, humanMetric } from "@/lib/product-display";
 import { getCompareOptions, getProductPlayerDetail, getProductTeamDetail } from "@/lib/queries/product-intelligence";
 
+import { resolveCompareType } from "./compare-type";
+
 export const metadata: Metadata = { title: "Comparar V2" };
 const value = (input: string | string[] | undefined) => Array.isArray(input) ? (input[0] ?? "") : (input ?? "");
 
 export default async function ComparePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  await connection(); const params = await searchParams; const type = value(params.type) === "team" ? "team" : "player"; const leftId = Number(value(params.left)); const rightId = Number(value(params.right));
+  await connection(); const params = await searchParams; const type = resolveCompareType(value(params.type)); const leftId = Number(value(params.left)); const rightId = Number(value(params.right));
   const detailsPromise = leftId > 0 && rightId > 0 ? type === "player" ? Promise.all([getProductPlayerDetail(leftId), getProductPlayerDetail(rightId)]) : Promise.all([getProductTeamDetail(leftId), getProductTeamDetail(rightId)]) : Promise.resolve([null, null] as const);
   const [optionsResult, [leftResult, rightResult]] = await Promise.all([getCompareOptions(), detailsPromise]);
   const options = optionsResult.status === "ready" ? (type === "player" ? optionsResult.data.players : optionsResult.data.teams) : [];
