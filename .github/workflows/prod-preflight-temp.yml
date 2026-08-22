@@ -1,0 +1,69 @@
+name: Production Historical Preflight Temp
+
+on:
+  push:
+    branches:
+      - prod-preflight-temp
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Validate secret exists
+        shell: bash
+        run: test -n "$DATABASE_URL"
+      - name: Install analytics dependencies
+        working-directory: analytics
+        run: uv sync --locked
+      - name: Read-only production preflight
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-preflight-production
+          --database-url "$DATABASE_URL"
+          --report-path "$RUNNER_TEMP/production-preflight.json"
+      - name: Read-only ENG_PL 2017/18 prewrite state
+        working-directory: analytics
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import dataclasses
+          import json
+          import os
+          from pathlib import Path
+
+          from football_intelligence.db.provider_repository import connect
+          from football_intelligence.jobs.promote_historical_player_v2 import inspect_prewrite_state
+
+          with connect(os.environ["DATABASE_URL"]) as connection:
+              connection.execute("SET TRANSACTION READ ONLY")
+              state = inspect_prewrite_state(connection)
+              connection.rollback()
+
+          path = Path(os.environ["RUNNER_TEMP"]) / "historical-preflight.json"
+          path.write_text(json.dumps(dataclasses.asdict(state), indent=2, sort_keys=True) + "\n")
+          print(path.read_text())
+          PY
+      - name: Show safe production preflight
+        shell: bash
+        run: cat "$RUNNER_TEMP/production-preflight.json"
+      - name: Upload read-only evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: production-historical-preflight-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/production-preflight.json
+            ${{ runner.temp }}/historical-preflight.json
+          retention-days: 1
