@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import { ComparisonRow, EmptyState, MetricComparisonRow, Section } from "@/features/product/product-ui";
 import { selectPlayerContext } from "@/lib/player-context";
 import { PLAYER_DIMENSION_LABELS, TEAM_DIMENSION_LABELS, humanMetric } from "@/lib/product-display";
-import { getCompareOptions, getProductTeamDetail } from "@/lib/queries/product-intelligence";
+import { getCompareOptions, getProductTeamDetail, type CompareOption } from "@/lib/queries/product-intelligence";
 import {
   getScopedPlayerCompareOptions,
   getScopedPlayerContexts,
@@ -28,14 +28,14 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
   const selectedContext = type === "player" ? selectPlayerContext(contexts, value(params.context)) : null;
   const contextScopeKey = selectedContext?.scopeKey ?? (value(params.context) || "invalid");
 
-  const optionsResult = type === "player"
-    ? await getScopedPlayerCompareOptions(contextScopeKey)
-    : await getCompareOptions();
-  const options = optionsResult.status === "ready"
-    ? type === "player"
-      ? optionsResult.data
-      : optionsResult.data.teams
-    : [];
+  let options: CompareOption[] = [];
+  if (type === "player") {
+    const playerOptionsResult = await getScopedPlayerCompareOptions(contextScopeKey);
+    if (playerOptionsResult.status === "ready") options = playerOptionsResult.data;
+  } else {
+    const teamOptionsResult = await getCompareOptions();
+    if (teamOptionsResult.status === "ready") options = teamOptionsResult.data.teams;
+  }
 
   const detailsPromise = leftId > 0 && rightId > 0
     ? type === "player"
