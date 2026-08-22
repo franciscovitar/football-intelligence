@@ -1,9 +1,11 @@
 name: Production Historical Preflight Temp
 
 on:
-  push:
+  pull_request:
     branches:
-      - prod-preflight-temp
+      - main
+    paths:
+      - ".github/workflows/prod-preflight-temp.yml"
 
 permissions:
   contents: read
