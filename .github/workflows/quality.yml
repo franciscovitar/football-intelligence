@@ -195,7 +195,7 @@ jobs:
           curl -fsS \
             "http://127.0.0.1:3000/rankings?window=season&dimension=overall&confidence=0.5" \
             > "$RUNNER_TEMP/rankings.html"
-          grep -q "Insufficient real data for this ranking" "$RUNNER_TEMP/rankings.html"
+          grep -q "Todavía no hay temporadas de jugadores publicadas" "$RUNNER_TEMP/rankings.html"
           ! grep -q "Web Smoke Forward" "$RUNNER_TEMP/rankings.html"
 
           curl -fsS \
@@ -245,17 +245,11 @@ jobs:
           grep -q "PERSISTENT WATCHLIST" "$RUNNER_TEMP/watchlist.html"
           grep -q "COMPARE · V2" "$RUNNER_TEMP/compare.html"
 
-          # Watchlist write gate: with a token configured, an unauthenticated
-          # visitor must see the locked (unlock-form) state, never the raw
-          # secret and never the add/remove forms. The authorized/unauthorized
-          # mutation behavior itself is covered deterministically by
-          # `apps/web/app/watchlist/mutations.test.ts` (`npm run web:test`) --
-          # this step intentionally stays a single non-mutating GET rather
-          # than replaying Next's dev-mode Server Action protocol, which is
-          # not a stable target for CI (action ids can be invalidated by
-          # Turbopack's on-demand route recompilation between requests).
+          # Without an explicit player context matching the primary team scope,
+          # the read path must fail closed instead of exposing legacy/test or
+          # historical candidates through the current-context watchlist.
           ! grep -q "$FOOTBALL_INTELLIGENCE_WRITE_TOKEN" "$RUNNER_TEMP/watchlist.html"
-          grep -q "Token de escritura" "$RUNNER_TEMP/watchlist.html"
+          grep -q "Sin jugadores del contexto principal" "$RUNNER_TEMP/watchlist.html"
           ! grep -q "name=\"playerId\"" "$RUNNER_TEMP/watchlist.html"
 
           curl -fsS \
