@@ -4,13 +4,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from football_intelligence.data_mesh.adapters.wyscout_open import (
-    parse_england_season,
-)
+from football_intelligence.data_mesh.adapters.wyscout_open import parse_england_season
 from football_intelligence.data_mesh.models import NormalizedObservation
-from football_intelligence.jobs.load_wyscout_historical import (
-    _apply_safe_minutes_policy,
-)
+from football_intelligence.jobs import load_wyscout_historical
 from football_intelligence.normalization.models import (
     NormalizedFixtureBatch,
     PlayerAppearanceRecord,
@@ -185,7 +181,10 @@ def test_safe_minutes_policy_excludes_ambiguous_exposure_without_dropping_rows()
         metric_granularity="player_match",
     )
 
-    safe_batch, report = _apply_safe_minutes_policy(batch, observations=[red_card])
+    safe_batch, report = load_wyscout_historical._apply_safe_minutes_policy(
+        batch,
+        observations=[red_card],
+    )
 
     assert [item.minutes for item in safe_batch.appearances] == [None, None]
     assert len(safe_batch.appearances) == 2
@@ -208,7 +207,10 @@ def test_real_shape_adapter_red_card_drives_safe_minutes_policy() -> None:
         expected_match_count=None,
     )
 
-    safe_batch, report = _apply_safe_minutes_policy(normalized.batch, observations=observations)
+    safe_batch, report = load_wyscout_historical._apply_safe_minutes_policy(
+        normalized.batch,
+        observations=observations,
+    )
     appearances = {item.player_external_id: item for item in safe_batch.appearances}
 
     assert appearances["21"].minutes is None
