@@ -148,8 +148,7 @@ def normalize_england_2017_18(
     missing_team_names = tuple(sorted(team_ids - team_names.keys()))
     if missing_team_names:
         raise WyscoutHistoricalNormalizationError(
-            "Wyscout teams.json is missing names for competition teams: "
-            f"{list(missing_team_names)}"
+            f"Wyscout teams.json is missing names for competition teams: {list(missing_team_names)}"
         )
 
     unresolved_players = tuple(
@@ -215,8 +214,7 @@ def normalize_england_2017_18(
     )
 
     player_stats = tuple(
-        _player_stats_record(appearance, player_metric_map)
-        for appearance in resolved_appearances
+        _player_stats_record(appearance, player_metric_map) for appearance in resolved_appearances
     )
     team_stats = tuple(
         _team_stats_record(match_id, team_id, team_metric_map)
@@ -485,9 +483,7 @@ def _normalize_match(match: dict[str, Any]) -> MatchRecord:
     if not isinstance(raw_kickoff, str) or not raw_kickoff.strip():
         raise WyscoutHistoricalNormalizationError(f"match {match_id} has no dateutc")
     try:
-        kickoff_at = datetime.strptime(raw_kickoff.strip(), "%Y-%m-%d %H:%M:%S").replace(
-            tzinfo=UTC
-        )
+        kickoff_at = datetime.strptime(raw_kickoff.strip(), "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
     except ValueError as exc:
         raise WyscoutHistoricalNormalizationError(
             f"match {match_id} has invalid dateutc {raw_kickoff!r}"
