@@ -37,17 +37,35 @@ class _FakeCursorResult:
         return self._row
 
 
+class _FakeCursor:
+    def __init__(self, connection: _FakeConnection) -> None:
+        self._connection = connection
+
+    def __enter__(self) -> _FakeCursor:
+        return self
+
+    def __exit__(self, *_args: Any) -> None:
+        return None
+
+    def executemany(self, sql: str, params: list[tuple[Any, ...]]) -> None:
+        self._connection.executemany_calls.append((sql, params))
+
+
 class _FakeConnection:
-    """Records every `execute()` call -- never actually touches a database."""
+    """Records SQL calls -- never actually touches a database."""
 
     def __init__(self) -> None:
         self.executed: list[tuple[str, tuple[Any, ...] | None]] = []
+        self.executemany_calls: list[tuple[str, list[tuple[Any, ...]]]] = []
 
     def execute(self, sql: str, params: tuple[Any, ...] | None = None) -> _FakeCursorResult:
         self.executed.append((sql, params))
         if "select id from ingestion.providers" in sql:
             return _FakeCursorResult((1,))
         return _FakeCursorResult(None)
+
+    def cursor(self) -> _FakeCursor:
+        return _FakeCursor(self)
 
 
 def _observation(*, metric_granularity: str | None, metric_name: str = "home_score") -> Any:
@@ -144,6 +162,38 @@ def test_mixed_legacy_and_v2_batch_persists_every_item() -> None:
     written = repository.persist_observations([legacy_observation, v2_observation])
 
     assert written == 2
+
+
+def test_large_observation_path_uses_bounded_executemany_batches() -> None:
+    connection = _FakeConnection()
+    repository = DataMeshRepository(connection)  # type: ignore[arg-type]
+    observations = [
+        _observation(metric_granularity="player_match", metric_name=f"metric-{index}")
+        for index in range(5)
+    ]
+
+    written = repository.persist_observations_batched(observations, batch_size=2)
+
+    assert written == 5
+    assert len(connection.executed) == 1  # provider lookup is cached across all batches
+    assert len(connection.executemany_calls) == 3
+    assert [len(params) for _sql, params in connection.executemany_calls] == [2, 2, 1]
+    for sql, params in connection.executemany_calls:
+        assert "insert into ingestion.source_observations" in sql
+        assert "metric_granularity" in sql
+        assert all(row[0] == 1 for row in params)
+
+
+def test_batched_observation_path_rejects_non_positive_batch_size() -> None:
+    connection = _FakeConnection()
+    repository = DataMeshRepository(connection)  # type: ignore[arg-type]
+
+    try:
+        repository.persist_observations_batched([], batch_size=0)
+    except ValueError as exc:
+        assert str(exc) == "batch_size must be positive"
+    else:
+        raise AssertionError("expected ValueError")
 
 
 def test_legacy_decision_persists_with_null_granularity() -> None:
