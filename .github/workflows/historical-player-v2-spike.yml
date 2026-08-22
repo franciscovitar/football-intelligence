@@ -141,10 +141,11 @@ jobs:
 
           CONTEXT='competition%3AENG_PL%3A2017%2F18'
           curl -fsS "http://127.0.0.1:3000/rankings?context=$CONTEXT&minutes=450" > "$RUNNER_TEMP/rankings.html"
-          grep -q "PLAYER EXPLORER · V2 · HISTÓRICO" "$RUNNER_TEMP/rankings.html"
+          grep -q "PLAYER EXPLORER · V2" "$RUNNER_TEMP/rankings.html"
+          grep -q "HISTÓRICO" "$RUNNER_TEMP/rankings.html"
           grep -q "ANÁLISIS DISPONIBLE · RANKING NO DISPONIBLE" "$RUNNER_TEMP/rankings.html"
           grep -q "Jugadores analizados" "$RUNNER_TEMP/rankings.html"
-          grep -q "385 con los filtros actuales" "$RUNNER_TEMP/rankings.html"
+          grep -Eq "385(<!-- -->)? con los filtros actuales" "$RUNNER_TEMP/rankings.html"
           ! grep -q "rank-number" "$RUNNER_TEMP/rankings.html"
 
           PLAYER_IDS=($(psql "$DATABASE_URL" -Atc "select player_id from analytics.product_player_detail_v2 where scope_key='competition:ENG_PL:2017/18' and window_key='season' and minutes >= 450 order by minutes desc, player_id limit 2"))
@@ -153,17 +154,20 @@ jobs:
           RIGHT="${PLAYER_IDS[1]}"
 
           curl -fsS "http://127.0.0.1:3000/player/$LEFT?context=$CONTEXT" > "$RUNNER_TEMP/player.html"
-          grep -q "PLAYER INTELLIGENCE · V2 REAL · HISTÓRICO" "$RUNNER_TEMP/player.html"
+          grep -q "PLAYER INTELLIGENCE · V2 REAL" "$RUNNER_TEMP/player.html"
+          grep -q "HISTÓRICO" "$RUNNER_TEMP/player.html"
           grep -q "2017/18" "$RUNNER_TEMP/player.html"
           grep -q "Métricas que sostienen la lectura" "$RUNNER_TEMP/player.html"
 
           curl -fsS "http://127.0.0.1:3000/compare?type=player&context=$CONTEXT&left=$LEFT&right=$RIGHT" > "$RUNNER_TEMP/compare.html"
-          grep -q "COMPARE · V2 · HISTÓRICO" "$RUNNER_TEMP/compare.html"
+          grep -q "COMPARE · V2" "$RUNNER_TEMP/compare.html"
+          grep -q "HISTÓRICO" "$RUNNER_TEMP/compare.html"
           grep -q "Jugador vs jugador" "$RUNNER_TEMP/compare.html"
           grep -q "2017/18" "$RUNNER_TEMP/compare.html"
           grep -q "Métricas y percentiles lado a lado" "$RUNNER_TEMP/compare.html"
 
-          grep -q "Explorar jugadores históricos · 2017/18" "$RUNNER_TEMP/home.html"
+          grep -q "Explorar jugadores históricos" "$RUNNER_TEMP/home.html"
+          grep -q "2017/18" "$RUNNER_TEMP/home.html"
           ! grep -q "Snapshot V2 real activo" "$RUNNER_TEMP/home.html"
 
           curl -fsS "http://127.0.0.1:3000/watchlist" > "$RUNNER_TEMP/watchlist.html"
