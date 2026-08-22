@@ -324,12 +324,10 @@ def _prepare_source(cache_dir: Path) -> tuple[Any, Any, list[Any], Any]:
 
 def _persist_data_mesh(connection: Any, observations: list[Any], run_id: int) -> int:
     repository = DataMeshRepository(connection)
-    written = 0
-    for observation in observations:
-        written += repository.persist_observations(
-            [dataclasses.replace(observation, ingestion_run_id=run_id)]
-        )
-    return written
+    with_run_id = [
+        dataclasses.replace(observation, ingestion_run_id=run_id) for observation in observations
+    ]
+    return repository.persist_observations_batched(with_run_id, batch_size=1_000)
 
 
 def inspect_prewrite_state(connection: Any) -> PrewriteState:
