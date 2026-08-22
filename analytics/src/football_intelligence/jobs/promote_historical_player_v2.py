@@ -323,12 +323,24 @@ def _prepare_source(cache_dir: Path) -> tuple[Any, Any, list[Any], Any]:
 
 
 def _persist_data_mesh(connection: Any, observations: list[Any], run_id: int) -> int:
+    """Persist the large Wyscout audit set in bounded psycopg pipeline batches.
+
+    The repository preserves the exact same per-observation upsert semantics;
+    pipeline mode only removes hundreds of thousands of network round trips.
+    Each bounded context syncs before the next batch, avoiding an unbounded
+    client/server command queue. Any SQL failure still aborts the surrounding
+    promotion transaction, so canonical data and Player V2 remain atomic.
+    """
+
     repository = DataMeshRepository(connection)
     written = 0
-    for observation in observations:
-        written += repository.persist_observations(
-            [dataclasses.replace(observation, ingestion_run_id=run_id)]
-        )
+    batch_size = 1_000
+    for start in range(0, len(observations), batch_size):
+        with connection.pipeline():
+            for observation in observations[start : start + batch_size]:
+                written += repository.persist_observations(
+                    [dataclasses.replace(observation, ingestion_run_id=run_id)]
+                )
     return written
 
 
