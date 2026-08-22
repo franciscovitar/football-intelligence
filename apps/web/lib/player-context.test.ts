@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseCompetitionScopeKey, selectPlayerContext } from "./player-context";
+import { parseCompetitionScopeKey, selectPlayerContext } from "./player-context.ts";
 
 test("parses explicit competition player scopes", () => {
   assert.deepEqual(parseCompetitionScopeKey("competition:ENG_PL:2017/18"), {
