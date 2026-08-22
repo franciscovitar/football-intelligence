@@ -6,7 +6,8 @@ on:
       - main
     paths:
       - ".github/workflows/historical-player-v2-spike.yml"
-  workflow_dispatch:
+      - "analytics/**"
+      - "apps/web/**"
 
 permissions:
   contents: read
@@ -66,84 +67,113 @@ jobs:
           --database-url "$DATABASE_URL"
           --report "$RUNNER_TEMP/wyscout-load.json"
 
-      - name: Calculate historical Player V2 in explicit scope
+      - name: Calculate historical Player V2 in explicit competition scope
         working-directory: analytics
         run: >-
           uv run football-intelligence-player-analytics
+          --competition ENG_PL
           --season "2017/18"
-          --scope-key "competition:ENG_PL:2017/18"
           --database-url "$DATABASE_URL"
           --report "$RUNNER_TEMP/player-v2.json"
 
-      - name: Report historical Player V2 evidence
+      - name: Verify historical Player V2 evidence
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== player-v2 report ==='
-          cat "$RUNNER_TEMP/player-v2.json"
-          echo '=== product/detail counts ==='
-          psql "$DATABASE_URL" -P pager=off -c "
-            select window_key, evidence_state, count(*) as rows,
-                   count(*) filter (where overall_score is not null) as overall_scores,
-                   count(*) filter (where confidence >= 0.40) as confidence_ge_040
-            from analytics.product_player_detail_v2
-            where scope_key = 'competition:ENG_PL:2017/18'
-            group by window_key, evidence_state
-            order by window_key, evidence_state;
-          "
-          echo '=== ranking candidates ==='
-          psql "$DATABASE_URL" -P pager=off -c "
-            select window_key, count(*) as candidates,
-                   count(*) filter (where evidence_state = 'ready' and overall_score is not null) as overall_publishable
-            from analytics.product_player_ranking_candidates_v2
-            where scope_key = 'competition:ENG_PL:2017/18'
-            group by window_key
-            order by window_key;
-          "
-          echo '=== ready dimensions, season ==='
-          psql "$DATABASE_URL" -P pager=off -c "
-            with dimensions as (
-              select score.player_id, entry.key as dimension,
-                     entry.value ->> 'evidence_state' as evidence_state,
-                     nullif(entry.value ->> 'score', '')::numeric as score
-              from analytics.product_player_detail_v2 as score
-              cross join lateral jsonb_each(score.dimension_evidence) as entry
-              where score.scope_key = 'competition:ENG_PL:2017/18'
-                and score.window_key = 'season'
-            )
-            select dimension,
-                   count(*) filter (where evidence_state = 'ready' and score is not null) as ready_scored,
-                   count(*) filter (where evidence_state = 'partial') as partial,
-                   count(*) filter (where evidence_state = 'insufficient_data') as insufficient
-            from dimensions
-            group by dimension
-            order by dimension;
-          "
-          echo '=== season player population ==='
-          psql "$DATABASE_URL" -P pager=off -c "
-            select count(distinct player_id) as players_with_snapshots,
-                   count(distinct player_id) filter (where minutes >= 450) as players_450_min,
-                   min(minutes) as min_minutes,
-                   max(minutes) as max_minutes
-            from analytics.product_player_detail_v2
-            where scope_key = 'competition:ENG_PL:2017/18'
-              and window_key = 'season';
-          "
-          echo '=== sample players ==='
-          psql "$DATABASE_URL" -P pager=off -c "
-            select p.display_name, s.role, s.minutes, s.appearances,
-                   s.confidence, s.evidence_coverage_pct, s.evidence_state, s.overall_score
-            from analytics.product_player_detail_v2 s
-            join football.players p on p.id = s.player_id
-            where s.scope_key = 'competition:ENG_PL:2017/18'
-              and s.window_key = 'season'
-            order by s.minutes desc, p.display_name
-            limit 12;
-          "
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-      - name: Assert historical context does not look current
+          report = json.loads((Path(os.environ["RUNNER_TEMP"]) / "player-v2.json").read_text())
+          assert report["competition"] == "ENG_PL", report
+          assert report["season"] == "2017/18", report
+          assert report["scope_key"] == "competition:ENG_PL:2017/18", report
+          assert report["score_snapshot_count"] == 2048, report
+          assert report["feature_snapshot_count"] == 26841, report
+          assert report["evidence_state_counts"] == {
+              "insufficient_data": 1754,
+              "partial": 294,
+          }, report
+          PY
+
+          test "$(psql "$DATABASE_URL" -Atc "select count(distinct player_id) from analytics.product_player_detail_v2 where scope_key='competition:ENG_PL:2017/18' and window_key='season'")" = "512"
+          test "$(psql "$DATABASE_URL" -Atc "select count(distinct player_id) from analytics.product_player_detail_v2 where scope_key='competition:ENG_PL:2017/18' and window_key='season' and minutes >= 450")" = "385"
+          test "$(psql "$DATABASE_URL" -Atc "select count(*) from analytics.product_player_ranking_candidates_v2 where scope_key='competition:ENG_PL:2017/18'")" = "0"
+          test "$(psql "$DATABASE_URL" -Atc "select count(*) from analytics.product_player_detail_v2 s cross join lateral jsonb_each(s.dimension_evidence) e where s.scope_key='competition:ENG_PL:2017/18' and s.window_key='season' and e.key='performance' and e.value->>'evidence_state'='ready' and e.value->>'score' is not null")" = "385"
+          test "$(psql "$DATABASE_URL" -Atc "select count(*) from analytics.product_player_detail_v2 where scope_key='competition:ENG_PL:2017/18' and overall_score is not null")" = "0"
+
+      - uses: actions/setup-node@v6.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Verify explicit historical web experience
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --workspace @football-intelligence/web run dev -- \
+            --hostname 127.0.0.1 \
+            --port 3000 \
+            > "$RUNNER_TEMP/historical-player-web.log" 2>&1 &
+          WEB_PID=$!
+          cleanup() { kill "$WEB_PID" 2>/dev/null || true; }
+          trap cleanup EXIT
+
+          READY=0
+          for attempt in $(seq 1 45); do
+            if curl -fsS "http://127.0.0.1:3000/" > "$RUNNER_TEMP/home.html"; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$READY" -ne 1 ]; then
+            cat "$RUNNER_TEMP/historical-player-web.log"
+            exit 1
+          fi
+
+          CONTEXT='competition%3AENG_PL%3A2017%2F18'
+          curl -fsS "http://127.0.0.1:3000/rankings?context=$CONTEXT&minutes=450" > "$RUNNER_TEMP/rankings.html"
+          grep -q "PLAYER EXPLORER · V2 · HISTÓRICO" "$RUNNER_TEMP/rankings.html"
+          grep -q "ANÁLISIS DISPONIBLE · RANKING NO DISPONIBLE" "$RUNNER_TEMP/rankings.html"
+          grep -q "Jugadores analizados" "$RUNNER_TEMP/rankings.html"
+          grep -q "385 con los filtros actuales" "$RUNNER_TEMP/rankings.html"
+          ! grep -q "rank-number" "$RUNNER_TEMP/rankings.html"
+
+          PLAYER_IDS=($(psql "$DATABASE_URL" -Atc "select player_id from analytics.product_player_detail_v2 where scope_key='competition:ENG_PL:2017/18' and window_key='season' and minutes >= 450 order by minutes desc, player_id limit 2"))
+          test "${#PLAYER_IDS[@]}" = "2"
+          LEFT="${PLAYER_IDS[0]}"
+          RIGHT="${PLAYER_IDS[1]}"
+
+          curl -fsS "http://127.0.0.1:3000/player/$LEFT?context=$CONTEXT" > "$RUNNER_TEMP/player.html"
+          grep -q "PLAYER INTELLIGENCE · V2 REAL · HISTÓRICO" "$RUNNER_TEMP/player.html"
+          grep -q "2017/18" "$RUNNER_TEMP/player.html"
+          grep -q "Métricas que sostienen la lectura" "$RUNNER_TEMP/player.html"
+
+          curl -fsS "http://127.0.0.1:3000/compare?type=player&context=$CONTEXT&left=$LEFT&right=$RIGHT" > "$RUNNER_TEMP/compare.html"
+          grep -q "COMPARE · V2 · HISTÓRICO" "$RUNNER_TEMP/compare.html"
+          grep -q "Jugador vs jugador" "$RUNNER_TEMP/compare.html"
+          grep -q "2017/18" "$RUNNER_TEMP/compare.html"
+          grep -q "Métricas y percentiles lado a lado" "$RUNNER_TEMP/compare.html"
+
+          grep -q "Explorar jugadores históricos · 2017/18" "$RUNNER_TEMP/home.html"
+          ! grep -q "Snapshot V2 real activo" "$RUNNER_TEMP/home.html"
+
+          curl -fsS "http://127.0.0.1:3000/watchlist" > "$RUNNER_TEMP/watchlist.html"
+          grep -q "Sin jugadores del contexto principal" "$RUNNER_TEMP/watchlist.html"
+
+          curl -fsS "http://127.0.0.1:3000/rankings?context=competition%3AENG_PL%3A1900%2F01" > "$RUNNER_TEMP/invalid.html"
+          grep -q "Contexto de jugadores no válido" "$RUNNER_TEMP/invalid.html"
+
+      - name: Confirm no production or current-season mutation
         shell: bash
         run: |
           set -euo pipefail
           test "$(psql "$DATABASE_URL" -Atc "select count(*) from analytics.product_player_detail_v2 where scope_key='competition:ENG_PL:2017/18'")" -gt 0
           test "$(psql "$DATABASE_URL" -Atc "select count(*) from football.seasons s join football.competitions c on c.id=s.competition_id where c.code='ENG_PL' and s.label='2017/18'")" = "1"
+          echo "ephemeral_database_only=true"
+          echo "production_written=false"
