@@ -43,8 +43,10 @@ from football_intelligence.db.local_safety import validate_local_database_url
 from football_intelligence.db.provider_repository import ProviderRepository, connect
 from football_intelligence.jobs.audit_wyscout_adapter import (
     WyscoutAdapterAuditError,
-    build_report as build_adapter_report,
     load_adapter_inputs,
+)
+from football_intelligence.jobs.audit_wyscout_adapter import (
+    build_report as build_adapter_report,
 )
 from football_intelligence.jobs.probe_wyscout_open import (
     DEFAULT_CACHE_DIR,
@@ -623,7 +625,9 @@ def _validate_scoped_invariants(counts: ScopedDatabaseCounts) -> None:
             f"expected 760 team-match stat rows after load, got {counts.team_match_stats}"
         )
     if counts.source_observations <= 0:
-        raise WyscoutHistoricalLoadError("certified Wyscout Data Mesh observations were not persisted")
+        raise WyscoutHistoricalLoadError(
+            "certified Wyscout Data Mesh observations were not persisted"
+        )
 
 
 if __name__ == "__main__":
