@@ -63,7 +63,7 @@ jobs:
         working-directory: analytics
         run: uv sync --dev --locked
 
-      - name: Load certified real Wyscout ENG_PL 2017/18
+      - name: First real Wyscout load
         working-directory: analytics
         shell: bash
         run: |
@@ -71,9 +71,9 @@ jobs:
           uv run football-intelligence-load-wyscout-historical \
             --cache-dir "$RUNNER_TEMP/wyscout-open-cache" \
             --database-url "$RUNTIME_DATABASE_URL" \
-            --report "$RUNNER_TEMP/wyscout-historical-load.json"
+            --report "$RUNNER_TEMP/wyscout-historical-first.json"
 
-      - name: Verify real-source runtime report
+      - name: Verify first real-source runtime report
         shell: bash
         run: |
           set -euo pipefail
@@ -82,7 +82,7 @@ jobs:
           import os
           from pathlib import Path
 
-          report_path = Path(os.environ["RUNNER_TEMP"]) / "wyscout-historical-load.json"
+          report_path = Path(os.environ["RUNNER_TEMP"]) / "wyscout-historical-first.json"
           report = json.loads(report_path.read_text(encoding="utf-8"))
 
           assert report["status"] == "PASS", report
@@ -102,6 +102,7 @@ jobs:
           adapter = report["adapter"]
           assert adapter["observations"] > 0, adapter
           assert adapter["safe_identities"] == 77, adapter
+          assert adapter["identities_with_observations"] == 77, adapter
           assert adapter["all_checks_passed"] is True, adapter
 
           counts = report["database_scope_counts"]
@@ -130,6 +131,60 @@ jobs:
               "writes": writes,
           }, indent=2, sort_keys=True))
           PY
+
+      - name: Second real Wyscout load for idempotency
+        working-directory: analytics
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run football-intelligence-load-wyscout-historical \
+            --cache-dir "$RUNNER_TEMP/wyscout-open-cache" \
+            --database-url "$RUNTIME_DATABASE_URL" \
+            --report "$RUNNER_TEMP/wyscout-historical-second.json"
+
+      - name: Verify full-load idempotency
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          first = json.loads((root / "wyscout-historical-first.json").read_text(encoding="utf-8"))
+          second = json.loads((root / "wyscout-historical-second.json").read_text(encoding="utf-8"))
+
+          assert first["status"] == second["status"] == "PASS"
+          assert first["source_probe"] == second["source_probe"]
+          assert first["adapter"] == second["adapter"]
+          assert first["database_scope_counts"] == second["database_scope_counts"], (
+              first["database_scope_counts"],
+              second["database_scope_counts"],
+          )
+          assert first["data_mesh"]["source_observations_written"] == second["data_mesh"]["source_observations_written"]
+          assert second["canonical"]["team_links"] == {
+              "already_linked": 20,
+              "new_canonical_required": 0,
+              "reused_existing_canonical": 0,
+          }, second["canonical"]["team_links"]
+          assert second["product"]["player_v2_snapshots_published"] is False
+          assert second["writes"]["production_written"] is False
+
+          print(json.dumps({
+              "idempotency": "PASS",
+              "first_counts": first["database_scope_counts"],
+              "second_counts": second["database_scope_counts"],
+              "second_team_links": second["canonical"]["team_links"],
+          }, indent=2, sort_keys=True))
+          PY
+
+          TEAM_ROWS=$(psql "$RUNTIME_DATABASE_URL" -Atc "select count(*) from football.teams")
+          WYSCOUT_TEAM_MAPS=$(psql "$RUNTIME_DATABASE_URL" -Atc "select count(*) from football.team_provider_ids m join ingestion.providers p on p.id=m.provider_id where p.code='wyscout-open'")
+          test "$TEAM_ROWS" = "20"
+          test "$WYSCOUT_TEAM_MAPS" = "20"
+          echo "football_teams=$TEAM_ROWS"
+          echo "wyscout_team_provider_mappings=$WYSCOUT_TEAM_MAPS"
 
       - name: Verify historical loader did not publish Player V2
         shell: bash
