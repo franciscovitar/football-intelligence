@@ -29,8 +29,10 @@ from football_intelligence.db.provider_repository import ProviderRepository, con
 from football_intelligence.db.target_parsing import parse_database_target
 from football_intelligence.jobs.audit_wyscout_adapter import (
     WyscoutAdapterAuditError,
-    build_report as build_adapter_report,
     load_adapter_inputs,
+)
+from football_intelligence.jobs.audit_wyscout_adapter import (
+    build_report as build_adapter_report,
 )
 from football_intelligence.jobs.calculate_player_analytics import _persist_versioned_snapshots
 from football_intelligence.jobs.load_wyscout_historical import (
@@ -40,7 +42,11 @@ from football_intelligence.jobs.load_wyscout_historical import (
     _validate_scoped_invariants,
 )
 from football_intelligence.jobs.preflight_production_state import _verify_connected_target_matches
-from football_intelligence.jobs.probe_wyscout_open import DEFAULT_CACHE_DIR, WyscoutProbeError, run_probe
+from football_intelligence.jobs.probe_wyscout_open import (
+    DEFAULT_CACHE_DIR,
+    WyscoutProbeError,
+    run_probe,
+)
 from football_intelligence.normalization.wyscout_historical import (
     COMPETITION_CODE,
     MINUTES_METHODOLOGY_VERSION,
@@ -49,7 +55,9 @@ from football_intelligence.normalization.wyscout_historical import (
     normalize_england_2017_18,
 )
 from football_intelligence.player_analytics.engine import calculate_player_analytics
-from football_intelligence.player_analytics.engine_v2 import MODEL_VERSION as PLAYER_V2_MODEL_VERSION
+from football_intelligence.player_analytics.engine_v2 import (
+    MODEL_VERSION as PLAYER_V2_MODEL_VERSION,
+)
 from football_intelligence.player_analytics.engine_v2 import calculate_player_analytics_v2_result
 
 SCOPE_KEY = "competition:ENG_PL:2017/18"
@@ -340,7 +348,11 @@ def inspect_prewrite_state(connection: Any) -> PrewriteState:
     if season_id is None:
         matches = teams = players = appearances = player_stats = team_stats = 0
     else:
-        matches = _scalar(connection, "select count(*) from football.matches where season_id=%s", (season_id,))
+        matches = _scalar(
+            connection,
+            "select count(*) from football.matches where season_id=%s",
+            (season_id,),
+        )
         teams = _scalar(
             connection,
             """select count(distinct team_id) from (
