@@ -1,0 +1,126 @@
+name: Historical Production Promotion Spike
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/historical-production-promotion-spike.yml"
+      - "analytics/**"
+
+permissions:
+  contents: read
+
+jobs:
+  promote-local:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: football_historical_promotion
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d football_historical_promotion"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_historical_promotion
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Apply migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration" >/dev/null
+          done
+
+      - name: Apply core seeds
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database/seeds/001_core_catalog.sql >/dev/null
+
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install analytics dependencies
+        working-directory: analytics
+        run: uv sync --dev --locked
+
+      - name: Promote certified historical scope - first run
+        working-directory: analytics
+        run: >-
+          uv run python -m football_intelligence.jobs.promote_historical_player_v2
+          --cache-dir "$RUNNER_TEMP/wyscout-open-cache"
+          --database-url "$DATABASE_URL"
+          --report "$RUNNER_TEMP/promotion-first.json"
+
+      - name: Verify first run
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads((Path(os.environ["RUNNER_TEMP"]) / "promotion-first.json").read_text())
+          assert report["status"] == "PASS", report
+          assert report["production_written"] is False, report
+          assert report["scope_key"] == "competition:ENG_PL:2017/18", report
+          assert report["prewrite_state"]["season_exists"] is False, report
+          assert report["canonical"]["matches"] == 380, report
+          assert report["canonical"]["source_observations"] == 412609, report
+          assert report["player_v2"]["score_snapshots"] == 2048, report
+          assert report["player_v2"]["feature_snapshots"] == 26841, report
+          assert report["player_v2"]["season_players"] == 512, report
+          assert report["player_v2"]["season_players_450_min"] == 385, report
+          assert report["player_v2"]["ranking_candidates"] == 0, report
+          assert report["player_v2"]["overall_scores"] == 0, report
+          PY
+
+      - name: Promote certified historical scope - idempotent second run
+        working-directory: analytics
+        run: >-
+          uv run python -m football_intelligence.jobs.promote_historical_player_v2
+          --cache-dir "$RUNNER_TEMP/wyscout-open-cache"
+          --database-url "$DATABASE_URL"
+          --report "$RUNNER_TEMP/promotion-second.json"
+
+      - name: Verify certified-complete idempotence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads((Path(os.environ["RUNNER_TEMP"]) / "promotion-second.json").read_text())
+          pre = report["prewrite_state"]
+          assert pre["season_exists"] is True, report
+          assert pre["matches"] == 380, report
+          assert pre["players"] == 515, report
+          assert pre["player_appearances"] == 10443, report
+          assert pre["source_observations"] == 412609, report
+          assert pre["player_v2_rows"] == 2048, report
+          assert report["canonical"]["matches"] == 380, report
+          assert report["canonical"]["source_observations"] == 412609, report
+          assert report["player_v2"]["score_snapshots"] == 2048, report
+          assert report["player_v2"]["feature_snapshots"] == 26841, report
+          PY
+
+          test "$(psql "$DATABASE_URL" -Atc "select count(*) from analytics.product_player_detail_v2 where scope_key='competition:ENG_PL:2017/18'")" = "2048"
+          test "$(psql "$DATABASE_URL" -Atc "select count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout_open' and o.entity_identity_hints->>'season_label'='2017/18'")" = "412609"
+          echo "production_written=false"
