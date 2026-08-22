@@ -14,6 +14,23 @@ Scope implemented by the loader:
 
 This is **not current-season evidence** and must never be presented as such.
 
+## Observed real-runtime verification
+
+Verified on 2026-08-22 in an ephemeral GitHub Actions runner with PostgreSQL 17. The runtime used only the public Wyscout source and a temporary local database; no production/Neon database was accessed or written.
+
+Observed first-load invariants:
+
+- official source probe: 380 matches, 643,150 events, 603 roster/squad players — PASS;
+- certified adapter: 412,609 `NormalizedObservation` rows, 77/77 adapter-safe identities observed — PASS;
+- canonical scope: 380 matches, 20 teams, 515 participating players;
+- 10,443 `player_appearances` and 10,443 `player_match_stats` rows;
+- 760 `team_match_stats` rows;
+- 412,609 Data Mesh `source_observations`, equal to adapter output;
+- conservative minutes policy withheld exposure for 41 red-card appearances and 99 zero-duration standardized appearances rather than inventing minutes;
+- zero Player V2 score/feature snapshots were published.
+
+Full-load idempotency was then verified by executing the same loader a second time against the same temporary database. All scoped counts remained identical, `football.teams` remained at 20 rows, Wyscout team-provider mappings remained at 20, and all 20 teams were recognized as already linked. Runtime evidence: GitHub Actions run `32596409687`.
+
 ## Command
 
 From `analytics/`:
