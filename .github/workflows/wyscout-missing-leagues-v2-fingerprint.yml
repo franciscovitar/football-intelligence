@@ -1,0 +1,368 @@
+name: Wyscout Missing Leagues V2 Fingerprint
+
+on:
+  push:
+    branches:
+      - evidence/wyscout-missing-leagues-v2-fingerprint
+    paths:
+      - .github/workflows/wyscout-missing-leagues-v2-fingerprint.yml
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  fingerprint:
+    name: ${{ matrix.competition }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        competition: [FRA_L1, GER_BL1, ESP_LL, ITA_SA]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: football_intelligence_wyscout_v2
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: football_intelligence_wyscout_v2
+      LOCAL_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_wyscout_v2
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: evidence/wyscout-missing-leagues-v2-fingerprint
+      - name: Apply migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Apply core seeds
+        run: psql -v ON_ERROR_STOP=1 -f database/seeds/001_core_catalog.sql
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Install analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+      - name: Load certified canonical scope only
+        working-directory: analytics
+        env:
+          COMPETITION: ${{ matrix.competition }}
+        run: |
+          uv run python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          from pathlib import Path
+
+          from football_intelligence.data_mesh.adapters.scope import ScopeMismatchError
+          from football_intelligence.data_mesh.adapters.wyscout_open import (
+              SOURCE_CODE,
+              WyscoutObservationConflictError,
+              parse_england_season,
+          )
+          from football_intelligence.db.provider_repository import ProviderRepository, connect
+          from football_intelligence.jobs.load_wyscout_historical import (
+              _apply_safe_minutes_policy,
+              _prepare_canonical_team_links,
+              _scoped_database_counts,
+          )
+          from football_intelligence.jobs.probe_wyscout_open import run_probe
+          from football_intelligence.jobs.wyscout_historical_scope import (
+              load_scope_inputs,
+              scope_config,
+              validate_adapter_observations,
+              validate_source_scope,
+          )
+          from football_intelligence.normalization.wyscout_historical import (
+              normalize_wyscout_historical_scope,
+          )
+
+          competition = os.environ["COMPETITION"]
+          cache_dir = Path("data/cache/wyscout-open")
+          config = scope_config(competition)
+
+          probe = run_probe(cache_dir=cache_dir)
+          assert probe.report.counts_verified
+          matches, events, players, teams = load_scope_inputs(cache_dir, config=config)
+          source_validation = validate_source_scope(
+              matches_payload=matches,
+              events_payload=events,
+              config=config,
+          )
+          assert source_validation.passed, source_validation.failures
+
+          try:
+              observations = parse_england_season(
+                  matches_payload=matches,
+                  events_payload=events,
+                  players_payload=players,
+                  teams_payload=teams,
+                  scope=config.scope,
+              )
+          except (ScopeMismatchError, WyscoutObservationConflictError) as exc:
+              raise RuntimeError(f"adapter failed for {competition}: {exc}") from exc
+          adapter = validate_adapter_observations(
+              observations=observations,
+              matches_payload=matches,
+              config=config,
+          )
+          assert adapter.passed, adapter.failures
+
+          normalization = normalize_wyscout_historical_scope(
+              matches_payload=matches,
+              events_payload=events,
+              players_payload=players,
+              teams_payload=teams,
+              scope=config.scope,
+              expected_match_count=config.spec.expected_match_count,
+          )
+          assert not normalization.unresolved_participating_player_ids
+          safe_batch, minutes_report = _apply_safe_minutes_policy(
+              normalization.batch,
+              observations=observations,
+          )
+
+          with connect(os.environ["LOCAL_DATABASE_URL"]) as connection:
+              canonical_batch, team_links = _prepare_canonical_team_links(connection, safe_batch)
+              repository = ProviderRepository(connection, provider_code=SOURCE_CODE)
+              rows_written = repository.persist_batch(
+                  competition_code=competition,
+                  batch=canonical_batch,
+              )
+              counts = _scoped_database_counts(
+                  connection,
+                  competition_code=competition,
+                  season_label=config.scope.season_label,
+                  provider_competition_id=config.scope.provider_competition_id,
+              )
+              expected = {
+                  "matches": len(canonical_batch.matches),
+                  "teams": len(canonical_batch.teams),
+                  "players": len(canonical_batch.players),
+                  "player_appearances": len(canonical_batch.appearances),
+                  "player_match_stats": len(canonical_batch.player_match_stats),
+                  "team_match_stats": len(canonical_batch.team_match_stats),
+                  "source_observations": 0,
+              }
+              actual = {
+                  "matches": counts.matches,
+                  "teams": counts.teams,
+                  "players": counts.players,
+                  "player_appearances": counts.player_appearances,
+                  "player_match_stats": counts.player_match_stats,
+                  "team_match_stats": counts.team_match_stats,
+                  "source_observations": counts.source_observations,
+              }
+              assert actual == expected, (actual, expected)
+              connection.commit()
+
+          output = {
+              "competition": competition,
+              "season": config.scope.season_label,
+              "source_validation": {
+                  "matches": source_validation.match_count,
+                  "events": source_validation.event_count,
+                  "roster_players": source_validation.roster_player_count,
+                  "teams": source_validation.team_count,
+                  "provider_competition_id": source_validation.provider_competition_id,
+                  "provider_season_id": source_validation.provider_season_id,
+              },
+              "adapter": {
+                  "observations": adapter.total_observations,
+                  "safe_identities": adapter.safe_identity_count,
+                  "identities_with_observations": adapter.identities_with_observations,
+                  "conflicting_duplicates": adapter.conflicting_duplicates,
+                  "native_goal_total": adapter.native_goal_total,
+                  "observed_team_goal_total": adapter.observed_team_goal_total,
+                  "wrong_country_source_references": adapter.wrong_country_source_references,
+              },
+              "canonical": actual,
+              "canonical_rows_written": rows_written,
+              "team_links": {
+                  "already_linked": team_links.already_linked,
+                  "reused_existing_canonical": team_links.reused_existing_canonical,
+                  "new_canonical_required": team_links.new_canonical_required,
+              },
+              "minutes_policy": {
+                  "red_card_appearances_excluded": minutes_report.red_card_appearances_excluded,
+                  "zero_duration_appearances_excluded": minutes_report.zero_duration_appearances_excluded,
+                  "version": minutes_report.version,
+              },
+          }
+          Path(os.environ["RUNNER_TEMP"]).joinpath("canonical.json").write_text(
+              json.dumps(output, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Calculate Player V2 first pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-player-analytics
+          --season 2017/18
+          --competition "${{ matrix.competition }}"
+          --database-url "$LOCAL_DATABASE_URL"
+          --report "$RUNNER_TEMP/v2-first.json"
+      - name: Calculate Player V2 second pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-player-analytics
+          --season 2017/18
+          --competition "${{ matrix.competition }}"
+          --database-url "$LOCAL_DATABASE_URL"
+          --report "$RUNNER_TEMP/v2-second.json"
+      - name: Build per-league fingerprint
+        working-directory: analytics
+        env:
+          COMPETITION: ${{ matrix.competition }}
+        run: |
+          uv run python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          from pathlib import Path
+
+          import psycopg
+
+          competition = os.environ["COMPETITION"]
+          scope_key = f"competition:{competition}:2017/18"
+          temp = Path(os.environ["RUNNER_TEMP"])
+          canonical = json.loads((temp / "canonical.json").read_text())
+          first = json.loads((temp / "v2-first.json").read_text())
+          second = json.loads((temp / "v2-second.json").read_text())
+
+          assert first["model_version"] == second["model_version"] == "player-v2.0"
+          assert first["competition"] == second["competition"] == competition
+          assert first["scope_key"] == second["scope_key"] == scope_key
+          assert first["score_snapshot_count"] == second["score_snapshot_count"]
+          assert first["feature_snapshot_count"] == second["feature_snapshot_count"]
+          assert first["evidence_state_counts"] == second["evidence_state_counts"]
+
+          with psycopg.connect(os.environ["LOCAL_DATABASE_URL"]) as connection:
+              def scalar(query: str) -> int:
+                  row = connection.execute(query, (scope_key, "player-v2.0")).fetchone()
+                  assert row is not None
+                  return int(row[0])
+
+              product_counts = {
+                  "season_players": scalar(
+                      """select count(distinct player_id) from analytics.product_player_detail_v2
+                         where scope_key=%s and model_version=%s and window_key='season'"""
+                  ),
+                  "season_players_450_min": scalar(
+                      """select count(distinct player_id) from analytics.product_player_detail_v2
+                         where scope_key=%s and model_version=%s and window_key='season'
+                           and minutes>=450"""
+                  ),
+                  "performance_ready": scalar(
+                      """select count(*) from analytics.product_player_detail_v2 s
+                         cross join lateral jsonb_each(s.dimension_evidence) e
+                         where s.scope_key=%s and s.model_version=%s and s.window_key='season'
+                           and e.key='performance' and e.value->>'evidence_state'='ready'
+                           and e.value->>'score' is not null"""
+                  ),
+                  "ranking_candidates": scalar(
+                      """select count(*) from analytics.product_player_ranking_candidates_v2
+                         where scope_key=%s and model_version=%s"""
+                  ),
+                  "overall_scores": scalar(
+                      """select count(*) from analytics.product_player_detail_v2
+                         where scope_key=%s and model_version=%s and overall_score is not null"""
+                  ),
+              }
+
+          payload = {
+              "status": "PASS",
+              "competition": competition,
+              "scope_key": scope_key,
+              "canonical": canonical,
+              "player_v2": {
+                  "score_snapshots": first["score_snapshot_count"],
+                  "feature_snapshots": first["feature_snapshot_count"],
+                  "evidence_states": first["evidence_state_counts"],
+                  "idempotent": True,
+                  "product_counts": product_counts,
+              },
+          }
+          output = temp / f"{competition}.json"
+          output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: v2-${{ matrix.competition }}
+          path: ${{ runner.temp }}/${{ matrix.competition }}.json
+          if-no-files-found: error
+          retention-days: 1
+
+  aggregate:
+    runs-on: ubuntu-latest
+    needs: fingerprint
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: evidence/wyscout-missing-leagues-v2-fingerprint
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          pattern: v2-*
+          path: /tmp/wyscout-v2-fingerprints
+          merge-multiple: true
+      - name: Aggregate certified fingerprints
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          directory = Path("/tmp/wyscout-v2-fingerprints")
+          competitions = ("FRA_L1", "GER_BL1", "ESP_LL", "ITA_SA")
+          scopes = {}
+          for competition in competitions:
+              path = directory / f"{competition}.json"
+              payload = json.loads(path.read_text())
+              assert payload["status"] == "PASS"
+              assert payload["competition"] == competition
+              scopes[competition] = payload
+
+          summary = {
+              "status": "PASS",
+              "main_sha_under_test": "3e11ba62105e58836ccdb8ab16c4d7fdaa5ac8ea",
+              "database_target": "four-isolated-ephemeral-postgresql-17-jobs",
+              "production_written": False,
+              "data_mesh_persisted": False,
+              "purpose": "certify canonical-to-Player-V2 fingerprints independently of the full Data Mesh loader idempotency gate",
+              "scopes": scopes,
+          }
+          output = Path("evidence/wyscout-open/missing-leagues-player-v2-fingerprint.json")
+          output.parent.mkdir(parents=True, exist_ok=True)
+          output.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+      - name: Persist fingerprint report on evidence branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evidence/wyscout-open/missing-leagues-player-v2-fingerprint.json
+          git commit -m "evidence: certify missing-league Player V2 fingerprints"
+          git push origin HEAD:evidence/wyscout-missing-leagues-v2-fingerprint
