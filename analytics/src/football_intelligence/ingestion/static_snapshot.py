@@ -211,7 +211,7 @@ def static_snapshot_manifest_from_dict(payload: dict[str, Any]) -> StaticSnapsho
             SnapshotFile(
                 path=_required_string(raw_dict, "path"),
                 sha256=_required_string(raw_dict, "sha256"),
-                byte_size=cast(int | None, byte_size_raw),
+                byte_size=byte_size_raw,
             )
         )
 
@@ -236,7 +236,7 @@ def static_snapshot_manifest_from_dict(payload: dict[str, Any]) -> StaticSnapsho
         season_labels=tuple(_required_string_list(payload, "season_labels")),
         data_grains=grains,
         files=tuple(files),
-        notes=cast(str | None, notes_raw),
+        notes=notes_raw,
     )
 
 
