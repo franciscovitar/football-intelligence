@@ -18,7 +18,7 @@ Core competitions remain:
 
 This initiative extends Block 20's multi-source architecture. It does **not**
 replace the Data Mesh, Metric Catalog V2, Entity Resolution V2, reconciliation,
-or existing Wyscout historical promotion path.
+or the existing Wyscout historical promotion path.
 
 ## Product direction
 
@@ -76,8 +76,8 @@ No stage may be skipped merely to obtain more filled cells.
 
 ## Static snapshot contract
 
-`football_intelligence.ingestion.static_snapshot` now provides the common
-metadata contract for every new static dataset.
+`football_intelligence.ingestion.static_snapshot` provides the common metadata
+contract for every new static dataset.
 
 A snapshot manifest records at minimum:
 
@@ -101,8 +101,11 @@ football-intelligence-validate-static-snapshot \
   --report /path/to/report.json
 ```
 
+Checksum verification streams files incrementally so large static datasets do
+not need to be loaded into memory solely for integrity checking.
+
 Heavy/original datasets remain in their authoritative source/evidence store or
-local cache according to repository/PAS storage policy; the repository should
+local cache according to repository/PAS storage policy. The repository should
 commit only safe metadata, adapters, mappings, tests, small certified fixtures,
 and durable reports when appropriate.
 
@@ -117,11 +120,16 @@ Each provider-local record can contribute:
 - raw player name;
 - competition + season;
 - canonical team contexts when resolved;
-- canonical shared matches when the source exposes enough detail;
+- canonical shared matches **attributed to the exact team context**;
 - date of birth;
 - nationality;
 - position;
 - height.
+
+Team-to-match attribution is explicit because one real player can represent more
+than one club during a season. This matches the existing
+`PlayerCrosswalkEntry`/`PlayerTeamContextEvidence` contract and preserves the
+real transfer cases already observed during Wyscout/StatsBomb overlap work.
 
 Candidate states:
 
@@ -130,9 +138,13 @@ Candidate states:
 Requires:
 
 - exact deterministic normalized name;
-- no hard date-of-birth contradiction;
-- exactly one shared canonical team context in the candidate record; and
-- at least one shared canonical match.
+- no hard date-of-birth contradiction; and
+- at least one shared canonical match explicitly attributed to the same shared
+  canonical team context in both sources.
+
+A candidate may contain one or multiple evidenced team contexts. Multiple
+contexts are valid when a transfer occurred, provided each shared match remains
+attached to its actual team context.
 
 This means the pair has enough generic evidence for a caller to build the
 existing explicit `PlayerCrosswalkEntry`. The crosswalk itself remains the
@@ -144,9 +156,9 @@ Used when evidence is strong but cannot satisfy the crosswalk automatically,
 for example:
 
 - same name + same date of birth + same team/season but no shared match ids;
-- multiple shared team contexts after a real transfer, before each match is
-  attributed to its exact team context;
-- season-level profile datasets that cannot expose match-level identity.
+- season-level profile datasets that cannot expose match-level identity;
+- an otherwise credible profile pair whose source granularity cannot prove the
+  shared-match requirement.
 
 ### `insufficient_evidence`
 
@@ -161,8 +173,8 @@ No automatic player link is created.
 ### `conflict`
 
 A hard identity contradiction was observed. The first implemented hard conflict
-is differing non-null dates of birth for the exact normalized name pair.
-The evidence stays visible for diagnosis and cannot be silently promoted.
+is differing non-null dates of birth for an exact normalized-name pair. The
+evidence stays visible for diagnosis and cannot be silently promoted.
 
 Nationality, position and small height differences are corroboration/quality
 signals rather than hard identity blockers because real sources may differ in
@@ -177,7 +189,7 @@ Normalize representation only:
 - Unicode/provider-specific text defects at the provider boundary;
 - deterministic player-name normalization for comparison;
 - ISO dates;
-- consistent numeric units (for example height in centimetres);
+- consistent numeric units, for example height in centimetres;
 - explicit provider-native vs canonical ids.
 
 Never manufacture aliases globally. A reviewed alias/crosswalk is explicit
@@ -227,7 +239,7 @@ The working source families are:
 | Transfermarkt-derived static dataset | broad six-league player profiles, career/appearance/market context | candidate; re-audit provenance/licence before adapter/promotion |
 | FBref/Sports-Reference-derived static snapshot | deep five-European-league player season metrics | candidate; current prohibition remains until a new source/compliance review closes it |
 | LPF official data/reports | authoritative Argentina enrichment/validation | candidate; audit exact reusable fields and acquisition method |
-| FootyStats static export | possible Argentina/europe player enrichment | candidate; requires current licence/cost/use review before acquisition/promotion |
+| FootyStats static export | possible Argentina/Europe player enrichment | candidate; requires current licence/cost/use review before acquisition/promotion |
 
 A candidate can be investigated, schema-audited, and mapped without automatically
 becoming product-approved evidence. Any raw acquisition must still respect the
@@ -267,7 +279,8 @@ Before a snapshot can be promoted, produce at least:
 - duplicate rows quantified;
 - player candidate states counted;
 - unresolved and conflicting identities retained;
-- no global name-only canonical players.
+- no global name-only canonical players;
+- transfer cases preserve team-specific match evidence.
 
 ### Metric integrity
 
@@ -295,8 +308,8 @@ Coverage is descriptive evidence, never a reason to weaken gates.
 
 ## Rollout order
 
-1. Foundation (this document): static snapshot provenance/integrity contract +
-   conservative identity-candidate layer.
+1. Foundation: static snapshot provenance/integrity contract + conservative
+   identity-candidate layer.
 2. Re-audit candidate sources against current primary terms/provenance.
 3. Select the first source with the best six-league player-coverage leverage.
 4. Acquire one bounded snapshot outside the repository and generate its manifest.
@@ -317,10 +330,11 @@ candidate wins that role is a source-audit decision, not assumed here.
 - static snapshots have a reusable immutable provenance/checksum contract;
 - malformed/unsafe manifests fail closed;
 - cached-file integrity can be verified by a deterministic CLI;
+- large snapshot files are checksummed incrementally;
 - cross-source player candidates never use fuzzy/name-only resolution;
 - exact-name-only candidates remain insufficient;
 - hard DOB contradictions surface as conflicts;
-- match/team-supported pairs can be distinguished from review-only season-level
-  candidates;
+- shared matches retain their exact team context, including transfers;
+- season-level candidates without match identity stay review-only;
 - no existing source-compliance prohibition is silently relaxed;
 - no production/database mutation is part of this foundation.
