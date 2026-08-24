@@ -1,18 +1,17 @@
-"""Canonical-ready normalization for Wyscout Open ENG_PL 2017/18.
+"""Canonical-ready normalization for Wyscout Open historical scopes.
 
-Historical-only conversion from the already-certified Wyscout Open adapter
-output into the repository's provider-independent persistence DTOs.
+Historical-only conversion from the source-scoped Wyscout Open adapter output
+into the repository's provider-independent persistence DTOs.
 
-The only additional derivation introduced here is ``minutes``. The verified
-ENG_PL 2017/18 source marks every league fixture ``duration == \"Regular\"``
-and publishes substitution minutes, but no final-whistle timestamp. For
-analytics, a regular match therefore uses a standardized 90-minute endpoint:
-starters begin at 0, substitutes begin at their (clamped) substitution minute,
-and a player's end is their (clamped) substitution-out minute or 90.
+The only additional derivation introduced here is ``minutes``. This normalizer
+applies the existing standardized 90-minute methodology only to fixtures whose
+own source payload declares ``duration == "Regular"``; any other duration fails
+closed. Starters begin at 0, substitutes begin at their (clamped) substitution
+minute, and a player's end is their (clamped) substitution-out minute or 90.
 
 These are standardized analytics minutes, not a claim about exact elapsed
-stoppage time. The methodology is versioned so a future exact source can
-coexist without silently rewriting historical semantics.
+stoppage time. The methodology is versioned so a future exact source can coexist
+without silently rewriting historical semantics.
 """
 
 from __future__ import annotations
@@ -21,6 +20,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from football_intelligence.data_mesh.adapters.scope import AdapterScope
 from football_intelligence.data_mesh.adapters.wyscout_open import (
     DEFAULT_SCOPE,
     parse_player_match_observations,
@@ -110,20 +110,25 @@ class _AppearanceSeed:
     started: bool
 
 
-def normalize_england_2017_18(
+def normalize_wyscout_historical_scope(
     *,
     matches_payload: list[Any],
     events_payload: list[Any],
     players_payload: list[Any],
     teams_payload: list[Any],
-    expected_match_count: int | None = 380,
+    scope: AdapterScope,
+    expected_match_count: int | None = None,
 ) -> WyscoutHistoricalNormalizationResult:
-    """Build a provider-independent canonical batch from the certified scope."""
+    """Build one provider-independent canonical batch for a declared Wyscout scope."""
 
+    if scope.provider_season_id is None:
+        raise WyscoutHistoricalNormalizationError(
+            "Wyscout historical normalization requires a provider-native season id"
+        )
     if expected_match_count is not None and len(matches_payload) != expected_match_count:
         raise WyscoutHistoricalNormalizationError(
-            f"ENG_PL 2017/18 must contain exactly {expected_match_count} matches, "
-            f"got {len(matches_payload)}"
+            f"{scope.canonical_competition_code} {scope.season_label} must contain exactly "
+            f"{expected_match_count} matches, got {len(matches_payload)}"
         )
 
     team_names = _team_names_by_id(teams_payload)
@@ -134,14 +139,14 @@ def normalize_england_2017_18(
         matches_payload,
         events_payload,
         players_payload,
-        scope=DEFAULT_SCOPE,
+        scope=scope,
     )
     team_observations = parse_team_match_observations(
         matches_payload,
         events_payload,
         players_payload,
         teams_payload,
-        scope=DEFAULT_SCOPE,
+        scope=scope,
     )
 
     team_ids = _team_ids_from_matches(matches_payload)
@@ -195,7 +200,9 @@ def normalize_england_2017_18(
         for team_id in sorted(team_ids, key=lambda item: team_names[item].casefold())
     )
 
-    matches = tuple(_normalize_match(match) for match in matches_payload if isinstance(match, dict))
+    matches = tuple(
+        _normalize_match(match, scope=scope) for match in matches_payload if isinstance(match, dict)
+    )
     if expected_match_count is not None and len(matches) != expected_match_count:
         raise WyscoutHistoricalNormalizationError(
             f"only {len(matches)} of {expected_match_count} Wyscout matches were "
@@ -223,8 +230,8 @@ def normalize_england_2017_18(
 
     return WyscoutHistoricalNormalizationResult(
         batch=NormalizedFixtureBatch(
-            provider_competition_id=PROVIDER_COMPETITION_ID,
-            season_label=SEASON_LABEL,
+            provider_competition_id=str(scope.provider_competition_id),
+            season_label=scope.season_label,
             teams=teams,
             players=players,
             matches=matches,
@@ -233,6 +240,26 @@ def normalize_england_2017_18(
             player_match_stats=player_stats,
         ),
         unresolved_participating_player_ids=unresolved_players,
+    )
+
+
+def normalize_england_2017_18(
+    *,
+    matches_payload: list[Any],
+    events_payload: list[Any],
+    players_payload: list[Any],
+    teams_payload: list[Any],
+    expected_match_count: int | None = 380,
+) -> WyscoutHistoricalNormalizationResult:
+    """Backward-compatible wrapper for the original ENG_PL 2017/18 scope."""
+
+    return normalize_wyscout_historical_scope(
+        matches_payload=matches_payload,
+        events_payload=events_payload,
+        players_payload=players_payload,
+        teams_payload=teams_payload,
+        scope=DEFAULT_SCOPE,
+        expected_match_count=expected_match_count,
     )
 
 
@@ -433,17 +460,19 @@ def _match_team_pairs(matches_payload: list[Any]) -> set[tuple[int, int]]:
     return pairs
 
 
-def _normalize_match(match: dict[str, Any]) -> MatchRecord:
+def _normalize_match(match: dict[str, Any], *, scope: AdapterScope) -> MatchRecord:
     match_id = match.get("wyId")
     if not isinstance(match_id, int):
         raise WyscoutHistoricalNormalizationError("match without integer wyId")
-    if match.get("competitionId") != DEFAULT_SCOPE.provider_competition_id:
+    if match.get("competitionId") != scope.provider_competition_id:
         raise WyscoutHistoricalNormalizationError(
-            f"match {match_id} is outside Wyscout ENG_PL competition scope"
+            f"match {match_id} is outside Wyscout "
+            f"{scope.canonical_competition_code} competition scope"
         )
-    if match.get("seasonId") != DEFAULT_SCOPE.provider_season_id:
+    if match.get("seasonId") != scope.provider_season_id:
         raise WyscoutHistoricalNormalizationError(
-            f"match {match_id} is outside Wyscout ENG_PL 2017/18 season scope"
+            f"match {match_id} is outside Wyscout "
+            f"{scope.canonical_competition_code} {scope.season_label} season scope"
         )
     if match.get("status") != "Played":
         raise WyscoutHistoricalNormalizationError(
