@@ -27,10 +27,11 @@ from __future__ import annotations
 import calendar
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Any, Mapping, cast
+from typing import Any, cast
 
 from football_intelligence.data_mesh.player_identity_candidates import PlayerIdentityRecord
 
@@ -112,7 +113,11 @@ class WikidataTeamMembership:
         hold even at the latest possible start and earliest possible end.
         """
 
-        if season_start > season_end or len(self.start_times) != 1 or len(self.end_times) != 1:
+        if (
+            season_start > season_end
+            or len(self.start_times) != 1
+            or len(self.end_times) != 1
+        ):
             return False
         start_bounds = self.start_times[0].date_bounds
         end_bounds = self.end_times[0].date_bounds
@@ -141,7 +146,9 @@ class WikidataPlayerProfile:
         """Resolve one exact DOB only when every bounded DOB claim is compatible."""
 
         exact_dates = {
-            value.exact_date for value in self.dates_of_birth if value.exact_date is not None
+            exact
+            for value in self.dates_of_birth
+            if (exact := value.exact_date) is not None
         }
         if len(exact_dates) != 1:
             return None
@@ -211,11 +218,15 @@ def validate_qid(value: str) -> str:
     return qid
 
 
-def load_wikidata_profile(path: Path, *, expected_qid: str | None = None) -> WikidataPlayerProfile:
+def load_wikidata_profile(
+    path: Path, *, expected_qid: str | None = None
+) -> WikidataPlayerProfile:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise WikidataProfileError("Special:EntityData document root must be a JSON object")
-    return parse_wikidata_entity_document(cast(dict[str, Any], payload), expected_qid=expected_qid)
+    return parse_wikidata_entity_document(
+        cast(dict[str, Any], payload), expected_qid=expected_qid
+    )
 
 
 def parse_wikidata_entity_document(
@@ -233,13 +244,17 @@ def parse_wikidata_entity_document(
     entity = cast(dict[str, Any], entity_raw)
 
     labels = entity.get("labels")
-    display_name = _preferred_label(cast(dict[str, Any], labels) if isinstance(labels, dict) else {})
+    display_name = _preferred_label(
+        cast(dict[str, Any], labels) if isinstance(labels, dict) else {}
+    )
     claims_raw = entity.get("claims")
     claims = cast(dict[str, Any], claims_raw) if isinstance(claims_raw, dict) else {}
 
     revision_raw = entity.get("lastrevid")
     last_revision_id = (
-        revision_raw if isinstance(revision_raw, int) and not isinstance(revision_raw, bool) else None
+        revision_raw
+        if isinstance(revision_raw, int) and not isinstance(revision_raw, bool)
+        else None
     )
     modified_raw = entity.get("modified")
     modified_at = modified_raw if isinstance(modified_raw, str) else None
@@ -284,7 +299,9 @@ def _label_value(raw: Any) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
-def _active_statements(claims: dict[str, Any], property_id: str) -> tuple[dict[str, Any], ...]:
+def _active_statements(
+    claims: dict[str, Any], property_id: str
+) -> tuple[dict[str, Any], ...]:
     statements_raw = claims.get(property_id)
     if not isinstance(statements_raw, list):
         return ()
@@ -304,7 +321,9 @@ def _claim_item_qids(claims: dict[str, Any], property_id: str) -> tuple[str, ...
     return tuple(sorted(values))
 
 
-def _claim_times(claims: dict[str, Any], property_id: str) -> tuple[WikidataTimeValue, ...]:
+def _claim_times(
+    claims: dict[str, Any], property_id: str
+) -> tuple[WikidataTimeValue, ...]:
     values = {
         value
         for statement in _active_statements(claims, property_id)
@@ -320,7 +339,9 @@ def _team_memberships(claims: dict[str, Any]) -> tuple[WikidataTeamMembership, .
         if team_qid is None:
             continue
         qualifiers_raw = statement.get("qualifiers")
-        qualifiers = cast(dict[str, Any], qualifiers_raw) if isinstance(qualifiers_raw, dict) else {}
+        qualifiers = (
+            cast(dict[str, Any], qualifiers_raw) if isinstance(qualifiers_raw, dict) else {}
+        )
         memberships.append(
             WikidataTeamMembership(
                 team_qid=team_qid,
@@ -359,14 +380,14 @@ def _item_qid_from_snak(raw: Any) -> str | None:
     return qid
 
 
-def _qualifier_times(qualifiers: dict[str, Any], property_id: str) -> tuple[WikidataTimeValue, ...]:
+def _qualifier_times(
+    qualifiers: dict[str, Any], property_id: str
+) -> tuple[WikidataTimeValue, ...]:
     snaks_raw = qualifiers.get(property_id)
     if not isinstance(snaks_raw, list):
         return ()
     values = {
-        value
-        for snak in snaks_raw
-        if (value := _time_from_snak(snak)) is not None
+        value for snak in snaks_raw if (value := _time_from_snak(snak)) is not None
     }
     return tuple(sorted(values, key=_time_sort_key))
 
@@ -383,7 +404,11 @@ def _time_from_snak(raw: Any) -> WikidataTimeValue | None:
     raw_time = value.get("time")
     precision = value.get("precision")
     calendar_model = value.get("calendarmodel")
-    if not isinstance(raw_time, str) or not isinstance(precision, int) or isinstance(precision, bool):
+    if (
+        not isinstance(raw_time, str)
+        or not isinstance(precision, int)
+        or isinstance(precision, bool)
+    ):
         return None
     calendar_qid = _qid_from_uri(calendar_model) if isinstance(calendar_model, str) else None
     return WikidataTimeValue(
