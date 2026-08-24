@@ -1,4 +1,4 @@
-"""Safely load certified Wyscout Open ENG_PL 2017/18 evidence into local PostgreSQL.
+"""Safely load certified Wyscout Open 2017/18 core-league evidence into local PostgreSQL.
 
 This is an intentionally local-only historical bootstrap. It reuses the
 existing official Figshare acquisition/probe and the certified Wyscout Data
@@ -32,8 +32,11 @@ from typing import Any
 
 from psycopg import Connection
 
+from football_intelligence.data_mesh.adapters.scope import ScopeMismatchError
 from football_intelligence.data_mesh.adapters.wyscout_open import (
+    DEFAULT_SCOPE,
     SOURCE_CODE,
+    WyscoutObservationConflictError,
     parse_england_season,
 )
 from football_intelligence.data_mesh.entity_resolution import normalize_team_name
@@ -41,17 +44,18 @@ from football_intelligence.data_mesh.models import NormalizedObservation
 from football_intelligence.db.data_mesh_repository import DataMeshRepository
 from football_intelligence.db.local_safety import validate_local_database_url
 from football_intelligence.db.provider_repository import ProviderRepository, connect
-from football_intelligence.jobs.audit_wyscout_adapter import (
-    WyscoutAdapterAuditError,
-    load_adapter_inputs,
-)
-from football_intelligence.jobs.audit_wyscout_adapter import (
-    build_report as build_adapter_report,
-)
 from football_intelligence.jobs.probe_wyscout_open import (
     DEFAULT_CACHE_DIR,
     WyscoutProbeError,
     run_probe,
+)
+from football_intelligence.jobs.wyscout_historical_scope import (
+    WyscoutHistoricalScopeError,
+    load_scope_inputs,
+    scope_config,
+    supported_competition_codes,
+    validate_adapter_observations,
+    validate_source_scope,
 )
 from football_intelligence.normalization.models import (
     NormalizedFixtureBatch,
@@ -63,7 +67,7 @@ from football_intelligence.normalization.wyscout_historical import (
     MINUTES_METHODOLOGY_VERSION,
     SEASON_LABEL,
     WyscoutHistoricalNormalizationError,
-    normalize_england_2017_18,
+    normalize_wyscout_historical_scope,
 )
 
 _MINUTES_POLICY_VERSION = "wyscout-regular-90-ambiguous-missing-v1.0"
@@ -101,12 +105,21 @@ class ScopedDatabaseCounts:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Load certified Wyscout Open ENG_PL 2017/18 historical evidence into a "
-            "LOCAL PostgreSQL database. Source probe + adapter audit run before any DB "
+            "Load one certified Wyscout Open 2017/18 European core-league scope into a "
+            "LOCAL PostgreSQL database. Source + adapter validation run before any DB "
             "connection. No remote/production writes and no Player V2 publication."
         )
     )
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE_DIR)
+    parser.add_argument(
+        "--competition",
+        choices=supported_competition_codes(),
+        default=COMPETITION_CODE,
+        help=(
+            "Certified Wyscout 2017/18 competition to load. Defaults to ENG_PL "
+            "for backward compatibility."
+        ),
+    )
     parser.add_argument(
         "--database-url",
         required=True,
@@ -123,42 +136,67 @@ def main() -> None:
     args = build_parser().parse_args()
     database_url = validate_local_database_url(args.database_url)
     assert database_url is not None
+    config = scope_config(args.competition)
 
-    # Source + semantic validation is deliberately complete before a DB socket
-    # is opened. A changed/corrupt upstream source can never partially load.
+    # The official England probe acquires/checksums the shared Figshare archives
+    # and reference files before the selected country payload is read from cache.
+    # All source + semantic validation completes before a DB socket is opened.
     try:
         probe_result = run_probe(cache_dir=args.cache_dir)
     except WyscoutProbeError as exc:
-        raise SystemExit(f"WYSCOUT HISTORICAL LOAD: FAIL source probe - {exc}") from exc
+        raise SystemExit(f"WYSCOUT HISTORICAL LOAD: FAIL source acquisition - {exc}") from exc
     if not probe_result.report.counts_verified:
-        raise SystemExit("WYSCOUT HISTORICAL LOAD: FAIL source published-count verification")
+        raise SystemExit("WYSCOUT HISTORICAL LOAD: FAIL official archive acquisition probe")
 
     try:
-        matches_payload, events_payload, players_payload, teams_payload = load_adapter_inputs(
-            args.cache_dir
+        matches_payload, events_payload, players_payload, teams_payload = load_scope_inputs(
+            args.cache_dir,
+            config=config,
         )
+    except WyscoutHistoricalScopeError as exc:
+        raise SystemExit(f"WYSCOUT HISTORICAL LOAD: FAIL scope inputs - {exc}") from exc
+
+    source_validation = validate_source_scope(
+        matches_payload=matches_payload,
+        events_payload=events_payload,
+        config=config,
+    )
+    if not source_validation.passed:
+        raise SystemExit(
+            "WYSCOUT HISTORICAL LOAD: FAIL source scope validation: "
+            + "; ".join(source_validation.failures)
+        )
+
+    try:
         observations = parse_england_season(
             matches_payload=matches_payload,
             events_payload=events_payload,
             players_payload=players_payload,
             teams_payload=teams_payload,
+            scope=config.scope,
         )
-    except WyscoutAdapterAuditError as exc:
-        raise SystemExit(f"WYSCOUT HISTORICAL LOAD: FAIL adapter inputs - {exc}") from exc
+    except (ScopeMismatchError, WyscoutObservationConflictError) as exc:
+        raise SystemExit(f"WYSCOUT HISTORICAL LOAD: FAIL adapter - {exc}") from exc
 
-    adapter_report = build_adapter_report(observations)
-    if not adapter_report.all_passed:
-        failed = [check.name for check in adapter_report.checks if not check.passed]
+    adapter_report = validate_adapter_observations(
+        observations=observations,
+        matches_payload=matches_payload,
+        config=config,
+    )
+    if not adapter_report.passed:
         raise SystemExit(
-            "WYSCOUT HISTORICAL LOAD: FAIL certified adapter audit: " + ", ".join(failed)
+            "WYSCOUT HISTORICAL LOAD: FAIL adapter validation: "
+            + "; ".join(adapter_report.failures)
         )
 
     try:
-        normalization = normalize_england_2017_18(
+        normalization = normalize_wyscout_historical_scope(
             matches_payload=matches_payload,
             events_payload=events_payload,
             players_payload=players_payload,
             teams_payload=teams_payload,
+            scope=config.scope,
+            expected_match_count=config.spec.expected_match_count,
         )
     except WyscoutHistoricalNormalizationError as exc:
         raise SystemExit(f"WYSCOUT HISTORICAL LOAD: FAIL canonical normalization - {exc}") from exc
@@ -184,8 +222,8 @@ def main() -> None:
             job_name="load_wyscout_historical",
             trigger_kind="manual",
             scope={
-                "competition": COMPETITION_CODE,
-                "season": SEASON_LABEL,
+                "competition": config.spec.competition_code,
+                "season": config.scope.season_label,
                 "historical": True,
                 "minutes_methodology_version": MINUTES_METHODOLOGY_VERSION,
                 "minutes_policy_version": minutes_report.version,
@@ -193,7 +231,7 @@ def main() -> None:
         )
 
         canonical_rows_written = provider_repository.persist_batch(
-            competition_code=COMPETITION_CODE,
+            competition_code=config.spec.competition_code,
             batch=canonical_batch,
         )
 
@@ -206,8 +244,22 @@ def main() -> None:
                 [dataclasses.replace(observation, ingestion_run_id=run_id)]
             )
 
-        counts = _scoped_database_counts(connection)
-        _validate_scoped_invariants(counts)
+        counts = _scoped_database_counts(
+            connection,
+            competition_code=config.spec.competition_code,
+            season_label=config.scope.season_label,
+            provider_competition_id=config.scope.provider_competition_id,
+        )
+        _validate_scoped_invariants(
+            counts,
+            expected_matches=len(canonical_batch.matches),
+            expected_teams=len(canonical_batch.teams),
+            expected_players=len(canonical_batch.players),
+            expected_player_appearances=len(canonical_batch.appearances),
+            expected_player_match_stats=len(canonical_batch.player_match_stats),
+            expected_team_match_stats=len(canonical_batch.team_match_stats),
+            expected_source_observations=len(observations),
+        )
 
         provider_repository.finish_run(
             run_id,
@@ -217,8 +269,8 @@ def main() -> None:
             metadata={
                 "historical_only": True,
                 "product_snapshots_published": False,
-                "source_probe_counts_verified": True,
-                "adapter_checks_passed": True,
+                "source_scope_counts_verified": source_validation.passed,
+                "adapter_checks_passed": adapter_report.passed,
                 "adapter_observations": len(observations),
                 "canonical_rows_written": canonical_rows_written,
                 "source_observations_written": source_rows_written,
@@ -232,21 +284,29 @@ def main() -> None:
         "status": "PASS",
         "source": SOURCE_CODE,
         "scope": {
-            "competition": COMPETITION_CODE,
-            "season": SEASON_LABEL,
+            "competition": config.spec.competition_code,
+            "season": config.scope.season_label,
             "role": "historical_deep",
         },
         "source_probe": {
-            "matches": probe_result.report.match_count,
-            "events": probe_result.report.event_count,
-            "roster_players": probe_result.report.roster_player_count,
-            "counts_verified": probe_result.report.counts_verified,
+            "matches": source_validation.match_count,
+            "events": source_validation.event_count,
+            "roster_players": source_validation.roster_player_count,
+            "teams": source_validation.team_count,
+            "provider_competition_id": source_validation.provider_competition_id,
+            "provider_season_id": source_validation.provider_season_id,
+            "counts_verified": source_validation.passed,
+            "official_archive_checksum_probe": probe_result.report.counts_verified,
         },
         "adapter": {
             "observations": adapter_report.total_observations,
             "safe_identities": adapter_report.safe_identity_count,
             "identities_with_observations": adapter_report.identities_with_observations,
-            "all_checks_passed": adapter_report.all_passed,
+            "all_checks_passed": adapter_report.passed,
+            "conflicting_duplicates": adapter_report.conflicting_duplicates,
+            "native_goal_total": adapter_report.native_goal_total,
+            "observed_team_goal_total": adapter_report.observed_team_goal_total,
+            "wrong_country_source_references": adapter_report.wrong_country_source_references,
         },
         "canonical": {
             "rows_written": canonical_rows_written,
@@ -316,7 +376,7 @@ def _apply_safe_minutes_policy(
     """Keep standardized 90-minute exposure only where the source supports it.
 
     Wyscout gives substitution minutes but not a final-whistle timestamp.
-    ``normalize_england_2017_18`` therefore derives standardized regular-90
+    the historical normalizer therefore derives standardized regular-90
     minutes. Two cases remain unsafe for per-90 exposure:
 
     - a player sent off without a substitution-out record: the exact red-card
@@ -503,7 +563,13 @@ def _canonical_team_record(external_id: str, row: tuple[Any, ...]) -> TeamRecord
     )
 
 
-def _scoped_database_counts(connection: Connection[Any]) -> ScopedDatabaseCounts:
+def _scoped_database_counts(
+    connection: Connection[Any],
+    *,
+    competition_code: str = COMPETITION_CODE,
+    season_label: str = SEASON_LABEL,
+    provider_competition_id: int = DEFAULT_SCOPE.provider_competition_id,
+) -> ScopedDatabaseCounts:
     season_row = connection.execute(
         """
         select season.id
@@ -511,10 +577,12 @@ def _scoped_database_counts(connection: Connection[Any]) -> ScopedDatabaseCounts
         join football.competitions as competition on competition.id = season.competition_id
         where competition.code = %s and season.label = %s
         """,
-        (COMPETITION_CODE, SEASON_LABEL),
+        (competition_code, season_label),
     ).fetchone()
     if season_row is None:
-        raise WyscoutHistoricalLoadError("persisted historical season could not be found")
+        raise WyscoutHistoricalLoadError(
+            f"persisted historical season could not be found: {competition_code}/{season_label}"
+        )
     season_id = int(season_row[0])
 
     matches = _scalar(
@@ -582,8 +650,9 @@ def _scoped_database_counts(connection: Connection[Any]) -> ScopedDatabaseCounts
         join ingestion.providers as provider on provider.id = observation.provider_id
         where provider.code = %s
           and observation.entity_identity_hints ->> 'season_label' = %s
+          and observation.entity_identity_hints ->> 'competition_external_id' = %s
         """,
-        (SOURCE_CODE, SEASON_LABEL),
+        (SOURCE_CODE, season_label, str(provider_competition_id)),
     )
 
     return ScopedDatabaseCounts(
@@ -604,27 +673,53 @@ def _scalar(connection: Connection[Any], query: str, params: tuple[Any, ...]) ->
     return int(row[0])
 
 
-def _validate_scoped_invariants(counts: ScopedDatabaseCounts) -> None:
-    if counts.matches != 380:
-        raise WyscoutHistoricalLoadError(
-            f"expected 380 ENG_PL 2017/18 matches after load, got {counts.matches}"
-        )
-    if counts.teams != 20:
-        raise WyscoutHistoricalLoadError(
-            f"expected 20 ENG_PL 2017/18 teams after load, got {counts.teams}"
-        )
-    if counts.player_appearances <= 0 or counts.player_match_stats <= 0:
-        raise WyscoutHistoricalLoadError("historical player rows were not persisted")
+def _validate_scoped_invariants(
+    counts: ScopedDatabaseCounts,
+    *,
+    expected_matches: int = 380,
+    expected_teams: int = 20,
+    expected_players: int | None = None,
+    expected_player_appearances: int | None = None,
+    expected_player_match_stats: int | None = None,
+    expected_team_match_stats: int = 760,
+    expected_source_observations: int | None = None,
+) -> None:
+    exact_expectations = {
+        "matches": expected_matches,
+        "teams": expected_teams,
+        "team_match_stats": expected_team_match_stats,
+    }
+    optional_exact_expectations = {
+        "players": expected_players,
+        "player_appearances": expected_player_appearances,
+        "player_match_stats": expected_player_match_stats,
+        "source_observations": expected_source_observations,
+    }
+    for field_name, expected in exact_expectations.items():
+        actual = getattr(counts, field_name)
+        if actual != expected:
+            raise WyscoutHistoricalLoadError(
+                f"expected {expected} {field_name} after load, got {actual}"
+            )
+    for field_name, optional_expected in optional_exact_expectations.items():
+        actual = getattr(counts, field_name)
+        if optional_expected is not None and actual != optional_expected:
+            raise WyscoutHistoricalLoadError(
+                f"expected {optional_expected} {field_name} after load, got {actual}"
+            )
+
+    if expected_players is None and counts.players <= 0:
+        raise WyscoutHistoricalLoadError("historical players were not persisted")
+    if expected_player_appearances is None and counts.player_appearances <= 0:
+        raise WyscoutHistoricalLoadError("historical player appearances were not persisted")
+    if expected_player_match_stats is None and counts.player_match_stats <= 0:
+        raise WyscoutHistoricalLoadError("historical player stats were not persisted")
     if counts.player_appearances != counts.player_match_stats:
         raise WyscoutHistoricalLoadError(
             "every persisted participating appearance must have one player_match_stats row: "
             f"appearances={counts.player_appearances}, stats={counts.player_match_stats}"
         )
-    if counts.team_match_stats != 760:
-        raise WyscoutHistoricalLoadError(
-            f"expected 760 team-match stat rows after load, got {counts.team_match_stats}"
-        )
-    if counts.source_observations <= 0:
+    if expected_source_observations is None and counts.source_observations <= 0:
         raise WyscoutHistoricalLoadError(
             "certified Wyscout Data Mesh observations were not persisted"
         )
