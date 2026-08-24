@@ -41,6 +41,8 @@ football-intelligence-audit-statsbomb-mapping = "football_intelligence.jobs.audi
 football-intelligence-audit-statsbomb-adapter = "football_intelligence.jobs.audit_statsbomb_adapter:main"
 football-intelligence-audit-wyscout-statsbomb-overlap = "football_intelligence.jobs.audit_wyscout_statsbomb_overlap:main"
 football-intelligence-validate-static-snapshot = "football_intelligence.jobs.validate_static_snapshot:main"
+football-intelligence-collect-wikidata-profiles = "football_intelligence.jobs.collect_wikidata_profiles:main"
+football-intelligence-audit-wikidata-profiles = "football_intelligence.jobs.audit_wikidata_profiles:main"
 
 [dependency-groups]
 dev = [
@@ -58,7 +60,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.format]
 quote-style = "double"
-indent-style = "space"
+indent-style = "    "
 
 [tool.pytest.ini_options]
 addopts = "-ra -q"
