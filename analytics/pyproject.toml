@@ -35,6 +35,7 @@ football-intelligence-probe-wyscout-open = "football_intelligence.jobs.probe_wys
 football-intelligence-load-wyscout-historical = "football_intelligence.jobs.load_wyscout_historical:main"
 football-intelligence-audit-wyscout-mapping = "football_intelligence.jobs.audit_wyscout_metric_mapping:main"
 football-intelligence-audit-wyscout-adapter = "football_intelligence.jobs.audit_wyscout_adapter:main"
+football-intelligence-audit-wyscout-core-leagues = "football_intelligence.jobs.audit_wyscout_core_leagues:main"
 football-intelligence-fetch-statsbomb-open = "football_intelligence.jobs.fetch_statsbomb_open:main"
 football-intelligence-audit-statsbomb-mapping = "football_intelligence.jobs.audit_statsbomb_mapping:main"
 football-intelligence-audit-statsbomb-adapter = "football_intelligence.jobs.audit_statsbomb_adapter:main"
