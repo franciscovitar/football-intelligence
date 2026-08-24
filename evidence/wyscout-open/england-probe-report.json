@@ -1,0 +1,210 @@
+{
+  "assets": {
+    "events": {
+      "article_id": 7770599,
+      "article_title": "Events",
+      "checksum_verified": true,
+      "file_id": 14464685,
+      "file_name": "events.zip",
+      "from_cache": false
+    },
+    "matches": {
+      "article_id": 7770422,
+      "article_title": "Matches",
+      "checksum_verified": true,
+      "file_id": 14464622,
+      "file_name": "matches.zip",
+      "from_cache": false
+    }
+  },
+  "counts": {
+    "distinct_team_count": 20,
+    "event_actor_count": 514,
+    "event_count": 643150,
+    "match_count": 380,
+    "players_json_total_informational": 3603,
+    "roster_player_count": 603,
+    "tag_mapping_size_informational": 59,
+    "teams_json_total_informational": 142
+  },
+  "counts_verified": true,
+  "event_schema_audit": {
+    "event_name_distribution": {
+      "Duel": 176688,
+      "Foul": 8138,
+      "Free Kick": 36423,
+      "Goalkeeper leaving line": 1266,
+      "Interruption": 27535,
+      "Offside": 1558,
+      "Others on the ball": 51085,
+      "Pass": 328657,
+      "Save attempt": 3349,
+      "Shot": 8451
+    },
+    "player_id_coverage": {
+      "percentage": 100.0,
+      "present": 643150,
+      "total": 643150
+    },
+    "positions_coverage": {
+      "percentage": 100.0,
+      "present": 643150,
+      "total": 643150
+    },
+    "sub_event_name_distribution": {
+      "Acceleration": 4892,
+      "Air duel": 37760,
+      "Ball out of the field": 27331,
+      "Clearance": 11784,
+      "Corner": 3910,
+      "Cross": 12251,
+      "Foul": 7522,
+      "Free Kick": 7279,
+      "Free kick cross": 1693,
+      "Free kick shot": 350,
+      "Goal kick": 6061,
+      "Goalkeeper leaving line": 1266,
+      "Ground attacking duel": 53859,
+      "Ground defending duel": 53737,
+      "Ground loose ball duel": 31332,
+      "Hand foul": 275,
+      "Hand pass": 2474,
+      "Head pass": 21332,
+      "High pass": 25067,
+      "Late card foul": 70,
+      "Launch": 10247,
+      "Out of game foul": 97,
+      "Penalty": 80,
+      "Protest": 84,
+      "Reflexes": 2124,
+      "Save attempt": 1225,
+      "Shot": 8451,
+      "Simple pass": 251405,
+      "Simulation": 28,
+      "Smart pass": 5881,
+      "Throw in": 17050,
+      "Time lost foul": 48,
+      "Touch": 34409,
+      "Violent Foul": 14,
+      "Whistle": 204
+    },
+    "tag_ids_observed": [
+      101,
+      102,
+      201,
+      301,
+      302,
+      401,
+      402,
+      403,
+      501,
+      502,
+      503,
+      504,
+      601,
+      602,
+      701,
+      702,
+      703,
+      801,
+      901,
+      1001,
+      1101,
+      1102,
+      1201,
+      1202,
+      1203,
+      1204,
+      1205,
+      1206,
+      1207,
+      1208,
+      1209,
+      1210,
+      1211,
+      1212,
+      1213,
+      1214,
+      1215,
+      1216,
+      1217,
+      1218,
+      1219,
+      1220,
+      1221,
+      1222,
+      1223,
+      1301,
+      1302,
+      1401,
+      1601,
+      1701,
+      1702,
+      1703,
+      1801,
+      1802,
+      1901,
+      2001,
+      2101
+    ],
+    "tags_coverage": {
+      "percentage": 90.44,
+      "present": 581669,
+      "total": 643150
+    },
+    "team_id_coverage": {
+      "percentage": 100.0,
+      "present": 643150,
+      "total": 643150
+    }
+  },
+  "match_structure_audit": {
+    "matches_missing_team_structure": 0,
+    "matches_with_bench": 380,
+    "matches_with_lineup": 380,
+    "matches_with_substitutions": 380
+  },
+  "published_count_verification": [
+    {
+      "actual": 380,
+      "expected": 380,
+      "metric": "matches",
+      "status": "PASS"
+    },
+    {
+      "actual": 643150,
+      "expected": 643150,
+      "metric": "events",
+      "status": "PASS"
+    },
+    {
+      "actual": 603,
+      "expected": 603,
+      "metric": "players",
+      "status": "PASS"
+    }
+  ],
+  "scope": {
+    "competition": "ENG_PL",
+    "competitions_json_england_entry": "English first division",
+    "current_season_evidence": false,
+    "role": "HISTORICAL_DEEP",
+    "season": "2017/18"
+  },
+  "source": {
+    "collection_doi": "10.6084/m9.figshare.c.4415000.v5",
+    "figshare_collection_id": 4415000,
+    "licence": "CC BY 4.0",
+    "name": "Wyscout Open Data",
+    "paper_doi": "10.1038/s41597-019-0247-7"
+  },
+  "source_quality": {
+    "event_actors_absent_from_roster": [],
+    "roster_players_missing_from_players_json": [
+      379199,
+      447214,
+      470819,
+      532900
+    ]
+  }
+}
