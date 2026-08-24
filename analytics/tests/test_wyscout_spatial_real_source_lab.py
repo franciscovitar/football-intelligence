@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 
 from football_intelligence.jobs.audit_wyscout_spatial_metrics import (
     audit_real_wyscout_spatial_metrics,
@@ -36,5 +37,8 @@ def test_real_wyscout_spatial_metric_lab(tmp_path) -> None:
             for league in report["leagues"]
         ],
     }
-    print("WYSCOUT_SPATIAL_REAL_SOURCE_REPORT=" + json.dumps(compact, sort_keys=True))
+    warnings.warn(
+        "WYSCOUT_SPATIAL_REAL_SOURCE_REPORT=" + json.dumps(compact, sort_keys=True),
+        stacklevel=1,
+    )
     assert report["status"] == "PASS"
