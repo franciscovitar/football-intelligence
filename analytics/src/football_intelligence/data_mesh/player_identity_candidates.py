@@ -89,7 +89,9 @@ class PlayerIdentityRecord:
         if not self.normalized_name:
             raise PlayerIdentityRecordError("raw_name does not produce a usable normalized name")
         _validate_sorted_unique(self.team_context_keys, "team_context_keys")
-        evidence_team_keys = tuple(evidence.team_context_key for evidence in self.team_match_evidence)
+        evidence_team_keys = tuple(
+            evidence.team_context_key for evidence in self.team_match_evidence
+        )
         _validate_sorted_unique(evidence_team_keys, "team_match_evidence team_context_keys")
         unknown_evidence_teams = set(evidence_team_keys) - set(self.team_context_keys)
         if unknown_evidence_teams:
@@ -290,10 +292,12 @@ def _shared_team_match_evidence(
     right: PlayerIdentityRecord,
 ) -> tuple[PlayerTeamMatchEvidence, ...]:
     left_by_team = {
-        evidence.team_context_key: set(evidence.match_keys) for evidence in left.team_match_evidence
+        evidence.team_context_key: set(evidence.match_keys)
+        for evidence in left.team_match_evidence
     }
     right_by_team = {
-        evidence.team_context_key: set(evidence.match_keys) for evidence in right.team_match_evidence
+        evidence.team_context_key: set(evidence.match_keys)
+        for evidence in right.team_match_evidence
     }
     result: list[PlayerTeamMatchEvidence] = []
     for team_key in sorted(set(left_by_team) & set(right_by_team)):
@@ -312,8 +316,9 @@ def _validate_single_source_batch(
         return
     source_codes = {record.source_code for record in records}
     if len(source_codes) != 1:
+        sources = sorted(source_codes)
         raise PlayerIdentityRecordError(
-            f"{field_name} must contain records from exactly one source, got {sorted(source_codes)!r}"
+            f"{field_name} must contain records from exactly one source, got {sources!r}"
         )
     seen: dict[str, PlayerIdentityRecord] = {}
     for record in records:
