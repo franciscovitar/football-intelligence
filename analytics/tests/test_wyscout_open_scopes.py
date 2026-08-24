@@ -115,11 +115,14 @@ def test_verify_published_scope_counts_reports_each_dimension_without_inventing_
     matches = [_match(1), _match(2)]
     events = [{"matchId": 1}, {"matchId": 2}]
 
-    assert verify_published_scope_counts(
-        matches_payload=matches,
-        events_payload=events,
-        spec=spec,
-    ) == ()
+    assert (
+        verify_published_scope_counts(
+            matches_payload=matches,
+            events_payload=events,
+            spec=spec,
+        )
+        == ()
+    )
 
     failures = verify_published_scope_counts(
         matches_payload=matches[:1],
