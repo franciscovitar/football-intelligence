@@ -13,7 +13,13 @@ from football_intelligence.providers.wyscout_open_scopes import (
 )
 
 
-def _spec(*, matches: int = 2, events: int = 2, players: int = 4, teams: int = 2) -> WyscoutCoreLeagueSpec:
+def _spec(
+    *,
+    matches: int = 2,
+    events: int = 2,
+    players: int = 4,
+    teams: int = 2,
+) -> WyscoutCoreLeagueSpec:
     return WyscoutCoreLeagueSpec(
         competition_code="TEST_LEAGUE",
         source_file_label="Test",
