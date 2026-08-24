@@ -1,0 +1,85 @@
+name: Apply Wyscout Generic Loader PR
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/_apply-wyscout-generic-loader.yml
+      - .github/workflows/_apply-wyscout-generic-loader-pr.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Reuse guarded edit script
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/_apply-wyscout-generic-loader.yml').read_text(
+              encoding='utf-8'
+          )
+          start_marker = "          python - <<'PY'\n"
+          end_marker = "          PY\n      - name: Remove temporary edit workflow\n"
+          if workflow.count(start_marker) != 1 or workflow.count(end_marker) != 1:
+              raise RuntimeError('could not extract guarded loader edit script uniquely')
+          script = workflow.split(start_marker, 1)[1].split(end_marker, 1)[0]
+          lines = script.splitlines()
+          dedented = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines)
+          exec(compile(dedented, '<guarded-loader-edit>', 'exec'), {'__name__': '__main__'})
+          PY
+      - name: Remove temporary workflows
+        run: >-
+          rm .github/workflows/_apply-wyscout-generic-loader.yml
+          .github/workflows/_apply-wyscout-generic-loader-pr.yml
+      - name: Install analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+      - name: Format touched Python
+        working-directory: analytics
+        run: >-
+          uv run ruff format
+          src/football_intelligence/jobs/load_wyscout_historical.py
+          src/football_intelligence/jobs/wyscout_historical_scope.py
+      - name: Lint touched Python
+        working-directory: analytics
+        run: >-
+          uv run ruff check
+          src/football_intelligence/jobs/load_wyscout_historical.py
+          src/football_intelligence/jobs/wyscout_historical_scope.py
+      - name: Typecheck analytics source
+        working-directory: analytics
+        run: uv run mypy src
+      - name: Run focused Wyscout tests
+        working-directory: analytics
+        run: >-
+          uv run pytest
+          tests/test_wyscout_historical_normalization.py
+          tests/test_wyscout_historical_generic_scope.py
+          tests/test_wyscout_open_scopes.py
+      - name: Commit verified loader changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add analytics/src/football_intelligence/jobs/load_wyscout_historical.py \
+                  analytics/src/football_intelligence/jobs/wyscout_historical_scope.py \
+                  .github/workflows/_apply-wyscout-generic-loader.yml \
+                  .github/workflows/_apply-wyscout-generic-loader-pr.yml
+          git commit -m "feat: generalize Wyscout historical local loader"
+          git push origin HEAD:${{ github.head_ref }}
