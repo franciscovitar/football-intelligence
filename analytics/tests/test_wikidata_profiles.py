@@ -197,11 +197,14 @@ def test_unbounded_team_membership_is_not_used_as_season_identity_evidence() -> 
         expected_qid="Q104",
     )
 
-    assert profile.canonical_team_context_keys(
-        season_start=date(2017, 8, 1),
-        season_end=date(2018, 5, 31),
-        team_qid_to_context={"Q200": "team:ENG_PL:liverpool"},
-    ) == ()
+    assert (
+        profile.canonical_team_context_keys(
+            season_start=date(2017, 8, 1),
+            season_end=date(2018, 5, 31),
+            team_qid_to_context={"Q200": "team:ENG_PL:liverpool"},
+        )
+        == ()
+    )
 
 
 def test_imprecise_membership_must_guarantee_overlap() -> None:
