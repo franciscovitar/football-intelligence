@@ -22,6 +22,8 @@ def _record(
     matches_by_team: tuple[tuple[str, tuple[str, ...]], ...] = (),
     dob: date | None = None,
     nationality: str | None = None,
+    position: str | None = None,
+    height_cm: int | None = None,
 ) -> PlayerIdentityRecord:
     return PlayerIdentityRecord(
         source_code=source,
@@ -36,8 +38,8 @@ def _record(
         ),
         date_of_birth=dob,
         nationality=nationality,
-        position="forward",
-        height_cm=170,
+        position=position,
+        height_cm=height_cm,
     )
 
 
@@ -131,6 +133,31 @@ def test_profile_and_team_evidence_without_shared_match_requires_review() -> Non
     assert candidate.state == "review_required"
     assert "shared_team_context" in candidate.reasons
     assert "date_of_birth_match" in candidate.reasons
+
+
+def test_profile_evidence_without_team_requires_review() -> None:
+    candidate = compare_player_identity_records(
+        _record(
+            source="source-a",
+            player_id="1",
+            dob=date(2000, 1, 31),
+            position="forward",
+            height_cm=170,
+        ),
+        _record(
+            source="source-b",
+            player_id="9",
+            name="Julian Alvarez",
+            dob=date(2000, 1, 31),
+            position="forward",
+            height_cm=170,
+        ),
+    )
+
+    assert candidate.state == "review_required"
+    assert "date_of_birth_match" in candidate.reasons
+    assert "position_match" in candidate.reasons
+    assert "height_match" in candidate.reasons
 
 
 def test_multiple_transfer_team_contexts_with_attributed_matches_are_crosswalk_ready() -> None:
