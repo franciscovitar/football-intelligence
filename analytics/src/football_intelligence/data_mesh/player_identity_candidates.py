@@ -11,9 +11,8 @@ The comparison rules are conservative and provider-independent:
 - fuzzy/edit-distance/LLM matching is never used;
 - contradictory dates of birth are a hard conflict;
 - exact name alone is always insufficient;
-- a candidate is ``crosswalk_ready`` only when exact normalized name, at least
-  one shared canonical team context, and at least one shared canonical match
-  are all present, with no hard contradiction;
+- a candidate is ``crosswalk_ready`` only when exact normalized name and
+  team-specific shared canonical matches exist, with no hard contradiction;
 - richer profile evidence without shared-match evidence is review material,
   never an automatic crosswalk.
 """
@@ -41,12 +40,25 @@ class PlayerIdentityRecordError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class PlayerTeamMatchEvidence:
+    """Canonical match evidence for one provider-local player/team context."""
+
+    team_context_key: str
+    match_keys: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.team_context_key, str) or not self.team_context_key.strip():
+            raise PlayerIdentityRecordError("team_context_key must be a non-blank string")
+        _validate_sorted_unique(self.match_keys, "match_keys", require_non_empty=True)
+
+
+@dataclass(frozen=True, slots=True)
 class PlayerIdentityRecord:
     """Provider-local identity evidence used to compare the same real player.
 
-    ``team_context_keys`` and ``shared_match_keys`` must already use canonical
+    ``team_context_keys`` and ``team_match_evidence`` must already use canonical
     Football Intelligence logical keys when present. Static season-level sources
-    that do not expose match identity may leave ``shared_match_keys`` empty; such
+    that do not expose match identity may leave ``team_match_evidence`` empty; such
     records can produce review candidates but can never become crosswalk-ready by
     themselves.
     """
@@ -57,7 +69,7 @@ class PlayerIdentityRecord:
     competition_code: str
     season_label: str
     team_context_keys: tuple[str, ...] = ()
-    shared_match_keys: tuple[str, ...] = ()
+    team_match_evidence: tuple[PlayerTeamMatchEvidence, ...] = ()
     date_of_birth: date | None = None
     nationality: str | None = None
     position: str | None = None
@@ -77,7 +89,14 @@ class PlayerIdentityRecord:
         if not self.normalized_name:
             raise PlayerIdentityRecordError("raw_name does not produce a usable normalized name")
         _validate_sorted_unique(self.team_context_keys, "team_context_keys")
-        _validate_sorted_unique(self.shared_match_keys, "shared_match_keys")
+        evidence_team_keys = tuple(evidence.team_context_key for evidence in self.team_match_evidence)
+        _validate_sorted_unique(evidence_team_keys, "team_match_evidence team_context_keys")
+        unknown_evidence_teams = set(evidence_team_keys) - set(self.team_context_keys)
+        if unknown_evidence_teams:
+            raise PlayerIdentityRecordError(
+                "team_match_evidence references teams absent from team_context_keys: "
+                f"{sorted(unknown_evidence_teams)!r}"
+            )
         if self.height_cm is not None and not 100 <= self.height_cm <= 230:
             raise PlayerIdentityRecordError(
                 f"height_cm must be between 100 and 230 when present, got {self.height_cm}"
@@ -99,11 +118,18 @@ class PlayerIdentityCandidate:
     state: PlayerIdentityCandidateState
     reasons: tuple[str, ...]
     shared_team_context_keys: tuple[str, ...]
-    shared_match_keys: tuple[str, ...]
+    shared_team_match_evidence: tuple[PlayerTeamMatchEvidence, ...]
 
     @property
     def exact_name_match(self) -> bool:
         return self.left.normalized_name == self.right.normalized_name
+
+    @property
+    def shared_match_keys(self) -> tuple[str, ...]:
+        matches: set[str] = set()
+        for evidence in self.shared_team_match_evidence:
+            matches.update(evidence.match_keys)
+        return tuple(sorted(matches))
 
 
 def compare_player_identity_records(
@@ -118,7 +144,7 @@ def compare_player_identity_records(
         )
 
     shared_teams = tuple(sorted(set(left.team_context_keys) & set(right.team_context_keys)))
-    shared_matches = tuple(sorted(set(left.shared_match_keys) & set(right.shared_match_keys)))
+    shared_team_match_evidence = _shared_team_match_evidence(left, right)
     reasons: list[str] = []
 
     if left.normalized_name != right.normalized_name:
@@ -128,7 +154,7 @@ def compare_player_identity_records(
             state="insufficient_evidence",
             reasons=("normalized_name_mismatch",),
             shared_team_context_keys=shared_teams,
-            shared_match_keys=shared_matches,
+            shared_team_match_evidence=shared_team_match_evidence,
         )
 
     reasons.append("exact_normalized_name")
@@ -144,7 +170,7 @@ def compare_player_identity_records(
             state="conflict",
             reasons=tuple(reasons + ["date_of_birth_conflict"]),
             shared_team_context_keys=shared_teams,
-            shared_match_keys=shared_matches,
+            shared_team_match_evidence=shared_team_match_evidence,
         )
 
     if left.date_of_birth is not None and left.date_of_birth == right.date_of_birth:
@@ -174,23 +200,20 @@ def compare_player_identity_records(
         reasons.append("same_competition_season")
     if shared_teams:
         reasons.append("shared_team_context")
-    if shared_matches:
-        reasons.append("shared_canonical_match")
+    if shared_team_match_evidence:
+        reasons.append("shared_team_specific_canonical_match")
 
-    # The existing PlayerCrosswalk contract needs team-context-specific shared
-    # match evidence. With exactly one shared team context, the global shared
-    # match intersection is unambiguous enough to mark the pair ready for a
-    # caller to build that explicit evidence object. Multiple shared teams (a
-    # real transfer scenario) stay review-required until the caller attributes
-    # each shared match to its team context explicitly.
-    if len(shared_teams) == 1 and shared_matches:
+    # Team->match attribution is explicit here, matching the existing
+    # PlayerCrosswalkEntry contract and covering real transfer cases without
+    # forcing one team per player.
+    if shared_team_match_evidence:
         return PlayerIdentityCandidate(
             left=left,
             right=right,
             state="crosswalk_ready",
             reasons=tuple(reasons),
             shared_team_context_keys=shared_teams,
-            shared_match_keys=shared_matches,
+            shared_team_match_evidence=shared_team_match_evidence,
         )
 
     corroborating_profile = any(
@@ -210,7 +233,7 @@ def compare_player_identity_records(
             state="review_required",
             reasons=tuple(reasons),
             shared_team_context_keys=shared_teams,
-            shared_match_keys=shared_matches,
+            shared_team_match_evidence=shared_team_match_evidence,
         )
 
     return PlayerIdentityCandidate(
@@ -219,7 +242,7 @@ def compare_player_identity_records(
         state="insufficient_evidence",
         reasons=tuple(reasons + ["name_only_or_weak_profile_evidence"]),
         shared_team_context_keys=shared_teams,
-        shared_match_keys=shared_matches,
+        shared_team_match_evidence=shared_team_match_evidence,
     )
 
 
@@ -262,6 +285,26 @@ def generate_exact_name_candidates(
     )
 
 
+def _shared_team_match_evidence(
+    left: PlayerIdentityRecord,
+    right: PlayerIdentityRecord,
+) -> tuple[PlayerTeamMatchEvidence, ...]:
+    left_by_team = {
+        evidence.team_context_key: set(evidence.match_keys) for evidence in left.team_match_evidence
+    }
+    right_by_team = {
+        evidence.team_context_key: set(evidence.match_keys) for evidence in right.team_match_evidence
+    }
+    result: list[PlayerTeamMatchEvidence] = []
+    for team_key in sorted(set(left_by_team) & set(right_by_team)):
+        shared_matches = tuple(sorted(left_by_team[team_key] & right_by_team[team_key]))
+        if shared_matches:
+            result.append(
+                PlayerTeamMatchEvidence(team_context_key=team_key, match_keys=shared_matches)
+            )
+    return tuple(result)
+
+
 def _validate_single_source_batch(
     records: tuple[PlayerIdentityRecord, ...], field_name: str
 ) -> None:
@@ -283,7 +326,11 @@ def _validate_single_source_batch(
         seen[record.provider_player_id] = record
 
 
-def _validate_sorted_unique(values: tuple[str, ...], field_name: str) -> None:
+def _validate_sorted_unique(
+    values: tuple[str, ...], field_name: str, *, require_non_empty: bool = False
+) -> None:
+    if require_non_empty and not values:
+        raise PlayerIdentityRecordError(f"{field_name} must contain at least one value")
     if tuple(sorted(values)) != values:
         raise PlayerIdentityRecordError(f"{field_name} must be in canonical ascending order")
     if len(set(values)) != len(values):
