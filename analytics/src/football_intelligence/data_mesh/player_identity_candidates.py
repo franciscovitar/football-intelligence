@@ -195,8 +195,7 @@ def compare_player_identity_records(
             reasons.append("height_differs_non_blocking")
 
     same_scope = (
-        left.competition_code == right.competition_code
-        and left.season_label == right.season_label
+        left.competition_code == right.competition_code and left.season_label == right.season_label
     )
     if same_scope:
         reasons.append("same_competition_season")
@@ -292,8 +291,7 @@ def _shared_team_match_evidence(
     right: PlayerIdentityRecord,
 ) -> tuple[PlayerTeamMatchEvidence, ...]:
     left_by_team = {
-        evidence.team_context_key: set(evidence.match_keys)
-        for evidence in left.team_match_evidence
+        evidence.team_context_key: set(evidence.match_keys) for evidence in left.team_match_evidence
     }
     right_by_team = {
         evidence.team_context_key: set(evidence.match_keys)
