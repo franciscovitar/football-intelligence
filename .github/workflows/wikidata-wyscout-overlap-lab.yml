@@ -40,14 +40,38 @@ jobs:
           path = Path("analytics/src/football_intelligence/jobs/audit_wyscout_wikidata_overlap.py")
           text = path.read_text(encoding="utf-8")
           text = text.replace(
-              "target = normalize_team_name(wyscout_name)",
-              'target = normalize_team_name(wyscout_name.replace(".", ""))',
-          )
-          text = text.replace(
-              "if normalize_team_name(label) != target:",
-              'if normalize_team_name(label.replace(".", "")) != target:',
+              'if "football" not in description_text:\n            continue',
+              'if "football" not in description_text or "club" not in description_text:\n            continue',
           )
           path.write_text(text, encoding="utf-8")
+
+          test_path = Path("analytics/tests/test_wyscout_wikidata_overlap.py")
+          tests = test_path.read_text(encoding="utf-8")
+          marker = "def test_team_mapping_rejects_same_name_footballer_homonym() -> None:"
+          if marker not in tests:
+              tests += '''\n\n
+def test_team_mapping_rejects_same_name_footballer_homonym() -> None:
+    mapping = resolve_wikidata_team_candidate(
+        wyscout_team_id=1623,
+        wyscout_name="Everton",
+        search_results=[
+            {
+                "id": "Q140596527",
+                "label": "Everton",
+                "description": "French footballer",
+            },
+            {
+                "id": "Q5794",
+                "label": "Everton F.C.",
+                "description": "association football club in Liverpool, England",
+            },
+        ],
+    )
+
+    assert mapping.status == "resolved"
+    assert mapping.wikidata_qid == "Q5794"
+'''
+          test_path.write_text(tests, encoding="utf-8")
           PY
           cd analytics
           uv run ruff check --fix \
@@ -63,7 +87,7 @@ jobs:
           if ! git diff --cached --quiet; then
             git config user.name "football-intelligence-lab"
             git config user.email "actions@users.noreply.github.com"
-            git commit -m "fix: harden Wikidata team label matching"
+            git commit -m "fix: require club semantics for Wikidata team matching"
             git push origin "HEAD:feat/wikidata-wyscout-england-overlap-lab"
           fi
       - name: Run real Wyscout x Wikidata overlap audit
