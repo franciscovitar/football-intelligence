@@ -1,0 +1,457 @@
+{
+  "database_target": "four-isolated-ephemeral-postgresql-17-jobs",
+  "fresh_and_certified_complete_paths_verified": true,
+  "production_written": false,
+  "promotion_head_under_test": "8a35a58d0e79230278e9adc05cc219b2fb7c0731",
+  "scopes": {
+    "ESP_LL": {
+      "certified_complete_rerun": {
+        "canonical": {
+          "matches": 380,
+          "player_appearances": 10555,
+          "player_match_stats": 10555,
+          "players": 557,
+          "source_observations": 416407,
+          "team_match_stats": 760,
+          "teams": 20
+        },
+        "competition": "ESP_LL",
+        "player_v2": {
+          "evidence_states": {
+            "insufficient_data": 1880,
+            "partial": 344
+          },
+          "feature_snapshots": 29008,
+          "overall_scores": 0,
+          "performance_ready": 415,
+          "ranking_candidates": 0,
+          "score_snapshots": 2224,
+          "season_players": 556,
+          "season_players_450_min": 415
+        },
+        "prewrite_state": {
+          "matches": 380,
+          "player_appearances": 10555,
+          "player_match_stats": 10555,
+          "player_v2_feature_rows": 29008,
+          "player_v2_rows": 2224,
+          "players": 557,
+          "season_exists": true,
+          "source_observations": 416407,
+          "team_match_stats": 760,
+          "teams": 20
+        },
+        "production_written": false,
+        "scope_key": "competition:ESP_LL:2017/18",
+        "season": "2017/18",
+        "source": {
+          "adapter_observations": 416407,
+          "events": 628659,
+          "matches": 380,
+          "official_archive_checksum_probe": true,
+          "provider": "wyscout-open",
+          "provider_competition_id": 795,
+          "provider_season_id": 181144,
+          "roster_players": 619,
+          "teams": 20
+        },
+        "status": "PASS",
+        "target": "postgresql://localhost:5432/football_intelligence_promotion"
+      },
+      "competition": "ESP_LL",
+      "fresh_promotion": {
+        "canonical": {
+          "matches": 380,
+          "player_appearances": 10555,
+          "player_match_stats": 10555,
+          "players": 557,
+          "source_observations": 416407,
+          "team_match_stats": 760,
+          "teams": 20
+        },
+        "competition": "ESP_LL",
+        "player_v2": {
+          "evidence_states": {
+            "insufficient_data": 1880,
+            "partial": 344
+          },
+          "feature_snapshots": 29008,
+          "overall_scores": 0,
+          "performance_ready": 415,
+          "ranking_candidates": 0,
+          "score_snapshots": 2224,
+          "season_players": 556,
+          "season_players_450_min": 415
+        },
+        "prewrite_state": {
+          "matches": 0,
+          "player_appearances": 0,
+          "player_match_stats": 0,
+          "player_v2_feature_rows": 0,
+          "player_v2_rows": 0,
+          "players": 0,
+          "season_exists": false,
+          "source_observations": 0,
+          "team_match_stats": 0,
+          "teams": 0
+        },
+        "production_written": false,
+        "scope_key": "competition:ESP_LL:2017/18",
+        "season": "2017/18",
+        "source": {
+          "adapter_observations": 416407,
+          "events": 628659,
+          "matches": 380,
+          "official_archive_checksum_probe": true,
+          "provider": "wyscout-open",
+          "provider_competition_id": 795,
+          "provider_season_id": 181144,
+          "roster_players": 619,
+          "teams": 20
+        },
+        "status": "PASS",
+        "target": "postgresql://localhost:5432/football_intelligence_promotion"
+      },
+      "idempotent": true,
+      "production_written": false,
+      "status": "PASS"
+    },
+    "FRA_L1": {
+      "certified_complete_rerun": {
+        "canonical": {
+          "matches": 380,
+          "player_appearances": 10515,
+          "player_match_stats": 10515,
+          "players": 542,
+          "source_observations": 415230,
+          "team_match_stats": 760,
+          "teams": 20
+        },
+        "competition": "FRA_L1",
+        "player_v2": {
+          "evidence_states": {
+            "insufficient_data": 1822,
+            "partial": 326
+          },
+          "feature_snapshots": 28007,
+          "overall_scores": 0,
+          "performance_ready": 395,
+          "ranking_candidates": 0,
+          "score_snapshots": 2148,
+          "season_players": 537,
+          "season_players_450_min": 395
+        },
+        "prewrite_state": {
+          "matches": 380,
+          "player_appearances": 10515,
+          "player_match_stats": 10515,
+          "player_v2_feature_rows": 28007,
+          "player_v2_rows": 2148,
+          "players": 542,
+          "season_exists": true,
+          "source_observations": 415230,
+          "team_match_stats": 760,
+          "teams": 20
+        },
+        "production_written": false,
+        "scope_key": "competition:FRA_L1:2017/18",
+        "season": "2017/18",
+        "source": {
+          "adapter_observations": 415230,
+          "events": 632807,
+          "matches": 380,
+          "official_archive_checksum_probe": true,
+          "provider": "wyscout-open",
+          "provider_competition_id": 412,
+          "provider_season_id": 181189,
+          "roster_players": 629,
+          "teams": 20
+        },
+        "status": "PASS",
+        "target": "postgresql://localhost:5432/football_intelligence_promotion"
+      },
+      "competition": "FRA_L1",
+      "fresh_promotion": {
+        "canonical": {
+          "matches": 380,
+          "player_appearances": 10515,
+          "player_match_stats": 10515,
+          "players": 542,
+          "source_observations": 415230,
+          "team_match_stats": 760,
+          "teams": 20
+        },
+        "competition": "FRA_L1",
+        "player_v2": {
+          "evidence_states": {
+            "insufficient_data": 1822,
+            "partial": 326
+          },
+          "feature_snapshots": 28007,
+          "overall_scores": 0,
+          "performance_ready": 395,
+          "ranking_candidates": 0,
+          "score_snapshots": 2148,
+          "season_players": 537,
+          "season_players_450_min": 395
+        },
+        "prewrite_state": {
+          "matches": 0,
+          "player_appearances": 0,
+          "player_match_stats": 0,
+          "player_v2_feature_rows": 0,
+          "player_v2_rows": 0,
+          "players": 0,
+          "season_exists": false,
+          "source_observations": 0,
+          "team_match_stats": 0,
+          "teams": 0
+        },
+        "production_written": false,
+        "scope_key": "competition:FRA_L1:2017/18",
+        "season": "2017/18",
+        "source": {
+          "adapter_observations": 415230,
+          "events": 632807,
+          "matches": 380,
+          "official_archive_checksum_probe": true,
+          "provider": "wyscout-open",
+          "provider_competition_id": 412,
+          "provider_season_id": 181189,
+          "roster_players": 629,
+          "teams": 20
+        },
+        "status": "PASS",
+        "target": "postgresql://localhost:5432/football_intelligence_promotion"
+      },
+      "idempotent": true,
+      "production_written": false,
+      "status": "PASS"
+    },
+    "GER_BL1": {
+      "certified_complete_rerun": {
+        "canonical": {
+          "matches": 306,
+          "player_appearances": 8501,
+          "player_match_stats": 8501,
+          "players": 472,
+          "source_observations": 336265,
+          "team_match_stats": 612,
+          "teams": 18
+        },
+        "competition": "GER_BL1",
+        "player_v2": {
+          "evidence_states": {
+            "insufficient_data": 1596,
+            "partial": 292
+          },
+          "feature_snapshots": 24786,
+          "overall_scores": 0,
+          "performance_ready": 349,
+          "ranking_candidates": 0,
+          "score_snapshots": 1888,
+          "season_players": 472,
+          "season_players_450_min": 349
+        },
+        "prewrite_state": {
+          "matches": 306,
+          "player_appearances": 8501,
+          "player_match_stats": 8501,
+          "player_v2_feature_rows": 24786,
+          "player_v2_rows": 1888,
+          "players": 472,
+          "season_exists": true,
+          "source_observations": 336265,
+          "team_match_stats": 612,
+          "teams": 18
+        },
+        "production_written": false,
+        "scope_key": "competition:GER_BL1:2017/18",
+        "season": "2017/18",
+        "source": {
+          "adapter_observations": 336265,
+          "events": 519407,
+          "matches": 306,
+          "official_archive_checksum_probe": true,
+          "provider": "wyscout-open",
+          "provider_competition_id": 426,
+          "provider_season_id": 181137,
+          "roster_players": 537,
+          "teams": 18
+        },
+        "status": "PASS",
+        "target": "postgresql://localhost:5432/football_intelligence_promotion"
+      },
+      "competition": "GER_BL1",
+      "fresh_promotion": {
+        "canonical": {
+          "matches": 306,
+          "player_appearances": 8501,
+          "player_match_stats": 8501,
+          "players": 472,
+          "source_observations": 336265,
+          "team_match_stats": 612,
+          "teams": 18
+        },
+        "competition": "GER_BL1",
+        "player_v2": {
+          "evidence_states": {
+            "insufficient_data": 1596,
+            "partial": 292
+          },
+          "feature_snapshots": 24786,
+          "overall_scores": 0,
+          "performance_ready": 349,
+          "ranking_candidates": 0,
+          "score_snapshots": 1888,
+          "season_players": 472,
+          "season_players_450_min": 349
+        },
+        "prewrite_state": {
+          "matches": 0,
+          "player_appearances": 0,
+          "player_match_stats": 0,
+          "player_v2_feature_rows": 0,
+          "player_v2_rows": 0,
+          "players": 0,
+          "season_exists": false,
+          "source_observations": 0,
+          "team_match_stats": 0,
+          "teams": 0
+        },
+        "production_written": false,
+        "scope_key": "competition:GER_BL1:2017/18",
+        "season": "2017/18",
+        "source": {
+          "adapter_observations": 336265,
+          "events": 519407,
+          "matches": 306,
+          "official_archive_checksum_probe": true,
+          "provider": "wyscout-open",
+          "provider_competition_id": 426,
+          "provider_season_id": 181137,
+          "roster_players": 537,
+          "teams": 18
+        },
+        "status": "PASS",
+        "target": "postgresql://localhost:5432/football_intelligence_promotion"
+      },
+      "idempotent": true,
+      "production_written": false,
+      "status": "PASS"
+    },
+    "ITA_SA": {
+      "certified_complete_rerun": {
+        "canonical": {
+          "matches": 380,
+          "player_appearances": 10573,
+          "player_match_stats": 10573,
+          "players": 534,
+          "source_observations": 420506,
+          "team_match_stats": 760,
+          "teams": 20
+        },
+        "competition": "ITA_SA",
+        "player_v2": {
+          "evidence_states": {
+            "insufficient_data": 1774,
+            "partial": 358
+          },
+          "feature_snapshots": 27872,
+          "overall_scores": 0,
+          "performance_ready": 403,
+          "ranking_candidates": 0,
+          "score_snapshots": 2132,
+          "season_players": 533,
+          "season_players_450_min": 403
+        },
+        "prewrite_state": {
+          "matches": 380,
+          "player_appearances": 10573,
+          "player_match_stats": 10573,
+          "player_v2_feature_rows": 27872,
+          "player_v2_rows": 2132,
+          "players": 534,
+          "season_exists": true,
+          "source_observations": 420506,
+          "team_match_stats": 760,
+          "teams": 20
+        },
+        "production_written": false,
+        "scope_key": "competition:ITA_SA:2017/18",
+        "season": "2017/18",
+        "source": {
+          "adapter_observations": 420506,
+          "events": 647372,
+          "matches": 380,
+          "official_archive_checksum_probe": true,
+          "provider": "wyscout-open",
+          "provider_competition_id": 524,
+          "provider_season_id": 181248,
+          "roster_players": 686,
+          "teams": 20
+        },
+        "status": "PASS",
+        "target": "postgresql://localhost:5432/football_intelligence_promotion"
+      },
+      "competition": "ITA_SA",
+      "fresh_promotion": {
+        "canonical": {
+          "matches": 380,
+          "player_appearances": 10573,
+          "player_match_stats": 10573,
+          "players": 534,
+          "source_observations": 420506,
+          "team_match_stats": 760,
+          "teams": 20
+        },
+        "competition": "ITA_SA",
+        "player_v2": {
+          "evidence_states": {
+            "insufficient_data": 1774,
+            "partial": 358
+          },
+          "feature_snapshots": 27872,
+          "overall_scores": 0,
+          "performance_ready": 403,
+          "ranking_candidates": 0,
+          "score_snapshots": 2132,
+          "season_players": 533,
+          "season_players_450_min": 403
+        },
+        "prewrite_state": {
+          "matches": 0,
+          "player_appearances": 0,
+          "player_match_stats": 0,
+          "player_v2_feature_rows": 0,
+          "player_v2_rows": 0,
+          "players": 0,
+          "season_exists": false,
+          "source_observations": 0,
+          "team_match_stats": 0,
+          "teams": 0
+        },
+        "production_written": false,
+        "scope_key": "competition:ITA_SA:2017/18",
+        "season": "2017/18",
+        "source": {
+          "adapter_observations": 420506,
+          "events": 647372,
+          "matches": 380,
+          "official_archive_checksum_probe": true,
+          "provider": "wyscout-open",
+          "provider_competition_id": 524,
+          "provider_season_id": 181248,
+          "roster_players": 686,
+          "teams": 20
+        },
+        "status": "PASS",
+        "target": "postgresql://localhost:5432/football_intelligence_promotion"
+      },
+      "idempotent": true,
+      "production_written": false,
+      "status": "PASS"
+    }
+  },
+  "status": "PASS"
+}
