@@ -148,7 +148,7 @@ def test_team_mapping_fails_closed_on_ambiguous_exact_football_candidates() -> N
             },
             {
                 "id": "Q3",
-                "label": "Liverpool Football Club",
+                "label": "Liverpool F.C.",
                 "description": "football club",
             },
         ],
@@ -156,6 +156,28 @@ def test_team_mapping_fails_closed_on_ambiguous_exact_football_candidates() -> N
 
     assert mapping.status == "ambiguous_exact_football_club_candidates"
     assert mapping.wikidata_qid is None
+
+
+def test_team_mapping_rejects_same_name_footballer_homonym() -> None:
+    mapping = resolve_wikidata_team_candidate(
+        wyscout_team_id=1623,
+        wyscout_name="Everton",
+        search_results=[
+            {
+                "id": "Q140596527",
+                "label": "Everton",
+                "description": "French footballer",
+            },
+            {
+                "id": "Q5794",
+                "label": "Everton F.C.",
+                "description": "association football club in Liverpool, England",
+            },
+        ],
+    )
+
+    assert mapping.status == "resolved"
+    assert mapping.wikidata_qid == "Q5794"
 
 
 def test_candidate_discovery_uses_exact_name_and_filters_known_dob_conflict() -> None:
