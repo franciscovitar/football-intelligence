@@ -1,0 +1,258 @@
+{
+  "data_mesh_persisted": false,
+  "database_target": "four-isolated-ephemeral-postgresql-17-jobs",
+  "main_sha_under_test": "3e11ba62105e58836ccdb8ab16c4d7fdaa5ac8ea",
+  "production_written": false,
+  "purpose": "certify canonical-to-Player-V2 fingerprints independently of the full Data Mesh loader idempotency gate",
+  "scopes": {
+    "ESP_LL": {
+      "canonical": {
+        "adapter": {
+          "conflicting_duplicates": 0,
+          "identities_with_observations": 77,
+          "native_goal_total": 1024,
+          "observations": 416407,
+          "observed_team_goal_total": 1024,
+          "safe_identities": 77,
+          "wrong_country_source_references": 0
+        },
+        "canonical": {
+          "matches": 380,
+          "player_appearances": 10555,
+          "player_match_stats": 10555,
+          "players": 557,
+          "source_observations": 0,
+          "team_match_stats": 760,
+          "teams": 20
+        },
+        "canonical_rows_written": 22827,
+        "competition": "ESP_LL",
+        "minutes_policy": {
+          "red_card_appearances_excluded": 69,
+          "version": "wyscout-regular-90-ambiguous-missing-v1.0",
+          "zero_duration_appearances_excluded": 63
+        },
+        "season": "2017/18",
+        "source_validation": {
+          "events": 628659,
+          "matches": 380,
+          "provider_competition_id": 795,
+          "provider_season_id": 181144,
+          "roster_players": 619,
+          "teams": 20
+        },
+        "team_links": {
+          "already_linked": 0,
+          "new_canonical_required": 20,
+          "reused_existing_canonical": 0
+        }
+      },
+      "competition": "ESP_LL",
+      "player_v2": {
+        "evidence_states": {
+          "insufficient_data": 1880,
+          "partial": 344
+        },
+        "feature_snapshots": 29008,
+        "idempotent": true,
+        "product_counts": {
+          "overall_scores": 0,
+          "performance_ready": 415,
+          "ranking_candidates": 0,
+          "season_players": 556,
+          "season_players_450_min": 415
+        },
+        "score_snapshots": 2224
+      },
+      "scope_key": "competition:ESP_LL:2017/18",
+      "status": "PASS"
+    },
+    "FRA_L1": {
+      "canonical": {
+        "adapter": {
+          "conflicting_duplicates": 0,
+          "identities_with_observations": 77,
+          "native_goal_total": 1033,
+          "observations": 415230,
+          "observed_team_goal_total": 1033,
+          "safe_identities": 77,
+          "wrong_country_source_references": 0
+        },
+        "canonical": {
+          "matches": 380,
+          "player_appearances": 10515,
+          "player_match_stats": 10515,
+          "players": 542,
+          "source_observations": 0,
+          "team_match_stats": 760,
+          "teams": 20
+        },
+        "canonical_rows_written": 22732,
+        "competition": "FRA_L1",
+        "minutes_policy": {
+          "red_card_appearances_excluded": 86,
+          "version": "wyscout-regular-90-ambiguous-missing-v1.0",
+          "zero_duration_appearances_excluded": 71
+        },
+        "season": "2017/18",
+        "source_validation": {
+          "events": 632807,
+          "matches": 380,
+          "provider_competition_id": 412,
+          "provider_season_id": 181189,
+          "roster_players": 629,
+          "teams": 20
+        },
+        "team_links": {
+          "already_linked": 0,
+          "new_canonical_required": 20,
+          "reused_existing_canonical": 0
+        }
+      },
+      "competition": "FRA_L1",
+      "player_v2": {
+        "evidence_states": {
+          "insufficient_data": 1822,
+          "partial": 326
+        },
+        "feature_snapshots": 28007,
+        "idempotent": true,
+        "product_counts": {
+          "overall_scores": 0,
+          "performance_ready": 395,
+          "ranking_candidates": 0,
+          "season_players": 537,
+          "season_players_450_min": 395
+        },
+        "score_snapshots": 2148
+      },
+      "scope_key": "competition:FRA_L1:2017/18",
+      "status": "PASS"
+    },
+    "GER_BL1": {
+      "canonical": {
+        "adapter": {
+          "conflicting_duplicates": 0,
+          "identities_with_observations": 77,
+          "native_goal_total": 855,
+          "observations": 336265,
+          "observed_team_goal_total": 855,
+          "safe_identities": 77,
+          "wrong_country_source_references": 0
+        },
+        "canonical": {
+          "matches": 306,
+          "player_appearances": 8501,
+          "player_match_stats": 8501,
+          "players": 472,
+          "source_observations": 0,
+          "team_match_stats": 612,
+          "teams": 18
+        },
+        "canonical_rows_written": 18410,
+        "competition": "GER_BL1",
+        "minutes_policy": {
+          "red_card_appearances_excluded": 42,
+          "version": "wyscout-regular-90-ambiguous-missing-v1.0",
+          "zero_duration_appearances_excluded": 82
+        },
+        "season": "2017/18",
+        "source_validation": {
+          "events": 519407,
+          "matches": 306,
+          "provider_competition_id": 426,
+          "provider_season_id": 181137,
+          "roster_players": 537,
+          "teams": 18
+        },
+        "team_links": {
+          "already_linked": 0,
+          "new_canonical_required": 18,
+          "reused_existing_canonical": 0
+        }
+      },
+      "competition": "GER_BL1",
+      "player_v2": {
+        "evidence_states": {
+          "insufficient_data": 1596,
+          "partial": 292
+        },
+        "feature_snapshots": 24786,
+        "idempotent": true,
+        "product_counts": {
+          "overall_scores": 0,
+          "performance_ready": 349,
+          "ranking_candidates": 0,
+          "season_players": 472,
+          "season_players_450_min": 349
+        },
+        "score_snapshots": 1888
+      },
+      "scope_key": "competition:GER_BL1:2017/18",
+      "status": "PASS"
+    },
+    "ITA_SA": {
+      "canonical": {
+        "adapter": {
+          "conflicting_duplicates": 0,
+          "identities_with_observations": 77,
+          "native_goal_total": 1017,
+          "observations": 420506,
+          "observed_team_goal_total": 1017,
+          "safe_identities": 77,
+          "wrong_country_source_references": 0
+        },
+        "canonical": {
+          "matches": 380,
+          "player_appearances": 10573,
+          "player_match_stats": 10573,
+          "players": 534,
+          "source_observations": 0,
+          "team_match_stats": 760,
+          "teams": 20
+        },
+        "canonical_rows_written": 22840,
+        "competition": "ITA_SA",
+        "minutes_policy": {
+          "red_card_appearances_excluded": 89,
+          "version": "wyscout-regular-90-ambiguous-missing-v1.0",
+          "zero_duration_appearances_excluded": 55
+        },
+        "season": "2017/18",
+        "source_validation": {
+          "events": 647372,
+          "matches": 380,
+          "provider_competition_id": 524,
+          "provider_season_id": 181248,
+          "roster_players": 686,
+          "teams": 20
+        },
+        "team_links": {
+          "already_linked": 0,
+          "new_canonical_required": 20,
+          "reused_existing_canonical": 0
+        }
+      },
+      "competition": "ITA_SA",
+      "player_v2": {
+        "evidence_states": {
+          "insufficient_data": 1774,
+          "partial": 358
+        },
+        "feature_snapshots": 27872,
+        "idempotent": true,
+        "product_counts": {
+          "overall_scores": 0,
+          "performance_ready": 403,
+          "ranking_candidates": 0,
+          "season_players": 533,
+          "season_players_450_min": 403
+        },
+        "score_snapshots": 2132
+      },
+      "scope_key": "competition:ITA_SA:2017/18",
+      "status": "PASS"
+    }
+  },
+  "status": "PASS"
+}
