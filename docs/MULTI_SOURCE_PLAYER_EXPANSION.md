@@ -233,17 +233,48 @@ The working source families are:
 | Source/family | Intended value | Current onboarding treatment |
 | --- | --- | --- |
 | Wyscout Open | historical/deep event and player evidence | existing certified historical path; reuse |
+| Wikidata structured data | six-league identity/profile corroboration and club-career context | current structured data is CC0; bounded known-QID static snapshot foundation selected for first profile fusion lab; no automatic crosswalk or performance role |
 | StatsBomb Open | historical/deep event evidence | existing `internal_only` restrictions remain |
 | Football-Data.co.uk | match/team facts | existing path; no deep player layer |
-| OpenFootball | independent fixture/result reconciliation | existing path |
-| Transfermarkt-derived static dataset | broad six-league player profiles, career/appearance/market context | candidate; re-audit provenance/licence before adapter/promotion |
-| FBref/Sports-Reference-derived static snapshot | deep five-European-league player season metrics | candidate; current prohibition remains until a new source/compliance review closes it |
+| OpenFootball | independent fixture/result reconciliation; possible separate CC0 player-profile corroboration via its player repositories | existing match path; player-profile completeness still requires empirical audit before use |
+| Transfermarkt / Transfermarkt-derived datasets | potentially broad profile/career context | rejected as automated product backbone under the current Transfermarkt terms; third-party mirrors do not cure upstream rights |
+| FBref / Sports-Reference-derived snapshots | potentially deep European player metrics | rejected as automated product backbone under current Sports Reference terms/data-use restrictions; do not bypass through static mirrors |
 | LPF official data/reports | authoritative Argentina enrichment/validation | candidate; audit exact reusable fields and acquisition method |
 | FootyStats static export | possible Argentina/Europe player enrichment | candidate; requires current licence/cost/use review before acquisition/promotion |
 
 A candidate can be investigated, schema-audited, and mapped without automatically
 becoming product-approved evidence. Any raw acquisition must still respect the
 current source policy and terms.
+
+### First selected profile source: Wikidata
+
+The 2026-08-24 source re-audit selects Wikidata structured data as the first
+profile/identity fusion source because its structured data is explicitly CC0 and
+its official Linked Data interface can return complete known entities without
+scraping presentation pages.
+
+The first implementation is intentionally bounded:
+
+- `football-intelligence-collect-wikidata-profiles` accepts only explicit known
+  QIDs and caps one run at 50 entities;
+- each `Special:EntityData/<QID>.json` response is frozen as its own local raw
+  file and covered by the generic SHA-256 snapshot manifest;
+- `football-intelligence-audit-wikidata-profiles` verifies checksums before
+  reporting actual profile-field coverage;
+- DOB precision is preserved: year/month precision never becomes a fabricated
+  day;
+- `P27` citizenship and `P413` position remain provider-native QIDs until a
+  reviewed mapping exists;
+- `P54` club membership enters a season identity record only through an explicit
+  QID→canonical-team mapping and bounded `P580`/`P582` qualifiers that prove
+  overlap with the target season;
+- Wikidata supplies no FI canonical match IDs in this path, so a Wikidata pair
+  can be `review_required` but not `crosswalk_ready` solely because of profile
+  evidence.
+
+This foundation does **not** claim measured six-league coverage yet. The next
+evidence gate is a real bounded snapshot/audit for one competition before any
+crosswalk or product promotion decision.
 
 ## Metric mapping
 
@@ -320,10 +351,9 @@ Coverage is descriptive evidence, never a reason to weaken gates.
 9. Expand the same certified adapter to all supported core competitions.
 10. Add the next source and reconcile/enrich, never replacing trustworthy evidence.
 
-The preferred first target is the source that can provide broad player identity
-coverage across all six leagues, because that becomes the common crosswalk spine
-for subsequent richer European and Argentina-specific performance sources. Which
-candidate wins that role is a source-audit decision, not assumed here.
+Steps 1-3 now have an implementation checkpoint: Wikidata is the first selected
+profile source. Step 4 remains deliberately unclaimed until a real bounded
+snapshot is acquired and audited outside the repository.
 
 ## Acceptance criteria for this foundation
 
@@ -336,5 +366,8 @@ candidate wins that role is a source-audit decision, not assumed here.
 - hard DOB contradictions surface as conflicts;
 - shared matches retain their exact team context, including transfers;
 - season-level candidates without match identity stay review-only;
+- Wikidata imprecise dates remain imprecise and cannot become fake exact dates;
+- Wikidata unbounded/ambiguous club memberships cannot create season team context;
+- Wikidata profile evidence cannot bypass the canonical shared-match rule;
 - no existing source-compliance prohibition is silently relaxed;
 - no production/database mutation is part of this foundation.
