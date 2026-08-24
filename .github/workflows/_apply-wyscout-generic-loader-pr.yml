@@ -38,9 +38,35 @@ jobs:
           if workflow.count(start_marker) != 1 or workflow.count(end_marker) != 1:
               raise RuntimeError('could not extract guarded loader edit script uniquely')
           script = workflow.split(start_marker, 1)[1].split(end_marker, 1)[0]
-          lines = script.splitlines()
-          dedented = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines)
+          lines = [line[10:] if line.startswith('          ') else line for line in script.splitlines()]
+
+          label_index = next(
+              index for index, line in enumerate(lines) if line.strip() == '"parser description",'
+          )
+          start_index = max(
+              index for index in range(label_index + 1) if lines[index].strip() == 'replace_once('
+          )
+          end_index = next(
+              index for index in range(label_index, len(lines)) if lines[index].strip() == ')'
+          )
+          del lines[start_index : end_index + 1]
+
+          dedented = '\n'.join(lines)
           exec(compile(dedented, '<guarded-loader-edit>', 'exec'), {'__name__': '__main__'})
+
+          loader_path = Path('analytics/src/football_intelligence/jobs/load_wyscout_historical.py')
+          loader = loader_path.read_text(encoding='utf-8')
+          old_description = (
+              'Load certified Wyscout Open ENG_PL 2017/18 historical evidence into a '
+              '"\n            "LOCAL PostgreSQL database. Source probe + adapter audit run before any DB '
+          )
+          new_description = (
+              'Load one certified Wyscout Open 2017/18 European core-league scope into a '
+              '"\n            "LOCAL PostgreSQL database. Source + adapter validation run before any DB '
+          )
+          if loader.count(old_description) != 1:
+              raise RuntimeError('parser description fallback did not match exactly once')
+          loader_path.write_text(loader.replace(old_description, new_description), encoding='utf-8')
           PY
       - name: Remove temporary workflows
         run: >-
