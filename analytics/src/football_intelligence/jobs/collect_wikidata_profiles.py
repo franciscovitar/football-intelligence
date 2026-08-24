@@ -52,7 +52,8 @@ def collect_snapshot(
     _validate_scope(snapshot_id, competition_codes, season_labels)
     if len(canonical_qids) > MAX_QIDS:
         raise WikidataCollectionError(
-            f"bounded collector accepts at most {MAX_QIDS} QIDs per snapshot, got {len(canonical_qids)}"
+            f"bounded collector accepts at most {MAX_QIDS} QIDs per snapshot, "
+            f"got {len(canonical_qids)}"
         )
 
     fetched: list[tuple[str, bytes]] = []
@@ -170,9 +171,14 @@ def _manifest_payload(manifest: StaticSnapshotManifest) -> dict[str, object]:
 
 def _load_qid_file(path: Path) -> tuple[str, ...]:
     payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, list) or any(not isinstance(item, str) for item in payload):
+    if not isinstance(payload, list):
         raise WikidataCollectionError("QID file must be a JSON array of strings")
-    return tuple(payload)
+    qids: list[str] = []
+    for item in payload:
+        if not isinstance(item, str):
+            raise WikidataCollectionError("QID file must be a JSON array of strings")
+        qids.append(item)
+    return tuple(qids)
 
 
 def build_parser() -> argparse.ArgumentParser:
