@@ -8,6 +8,10 @@ import pytest
 from football_intelligence.db.production_write_guard import (
     PRODUCTION_WRITE_CONFIRMATION_PHRASE,
 )
+from football_intelligence.jobs.historical_player_promotion_spec import (
+    historical_player_promotion_spec,
+    supported_promotion_competitions,
+)
 from football_intelligence.jobs.promote_historical_player_v2 import (
     EXPECTED_EVIDENCE_STATES,
     EXPECTED_FEATURE_SNAPSHOTS,
@@ -21,6 +25,7 @@ from football_intelligence.jobs.promote_historical_player_v2 import (
     EXPECTED_TEAMS,
     HistoricalPlayerPromotionError,
     PrewriteState,
+    build_parser,
     resolve_target,
     validate_player_v2_invariants,
     validate_prewrite_state,
@@ -37,6 +42,55 @@ def _args(database_url: str, **overrides: object) -> argparse.Namespace:
     }
     values.update(overrides)
     return argparse.Namespace(**values)
+
+
+def _complete_state(competition: str) -> PrewriteState:
+    spec = historical_player_promotion_spec(competition)
+    return PrewriteState(
+        season_exists=True,
+        matches=spec.matches,
+        teams=spec.teams,
+        players=spec.players,
+        player_appearances=spec.player_appearances,
+        player_match_stats=spec.player_match_stats,
+        team_match_stats=spec.team_match_stats,
+        source_observations=spec.source_observations,
+        player_v2_rows=spec.score_snapshots,
+        player_v2_feature_rows=spec.feature_snapshots,
+    )
+
+
+def test_parser_defaults_to_england_and_accepts_all_certified_scopes() -> None:
+    parser = build_parser()
+    default = parser.parse_args(
+        [
+            "--database-url",
+            "postgresql://postgres:postgres@localhost/test",
+            "--report",
+            "report.json",
+        ]
+    )
+    assert default.competition == "ENG_PL"
+    assert set(supported_promotion_competitions()) == {
+        "ENG_PL",
+        "ESP_LL",
+        "FRA_L1",
+        "GER_BL1",
+        "ITA_SA",
+    }
+
+    for competition in supported_promotion_competitions():
+        parsed = parser.parse_args(
+            [
+                "--competition",
+                competition,
+                "--database-url",
+                "postgresql://postgres:postgres@localhost/test",
+                "--report",
+                "report.json",
+            ]
+        )
+        assert parsed.competition == competition
 
 
 def test_local_target_needs_no_production_confirmation() -> None:
@@ -64,84 +118,132 @@ def test_remote_target_accepts_exact_quadruple_confirmation() -> None:
     assert target.safe_description == "postgresql://db.example.com:5432/football"
 
 
-def test_prewrite_state_accepts_only_fresh_or_certified_complete() -> None:
-    validate_prewrite_state(
-        PrewriteState(
-            season_exists=False,
-            matches=0,
-            teams=0,
-            players=0,
-            player_appearances=0,
-            player_match_stats=0,
-            team_match_stats=0,
-            source_observations=0,
-            player_v2_rows=0,
-        )
+def test_england_backward_compatible_aliases_match_pinned_spec() -> None:
+    spec = historical_player_promotion_spec("ENG_PL")
+    assert spec.matches == EXPECTED_MATCHES
+    assert spec.teams == EXPECTED_TEAMS
+    assert spec.players == EXPECTED_PLAYERS
+    assert spec.player_appearances == EXPECTED_PLAYER_APPEARANCES
+    assert spec.player_match_stats == EXPECTED_PLAYER_MATCH_STATS
+    assert spec.team_match_stats == EXPECTED_TEAM_MATCH_STATS
+    assert spec.source_observations == EXPECTED_SOURCE_OBSERVATIONS
+    assert spec.score_snapshots == EXPECTED_SCORE_SNAPSHOTS
+    assert spec.feature_snapshots == EXPECTED_FEATURE_SNAPSHOTS
+    assert spec.evidence_state_counts == EXPECTED_EVIDENCE_STATES
+
+
+def test_pinned_non_england_specs_match_observed_runtime_fingerprints() -> None:
+    expected = {
+        "ESP_LL": (380, 20, 557, 10_555, 416_407, 2_224, 29_008, 556, 415, 415),
+        "FRA_L1": (380, 20, 542, 10_515, 415_230, 2_148, 28_007, 537, 395, 395),
+        "GER_BL1": (306, 18, 472, 8_501, 336_265, 1_888, 24_786, 472, 349, 349),
+        "ITA_SA": (380, 20, 534, 10_573, 420_506, 2_132, 27_872, 533, 403, 403),
+    }
+    for competition, values in expected.items():
+        spec = historical_player_promotion_spec(competition)
+        assert (
+            spec.matches,
+            spec.teams,
+            spec.players,
+            spec.player_appearances,
+            spec.source_observations,
+            spec.score_snapshots,
+            spec.feature_snapshots,
+            spec.season_players,
+            spec.season_players_450_min,
+            spec.performance_ready,
+        ) == values
+        assert spec.player_match_stats == spec.player_appearances
+        assert spec.team_match_stats == spec.matches * 2
+        assert sum(spec.evidence_state_counts.values()) == spec.score_snapshots
+
+
+def test_prewrite_state_accepts_only_fresh_or_matching_certified_scope() -> None:
+    fresh = PrewriteState(
+        season_exists=False,
+        matches=0,
+        teams=0,
+        players=0,
+        player_appearances=0,
+        player_match_stats=0,
+        team_match_stats=0,
+        source_observations=0,
+        player_v2_rows=0,
+        player_v2_feature_rows=0,
     )
-    validate_prewrite_state(
-        PrewriteState(
-            season_exists=True,
-            matches=EXPECTED_MATCHES,
-            teams=EXPECTED_TEAMS,
-            players=EXPECTED_PLAYERS,
-            player_appearances=EXPECTED_PLAYER_APPEARANCES,
-            player_match_stats=EXPECTED_PLAYER_MATCH_STATS,
-            team_match_stats=EXPECTED_TEAM_MATCH_STATS,
-            source_observations=EXPECTED_SOURCE_OBSERVATIONS,
-            player_v2_rows=EXPECTED_SCORE_SNAPSHOTS,
+    validate_prewrite_state(fresh, spec=historical_player_promotion_spec("GER_BL1"))
+
+    for competition in supported_promotion_competitions():
+        validate_prewrite_state(
+            _complete_state(competition),
+            spec=historical_player_promotion_spec(competition),
         )
-    )
 
     with pytest.raises(HistoricalPlayerPromotionError, match="partial state"):
         validate_prewrite_state(
             PrewriteState(
                 season_exists=True,
-                matches=1,
-                teams=2,
-                players=0,
-                player_appearances=0,
-                player_match_stats=0,
-                team_match_stats=0,
-                source_observations=0,
-                player_v2_rows=0,
-            )
+                matches=306,
+                teams=18,
+                players=472,
+                player_appearances=8_501,
+                player_match_stats=8_501,
+                team_match_stats=612,
+                source_observations=336_265,
+                player_v2_rows=1_888,
+                player_v2_feature_rows=24_785,
+            ),
+            spec=historical_player_promotion_spec("GER_BL1"),
         )
 
 
-def test_player_v2_invariants_match_certified_runtime() -> None:
-    validate_player_v2_invariants(
-        score_count=EXPECTED_SCORE_SNAPSHOTS,
-        feature_count=EXPECTED_FEATURE_SNAPSHOTS,
-        evidence_states=Counter(EXPECTED_EVIDENCE_STATES),
-        snapshot_counts={
-            "scores": EXPECTED_SCORE_SNAPSHOTS,
-            "features": EXPECTED_FEATURE_SNAPSHOTS,
-        },
-        product_counts={
-            "season_players": 512,
-            "season_players_450_min": 385,
-            "performance_ready": 385,
-            "ranking_candidates": 0,
-            "overall_scores": 0,
-        },
-    )
+def test_prewrite_state_does_not_accept_another_leagues_complete_shape() -> None:
+    with pytest.raises(HistoricalPlayerPromotionError, match="partial state"):
+        validate_prewrite_state(
+            _complete_state("FRA_L1"),
+            spec=historical_player_promotion_spec("ESP_LL"),
+        )
 
 
-def test_player_v2_invariants_reject_changed_counts() -> None:
-    with pytest.raises(HistoricalPlayerPromotionError, match="runtime counts"):
+def test_player_v2_invariants_match_every_certified_runtime() -> None:
+    for competition in supported_promotion_competitions():
+        spec = historical_player_promotion_spec(competition)
         validate_player_v2_invariants(
-            score_count=EXPECTED_SCORE_SNAPSHOTS - 1,
-            feature_count=EXPECTED_FEATURE_SNAPSHOTS,
-            evidence_states=Counter(EXPECTED_EVIDENCE_STATES),
+            score_count=spec.score_snapshots,
+            feature_count=spec.feature_snapshots,
+            evidence_states=Counter(spec.evidence_state_counts),
             snapshot_counts={
-                "scores": EXPECTED_SCORE_SNAPSHOTS,
-                "features": EXPECTED_FEATURE_SNAPSHOTS,
+                "scores": spec.score_snapshots,
+                "features": spec.feature_snapshots,
             },
             product_counts={
-                "season_players": 512,
-                "season_players_450_min": 385,
-                "performance_ready": 385,
+                "season_players": spec.season_players,
+                "season_players_450_min": spec.season_players_450_min,
+                "performance_ready": spec.performance_ready,
                 "ranking_candidates": 0,
                 "overall_scores": 0,
             },
+            spec=spec,
+        )
+
+
+def test_player_v2_invariants_reject_changed_counts() -> None:
+    spec = historical_player_promotion_spec("ITA_SA")
+    with pytest.raises(HistoricalPlayerPromotionError, match="runtime counts"):
+        validate_player_v2_invariants(
+            score_count=spec.score_snapshots - 1,
+            feature_count=spec.feature_snapshots,
+            evidence_states=Counter(spec.evidence_state_counts),
+            snapshot_counts={
+                "scores": spec.score_snapshots,
+                "features": spec.feature_snapshots,
+            },
+            product_counts={
+                "season_players": spec.season_players,
+                "season_players_450_min": spec.season_players_450_min,
+                "performance_ready": spec.performance_ready,
+                "ranking_candidates": 0,
+                "overall_scores": 0,
+            },
+            spec=spec,
         )
