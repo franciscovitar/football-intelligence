@@ -61,9 +61,18 @@ EVENTS = [
 
 
 def test_real_audit_native_scope_ids_are_encoded_explicitly() -> None:
-    assert (FRA_L1_SCOPE.provider_competition_id, FRA_L1_SCOPE.provider_season_id) == (412, 181189)
-    assert (GER_BL1_SCOPE.provider_competition_id, GER_BL1_SCOPE.provider_season_id) == (426, 181137)
-    assert (ITA_SA_SCOPE.provider_competition_id, ITA_SA_SCOPE.provider_season_id) == (524, 181248)
+    assert (FRA_L1_SCOPE.provider_competition_id, FRA_L1_SCOPE.provider_season_id) == (
+        412,
+        181189,
+    )
+    assert (GER_BL1_SCOPE.provider_competition_id, GER_BL1_SCOPE.provider_season_id) == (
+        426,
+        181137,
+    )
+    assert (ITA_SA_SCOPE.provider_competition_id, ITA_SA_SCOPE.provider_season_id) == (
+        524,
+        181248,
+    )
 
 
 def test_verified_french_scope_normalizes_with_country_provenance() -> None:
