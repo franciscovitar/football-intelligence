@@ -1,0 +1,313 @@
+name: Apply Wyscout Generic Normalization Refactor V3
+
+on:
+  push:
+    branches:
+      - feat/wyscout-generic-historical-normalization
+    paths:
+      - .github/workflows/_apply-wyscout-generic-normalization-v3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Apply exact guarded edits
+        id: edit
+        continue-on-error: true
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+          import traceback
+
+          failure = Path("evidence/automation/wyscout-generic-refactor-failure-v3.txt")
+          failure.parent.mkdir(parents=True, exist_ok=True)
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{label}: expected exactly one match, got {count}")
+              return text.replace(old, new, 1)
+
+          try:
+              adapter = Path("analytics/src/football_intelligence/data_mesh/adapters/wyscout_open.py")
+              text = adapter.read_text(encoding="utf-8")
+              anchor = dedent('''\
+              ESP_LL_SCOPE = AdapterScope(
+                  canonical_competition_code="ESP_LL",
+                  season_label="2017/18",
+                  provider_competition_id=795,
+                  provider_season_id=181144,
+              )
+              ''')
+              expanded = anchor + dedent('''\
+
+              # Provider-native ids below were derived from the real official Figshare
+              # country payloads by `football-intelligence-audit-wyscout-core-leagues`
+              # after PR #35. The evidence run reproduced every published match/event/
+              # roster/team count with zero events outside scope and zero missing team
+              # references before these scopes were enabled in adapter code.
+              FRA_L1_SCOPE = AdapterScope(
+                  canonical_competition_code="FRA_L1",
+                  season_label="2017/18",
+                  provider_competition_id=412,
+                  provider_season_id=181189,
+              )
+              GER_BL1_SCOPE = AdapterScope(
+                  canonical_competition_code="GER_BL1",
+                  season_label="2017/18",
+                  provider_competition_id=426,
+                  provider_season_id=181137,
+              )
+              ITA_SA_SCOPE = AdapterScope(
+                  canonical_competition_code="ITA_SA",
+                  season_label="2017/18",
+                  provider_competition_id=524,
+                  provider_season_id=181248,
+              )
+              ''')
+              text = replace_once(text, anchor, expanded, "adapter scopes")
+              old_labels = '_SCOPE_FILE_LABELS: dict[str, str] = {"ENG_PL": "England", "ESP_LL": "Spain"}'
+              new_labels = dedent('''\
+              _SCOPE_FILE_LABELS: dict[str, str] = {
+                  "ENG_PL": "England",
+                  "ESP_LL": "Spain",
+                  "FRA_L1": "France",
+                  "GER_BL1": "Germany",
+                  "ITA_SA": "Italy",
+              }''')
+              text = replace_once(text, old_labels, new_labels, "source labels")
+              adapter.write_text(text, encoding="utf-8")
+
+              normalizer = Path("analytics/src/football_intelligence/normalization/wyscout_historical.py")
+              text = normalizer.read_text(encoding="utf-8")
+              marker = "from __future__ import annotations"
+              marker_index = text.index(marker)
+              text = dedent('''\
+              """Canonical-ready normalization for Wyscout Open historical scopes.
+
+              Historical-only conversion from the source-scoped Wyscout Open adapter output
+              into the repository's provider-independent persistence DTOs.
+
+              The only additional derivation introduced here is ``minutes``. This normalizer
+              applies the existing standardized 90-minute methodology only to fixtures whose
+              own source payload declares ``duration == "Regular"``; any other duration fails
+              closed. Starters begin at 0, substitutes begin at their (clamped) substitution
+              minute, and a player's end is their (clamped) substitution-out minute or 90.
+
+              These are standardized analytics minutes, not a claim about exact elapsed
+              stoppage time. The methodology is versioned so a future exact source can coexist
+              without silently rewriting historical semantics.
+              """
+
+              ''') + text[marker_index:]
+
+              import_anchor = "from football_intelligence.data_mesh.adapters.wyscout_open import (\n"
+              if text.count(import_anchor) != 1:
+                  raise RuntimeError("AdapterScope import anchor mismatch")
+              text = text.replace(
+                  import_anchor,
+                  "from football_intelligence.data_mesh.adapters.scope import AdapterScope\n"
+                  + import_anchor,
+                  1,
+              )
+
+              old_header = dedent('''\
+              def normalize_england_2017_18(
+                  *,
+                  matches_payload: list[Any],
+                  events_payload: list[Any],
+                  players_payload: list[Any],
+                  teams_payload: list[Any],
+                  expected_match_count: int | None = 380,
+              ) -> WyscoutHistoricalNormalizationResult:
+                  """Build a provider-independent canonical batch from the certified scope."""
+
+                  if expected_match_count is not None and len(matches_payload) != expected_match_count:
+                      raise WyscoutHistoricalNormalizationError(
+                          f"ENG_PL 2017/18 must contain exactly {expected_match_count} matches, "
+                          f"got {len(matches_payload)}"
+                      )
+              ''')
+              new_header = dedent('''\
+              def normalize_wyscout_historical_scope(
+                  *,
+                  matches_payload: list[Any],
+                  events_payload: list[Any],
+                  players_payload: list[Any],
+                  teams_payload: list[Any],
+                  scope: AdapterScope,
+                  expected_match_count: int | None = None,
+              ) -> WyscoutHistoricalNormalizationResult:
+                  """Build one provider-independent canonical batch for a declared Wyscout scope."""
+
+                  if scope.provider_season_id is None:
+                      raise WyscoutHistoricalNormalizationError(
+                          "Wyscout historical normalization requires a provider-native season id"
+                      )
+                  if expected_match_count is not None and len(matches_payload) != expected_match_count:
+                      raise WyscoutHistoricalNormalizationError(
+                          f"{scope.canonical_competition_code} {scope.season_label} must contain exactly "
+                          f"{expected_match_count} matches, got {len(matches_payload)}"
+                      )
+              ''')
+              text = replace_once(text, old_header, new_header, "normalizer header")
+
+              if text.count("scope=DEFAULT_SCOPE,") != 2:
+                  raise RuntimeError("expected exactly two DEFAULT_SCOPE adapter arguments")
+              text = text.replace("scope=DEFAULT_SCOPE,", "scope=scope,")
+
+              old_matches = (
+                  "    matches = tuple(_normalize_match(match) for match in matches_payload "
+                  "if isinstance(match, dict))\n"
+              )
+              new_matches = (
+                  "    matches = tuple(\n"
+                  "        _normalize_match(match, scope=scope)\n"
+                  "        for match in matches_payload\n"
+                  "        if isinstance(match, dict)\n"
+                  "    )\n"
+              )
+              text = replace_once(text, old_matches, new_matches, "match construction")
+
+              old_batch_scope = (
+                  "            provider_competition_id=PROVIDER_COMPETITION_ID,\n"
+                  "            season_label=SEASON_LABEL,\n"
+              )
+              new_batch_scope = (
+                  "            provider_competition_id=str(scope.provider_competition_id),\n"
+                  "            season_label=scope.season_label,\n"
+              )
+              text = replace_once(text, old_batch_scope, new_batch_scope, "batch scope")
+
+              wrapper_anchor = "\n\ndef _as_list(value: Any) -> list[Any]:\n"
+              wrapper = dedent('''\
+
+              def normalize_england_2017_18(
+                  *,
+                  matches_payload: list[Any],
+                  events_payload: list[Any],
+                  players_payload: list[Any],
+                  teams_payload: list[Any],
+                  expected_match_count: int | None = 380,
+              ) -> WyscoutHistoricalNormalizationResult:
+                  """Backward-compatible wrapper for the original ENG_PL 2017/18 scope."""
+
+                  return normalize_wyscout_historical_scope(
+                      matches_payload=matches_payload,
+                      events_payload=events_payload,
+                      players_payload=players_payload,
+                      teams_payload=teams_payload,
+                      scope=DEFAULT_SCOPE,
+                      expected_match_count=expected_match_count,
+                  )
+
+
+              def _as_list(value: Any) -> list[Any]:
+              ''')
+              text = replace_once(text, wrapper_anchor, wrapper, "England wrapper")
+
+              old_match_scope = dedent('''\
+              def _normalize_match(match: dict[str, Any]) -> MatchRecord:
+                  match_id = match.get("wyId")
+                  if not isinstance(match_id, int):
+                      raise WyscoutHistoricalNormalizationError("match without integer wyId")
+                  if match.get("competitionId") != DEFAULT_SCOPE.provider_competition_id:
+                      raise WyscoutHistoricalNormalizationError(
+                          f"match {match_id} is outside Wyscout ENG_PL competition scope"
+                      )
+                  if match.get("seasonId") != DEFAULT_SCOPE.provider_season_id:
+                      raise WyscoutHistoricalNormalizationError(
+                          f"match {match_id} is outside Wyscout ENG_PL 2017/18 season scope"
+                      )
+              ''')
+              new_match_scope = dedent('''\
+              def _normalize_match(match: dict[str, Any], *, scope: AdapterScope) -> MatchRecord:
+                  match_id = match.get("wyId")
+                  if not isinstance(match_id, int):
+                      raise WyscoutHistoricalNormalizationError("match without integer wyId")
+                  if match.get("competitionId") != scope.provider_competition_id:
+                      raise WyscoutHistoricalNormalizationError(
+                          f"match {match_id} is outside Wyscout "
+                          f"{scope.canonical_competition_code} competition scope"
+                      )
+                  if match.get("seasonId") != scope.provider_season_id:
+                      raise WyscoutHistoricalNormalizationError(
+                          f"match {match_id} is outside Wyscout "
+                          f"{scope.canonical_competition_code} {scope.season_label} season scope"
+                      )
+              ''')
+              text = replace_once(text, old_match_scope, new_match_scope, "match scope")
+              normalizer.write_text(text, encoding="utf-8")
+              failure.unlink(missing_ok=True)
+          except Exception:
+              failure.write_text(traceback.format_exc(), encoding="utf-8")
+              raise
+          PY
+      - name: Install analytics environment
+        if: steps.edit.outcome == 'success'
+        working-directory: analytics
+        run: uv sync --dev --locked
+      - name: Format touched source
+        if: steps.edit.outcome == 'success'
+        working-directory: analytics
+        run: >-
+          uv run ruff format
+          src/football_intelligence/data_mesh/adapters/wyscout_open.py
+          src/football_intelligence/normalization/wyscout_historical.py
+      - name: Lint touched source
+        if: steps.edit.outcome == 'success'
+        working-directory: analytics
+        run: >-
+          uv run ruff check
+          src/football_intelligence/data_mesh/adapters/wyscout_open.py
+          src/football_intelligence/normalization/wyscout_historical.py
+      - name: Typecheck analytics source
+        if: steps.edit.outcome == 'success'
+        working-directory: analytics
+        run: uv run mypy src
+      - name: Run existing Wyscout regressions
+        if: steps.edit.outcome == 'success'
+        working-directory: analytics
+        run: >-
+          uv run pytest
+          tests/test_wyscout_historical_normalization.py
+          tests/test_data_mesh_adapters_scope.py
+      - name: Persist transform failure
+        if: steps.edit.outcome != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git restore analytics || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evidence/automation/wyscout-generic-refactor-failure-v3.txt
+          git commit -m "evidence: record Wyscout refactor v3 failure"
+          git push origin HEAD:feat/wyscout-generic-historical-normalization
+          exit 1
+      - name: Commit verified refactor
+        if: steps.edit.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/_apply-wyscout-generic-normalization.yml
+          rm -f .github/workflows/_apply-wyscout-generic-normalization-v2.yml
+          rm -f .github/workflows/_apply-wyscout-generic-normalization-v3.yml
+          rm -f evidence/automation/wyscout-generic-refactor-failure.txt
+          rm -f evidence/automation/wyscout-generic-refactor-failure-v3.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: generalize Wyscout historical normalization by scope"
+          git push origin HEAD:feat/wyscout-generic-historical-normalization
