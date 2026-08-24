@@ -41,7 +41,7 @@ jobs:
           script = workflow.split(start_marker, 1)[1].split(end_marker, 1)[0]
           lines = [line[10:] if line.startswith('          ') else line for line in script.splitlines()]
 
-          skipped_labels = {
+          block_labels = {
               'parser description',
               'persist competition scope',
               'scoped persistence validation',
@@ -50,11 +50,9 @@ jobs:
               'report source validation',
               'report adapter validation',
               'minutes docstring',
-              'database scope header',
               'database observation scope',
-              'generic invariants',
           }
-          for label in skipped_labels:
+          for label in block_labels:
               marker = f'"{label}",'
               label_indexes = [index for index, line in enumerate(lines) if line.strip() == marker]
               if len(label_indexes) != 1:
@@ -68,6 +66,16 @@ jobs:
               )
               for index in range(start_index, end_index + 1):
                   lines[index] = ''
+
+          for label in {'database scope header', 'generic invariants'}:
+              matches = [
+                  index
+                  for index, line in enumerate(lines)
+                  if 'replace_once(' in line and f'"{label}"' in line
+              ]
+              if len(matches) != 1:
+                  raise RuntimeError(f'{label}: expected one inline guarded call, got {len(matches)}')
+              lines[matches[0]] = ''
 
           dedented = '\n'.join(lines)
           exec(compile(dedented, '<guarded-loader-edit>', 'exec'), {'__name__': '__main__'})
