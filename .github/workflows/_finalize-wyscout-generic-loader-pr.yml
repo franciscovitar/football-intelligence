@@ -28,6 +28,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
           runner = Path('.github/workflows/_apply-wyscout-generic-loader-pr.yml').read_text(
               encoding='utf-8'
@@ -43,19 +44,21 @@ jobs:
 
           helper_path = Path('analytics/src/football_intelligence/jobs/wyscout_historical_scope.py')
           helper = helper_path.read_text(encoding='utf-8')
-          old = '''        elif observation.entity_type == "player":
-              if observation.entity_source_id.rsplit(":", maxsplit=1)[-1] == "0":
-                  sentinel_player_observations += 1
-          '''
-          new = '''        elif (
-              observation.entity_type == "player"
-              and observation.entity_source_id.rsplit(":", maxsplit=1)[-1] == "0"
-          ):
-              sentinel_player_observations += 1
-          '''
-          if helper.count(old) != 1:
-              raise RuntimeError('SIM102 helper patch did not match exactly once')
-          helper_path.write_text(helper.replace(old, new), encoding='utf-8')
+          helper, count = re.subn(
+              r'(?m)^        elif observation\.entity_type == "player":\n'
+              r'            if observation\.entity_source_id\.rsplit\(":", maxsplit=1\)\[-1\] == "0":\n'
+              r'                sentinel_player_observations \+= 1$',
+              '        elif (\n'
+              '            observation.entity_type == "player"\n'
+              '            and observation.entity_source_id.rsplit(":", maxsplit=1)[-1] == "0"\n'
+              '        ):\n'
+              '            sentinel_player_observations += 1',
+              helper,
+              count=1,
+          )
+          if count != 1:
+              raise RuntimeError(f'SIM102 helper patch expected one match, got {count}')
+          helper_path.write_text(helper, encoding='utf-8')
           PY
       - name: Remove temporary workflows
         run: >-
