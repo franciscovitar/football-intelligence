@@ -15,6 +15,7 @@ import json
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -124,7 +125,7 @@ def _fetch_entity(qid: str) -> bytes:
     )
     try:
         with urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
-            return response.read()
+            return cast(bytes, response.read())
     except HTTPError as exc:
         retry_after = exc.headers.get("Retry-After")
         suffix = f"; Retry-After={retry_after}" if retry_after else ""
