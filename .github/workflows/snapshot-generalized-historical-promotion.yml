@@ -1,0 +1,64 @@
+name: Snapshot Generalized Historical Promotion
+
+on:
+  push:
+    branches:
+      - evidence/generalized-historical-promotion-local-runtime
+    paths:
+      - .github/workflows/snapshot-generalized-historical-promotion.yml
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: evidence/generalized-historical-promotion-local-runtime
+      TARGET_WORKFLOW: generalized-historical-promotion-local-runtime.yml
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: evidence/generalized-historical-promotion-local-runtime
+      - name: Snapshot runtime run
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_JSON="$(gh api --method GET \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/${TARGET_WORKFLOW}/runs" \
+            -f branch="${BRANCH}" -f per_page=5 --jq '.workflow_runs[0]')"
+          test -n "$RUN_JSON"
+          test "$RUN_JSON" != "null"
+          mkdir -p evidence/wyscout-open
+          RUN_JSON="$RUN_JSON" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          run = json.loads(os.environ["RUN_JSON"])
+          payload = {
+              "run_id": run["id"],
+              "status": run["status"],
+              "conclusion": run.get("conclusion"),
+              "html_url": run["html_url"],
+              "head_sha": run["head_sha"],
+              "run_number": run["run_number"],
+              "created_at": run["created_at"],
+              "updated_at": run["updated_at"],
+          }
+          Path("evidence/wyscout-open/generalized-historical-promotion-run.json").write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Persist snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evidence/wyscout-open/generalized-historical-promotion-run.json
+          git commit -m "evidence: snapshot generalized historical promotion"
+          git push origin HEAD:evidence/generalized-historical-promotion-local-runtime
