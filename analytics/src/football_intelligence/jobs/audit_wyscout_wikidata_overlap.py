@@ -57,10 +57,7 @@ EXPECTED_TEAMS = 20
 
 WIKIDATA_API = "https://www.wikidata.org/w/api.php"
 WIKIDATA_SPARQL = "https://query.wikidata.org/sparql"
-USER_AGENT = (
-    "FootballIntelligence/0.1 "
-    "(+https://github.com/franciscovitar/football-intelligence)"
-)
+USER_AGENT = "FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)"
 HTTP_TIMEOUT_SECONDS = 45
 MAX_ATTEMPTS = 4
 TEAM_SEARCH_LIMIT = 10
@@ -219,9 +216,7 @@ def resolve_wikidata_team_candidate(
     """
 
     resolution = resolve_team(name=wyscout_name, competition_code=COMPETITION_CODE)
-    canonical_context = (
-        resolution.logical_key if resolution.status == "resolved" else None
-    )
+    canonical_context = resolution.logical_key if resolution.status == "resolved" else None
     target = _normalize_wikidata_search_label(wyscout_name)
 
     plausible: list[tuple[str, str, str]] = []
@@ -299,9 +294,7 @@ def discover_exact_name_candidates(
             compatible: set[str] = set()
             for qid in qids:
                 candidate_dates = {
-                    row.date_of_birth
-                    for row in rows_by_qid[qid]
-                    if row.date_of_birth is not None
+                    row.date_of_birth for row in rows_by_qid[qid] if row.date_of_birth is not None
                 }
                 if not candidate_dates or player.date_of_birth in candidate_dates:
                     compatible.add(qid)
@@ -440,16 +433,10 @@ def _source_name_variants(row: dict[str, Any]) -> tuple[str, ...]:
     return tuple(deduped)
 
 
-def _matching_source_variant(
-    variants: tuple[str, ...], candidate_name: str
-) -> str | None:
+def _matching_source_variant(variants: tuple[str, ...], candidate_name: str) -> str | None:
     candidate_normalized = normalize_player_name(candidate_name)
     return next(
-        (
-            variant
-            for variant in variants
-            if normalize_player_name(variant) == candidate_normalized
-        ),
+        (variant for variant in variants if normalize_player_name(variant) == candidate_normalized),
         None,
     )
 
@@ -591,19 +578,13 @@ class WikidataLabClient:
             },
         )
         if not isinstance(payload, dict) or not isinstance(payload.get("search"), list):
-            raise WyscoutWikidataOverlapError(
-                f"Wikidata team search failed for {name!r}"
-            )
+            raise WyscoutWikidataOverlapError(f"Wikidata team search failed for {name!r}")
         return cast(list[Any], payload["search"])
 
     def discover_players_for_teams(
         self, mappings: tuple[WikidataTeamMapping, ...]
     ) -> tuple[WikidataDiscoveryRow, ...]:
-        qids = [
-            mapping.wikidata_qid
-            for mapping in mappings
-            if mapping.wikidata_qid is not None
-        ]
+        qids = [mapping.wikidata_qid for mapping in mappings if mapping.wikidata_qid is not None]
         rows: list[WikidataDiscoveryRow] = []
         for start in range(0, len(qids), SPARQL_TEAM_CHUNK_SIZE):
             chunk = qids[start : start + SPARQL_TEAM_CHUNK_SIZE]
@@ -615,9 +596,7 @@ class WikidataLabClient:
             rows.extend(_parse_sparql_discovery(payload))
             time.sleep(0.25)
 
-        unique = {
-            (row.qid, row.label, row.date_of_birth, row.team_qid): row for row in rows
-        }
+        unique = {(row.qid, row.label, row.date_of_birth, row.team_qid): row for row in rows}
         return tuple(
             sorted(
                 unique.values(),
@@ -630,9 +609,7 @@ class WikidataLabClient:
             )
         )
 
-    def fetch_player_profiles(
-        self, qids: Iterable[str]
-    ) -> dict[str, WikidataPlayerProfile]:
+    def fetch_player_profiles(self, qids: Iterable[str]) -> dict[str, WikidataPlayerProfile]:
         canonical_qids = sorted(set(qids))
         profiles: dict[str, WikidataPlayerProfile] = {}
 
@@ -654,16 +631,14 @@ class WikidataLabClient:
                 },
             )
             path = self._cache_dir / f"wikidata-entities-{batch_index:03d}.json"
-            encoded = (
-                json.dumps(payload, sort_keys=True, ensure_ascii=False) + "\n"
-            ).encode("utf-8")
+            encoded = (json.dumps(payload, sort_keys=True, ensure_ascii=False) + "\n").encode(
+                "utf-8"
+            )
             path.write_bytes(encoded)
 
             entities = payload.get("entities") if isinstance(payload, dict) else None
             if not isinstance(entities, dict):
-                raise WyscoutWikidataOverlapError(
-                    "Wikidata wbgetentities returned no entities map"
-                )
+                raise WyscoutWikidataOverlapError("Wikidata wbgetentities returned no entities map")
             for qid in batch:
                 raw_entity = entities.get(qid)
                 if not isinstance(raw_entity, dict):
@@ -710,16 +685,11 @@ class WikidataLabClient:
                 return json.loads(raw)
             except HTTPError as exc:
                 last_error = exc
-                if (
-                    exc.code not in {429, 500, 502, 503, 504}
-                    or attempt == MAX_ATTEMPTS
-                ):
+                if exc.code not in {429, 500, 502, 503, 504} or attempt == MAX_ATTEMPTS:
                     break
                 retry_after = exc.headers.get("Retry-After")
                 delay = (
-                    float(retry_after)
-                    if retry_after and retry_after.isdigit()
-                    else float(attempt)
+                    float(retry_after) if retry_after and retry_after.isdigit() else float(attempt)
                 )
                 time.sleep(min(delay, 10.0))
             except (URLError, TimeoutError, json.JSONDecodeError) as exc:
@@ -728,9 +698,7 @@ class WikidataLabClient:
                     break
                 time.sleep(float(attempt))
 
-        raise WyscoutWikidataOverlapError(
-            f"request failed for {url}: {last_error}"
-        )
+        raise WyscoutWikidataOverlapError(f"request failed for {url}: {last_error}")
 
 
 def _player_discovery_query(team_qids: list[str]) -> str:
@@ -767,9 +735,7 @@ def _parse_sparql_discovery(payload: Any) -> list[WikidataDiscoveryRow]:
             WikidataDiscoveryRow(
                 qid=qid,
                 label=label,
-                date_of_birth=_parse_wikidata_datetime(
-                    _value_from_binding(binding.get("dob"))
-                ),
+                date_of_birth=_parse_wikidata_datetime(_value_from_binding(binding.get("dob"))),
                 team_qid=team_qid,
             )
         )
@@ -835,23 +801,18 @@ def run_audit(*, cache_dir: Path) -> WyscoutWikidataOverlapReport:
     try:
         matches, players_payload, teams_payload = _acquire_wyscout_inputs(cache_dir)
     except (OSError, json.JSONDecodeError, WyscoutOpenDataError) as exc:
-        raise WyscoutWikidataOverlapError(
-            f"Wyscout acquisition failed: {exc}"
-        ) from exc
+        raise WyscoutWikidataOverlapError(f"Wyscout acquisition failed: {exc}") from exc
 
     failures: list[str] = []
     roster_ids = roster_player_ids(matches)
     if len(roster_ids) != EXPECTED_ROSTER_PLAYERS:
         failures.append(
-            f"Wyscout roster expected={EXPECTED_ROSTER_PLAYERS} "
-            f"actual={len(roster_ids)}"
+            f"Wyscout roster expected={EXPECTED_ROSTER_PLAYERS} actual={len(roster_ids)}"
         )
 
     team_ids = _competition_team_ids(matches)
     if len(team_ids) != EXPECTED_TEAMS:
-        failures.append(
-            f"Wyscout teams expected={EXPECTED_TEAMS} actual={len(team_ids)}"
-        )
+        failures.append(f"Wyscout teams expected={EXPECTED_TEAMS} actual={len(team_ids)}")
 
     roster = build_wyscout_roster_profiles(
         matches_payload=matches,
@@ -890,17 +851,12 @@ def run_audit(*, cache_dir: Path) -> WyscoutWikidataOverlapReport:
     team_mappings = tuple(sorted(mappings, key=lambda item: item.wyscout_team_id))
     discovery_rows = wikidata.discover_players_for_teams(team_mappings)
     candidates_by_player = discover_exact_name_candidates(roster, discovery_rows)
-    unique_candidate_qids = {
-        qids[0] for qids in candidates_by_player.values() if len(qids) == 1
-    }
+    unique_candidate_qids = {qids[0] for qids in candidates_by_player.values() if len(qids) == 1}
     profiles_by_qid = wikidata.fetch_player_profiles(unique_candidate_qids)
 
     team_qid_to_context: dict[str, str] = {}
     for mapping in team_mappings:
-        if (
-            mapping.wikidata_qid is not None
-            and mapping.canonical_team_context is not None
-        ):
+        if mapping.wikidata_qid is not None and mapping.canonical_team_context is not None:
             team_qid_to_context[mapping.wikidata_qid] = mapping.canonical_team_context
 
     results = tuple(
@@ -914,9 +870,7 @@ def run_audit(*, cache_dir: Path) -> WyscoutWikidataOverlapReport:
     )
 
     state_counts = Counter(result.state for result in results)
-    resolved_team_mappings = sum(
-        mapping.status == "resolved" for mapping in team_mappings
-    )
+    resolved_team_mappings = sum(mapping.status == "resolved" for mapping in team_mappings)
     if resolved_team_mappings < EXPECTED_TEAMS:
         failures.append(
             f"Wikidata team mappings resolved={resolved_team_mappings}/"
@@ -935,19 +889,11 @@ def run_audit(*, cache_dir: Path) -> WyscoutWikidataOverlapReport:
         wikidata_discovery_rows=len(discovery_rows),
         wikidata_discovery_entities=len({row.qid for row in discovery_rows}),
         players_with_exact_name_candidate=len(candidates_by_player),
-        players_with_unique_candidate=sum(
-            len(qids) == 1 for qids in candidates_by_player.values()
-        ),
+        players_with_unique_candidate=sum(len(qids) == 1 for qids in candidates_by_player.values()),
         wikidata_entities_loaded=len(profiles_by_qid),
-        wikidata_exact_dob_coverage=sum(
-            result.wikidata_has_exact_dob for result in results
-        ),
-        wikidata_citizenship_coverage=sum(
-            result.wikidata_has_citizenship for result in results
-        ),
-        wikidata_position_coverage=sum(
-            result.wikidata_has_position for result in results
-        ),
+        wikidata_exact_dob_coverage=sum(result.wikidata_has_exact_dob for result in results),
+        wikidata_citizenship_coverage=sum(result.wikidata_has_citizenship for result in results),
+        wikidata_position_coverage=sum(result.wikidata_has_position for result in results),
         wikidata_bounded_team_context_coverage=sum(
             result.wikidata_has_bounded_team_context for result in results
         ),
@@ -964,32 +910,24 @@ def _report_payload(report: WyscoutWikidataOverlapReport) -> dict[str, Any]:
     payload["methodology"] = {
         "wyscout_source": "official Figshare collection 4415000, CC BY 4.0",
         "wikidata_source": "official MediaWiki API + WDQS, CC0",
-        "player_discovery": (
-            "P54 membership in deterministically resolved 2017/18 ENG_PL clubs"
-        ),
+        "player_discovery": ("P54 membership in deterministically resolved 2017/18 ENG_PL clubs"),
         "name_matching": (
-            "exact deterministic normalized names over source-exposed "
-            "Wyscout variants"
+            "exact deterministic normalized names over source-exposed Wyscout variants"
         ),
         "identity_promotion": "none; no PlayerCrosswalk writes",
-        "shared_match_requirement": (
-            "not satisfiable by Wikidata profile evidence"
-        ),
+        "shared_match_requirement": ("not satisfiable by Wikidata profile evidence"),
     }
     payload["examples"] = {
         "review_required": [
-            asdict(result)
-            for result in report.results
-            if result.state == "review_required"
+            asdict(result) for result in report.results if result.state == "review_required"
         ][:_MAX_EXAMPLES],
-        "conflict": [
-            asdict(result) for result in report.results if result.state == "conflict"
-        ][:_MAX_EXAMPLES],
+        "conflict": [asdict(result) for result in report.results if result.state == "conflict"][
+            :_MAX_EXAMPLES
+        ],
         "unmatched": [
             asdict(result)
             for result in report.results
-            if result.state
-            in {"no_exact_name_candidate", "ambiguous_exact_name_candidates"}
+            if result.state in {"no_exact_name_candidate", "ambiguous_exact_name_candidates"}
         ][:_MAX_EXAMPLES],
     }
     return payload
@@ -997,9 +935,7 @@ def _report_payload(report: WyscoutWikidataOverlapReport) -> dict[str, Any]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description=(
-            "Audit real Wyscout ENG_PL 2017/18 player profiles against Wikidata."
-        )
+        description=("Audit real Wyscout ENG_PL 2017/18 player profiles against Wikidata.")
     )
     parser.add_argument("--cache-dir", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)

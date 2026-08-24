@@ -241,9 +241,7 @@ def test_unbounded_or_unmapped_team_context_does_not_fake_shared_team_evidence()
         dates_of_birth=(_time("+1992-06-15T00:00:00Z"),),
         citizenship_qids=(),
         position_qids=(),
-        team_memberships=(
-            WikidataTeamMembership(team_qid="Q200", start_times=(), end_times=()),
-        ),
+        team_memberships=(WikidataTeamMembership(team_qid="Q200", start_times=(), end_times=()),),
         last_revision_id=1,
         modified_at=None,
     )
