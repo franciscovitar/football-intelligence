@@ -1,0 +1,65 @@
+name: Wyscout Wikidata Overlap Lab
+
+on:
+  push:
+    branches:
+      - feat/wikidata-wyscout-england-overlap-lab
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Real source overlap audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - working-directory: analytics
+        run: uv sync --dev --locked
+      - name: Run real Wyscout x Wikidata overlap audit
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-audit-wyscout-wikidata-overlap
+          --cache-dir "$RUNNER_TEMP/wyscout-wikidata-cache"
+          --report "$RUNNER_TEMP/wyscout-wikidata-overlap.json"
+      - name: Print compact report
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["RUNNER_TEMP"]) / "wyscout-wikidata-overlap.json"
+          data = json.loads(path.read_text(encoding="utf-8"))
+          keys = [
+              "status",
+              "wyscout_roster_total",
+              "wyscout_profiles_available",
+              "team_mappings_resolved",
+              "team_total",
+              "wikidata_discovery_entities",
+              "players_with_exact_name_candidate",
+              "players_with_unique_candidate",
+              "wikidata_exact_dob_coverage",
+              "wikidata_citizenship_coverage",
+              "wikidata_position_coverage",
+              "wikidata_bounded_team_context_coverage",
+              "candidate_state_counts",
+              "failures",
+          ]
+          print(json.dumps({key: data.get(key) for key in keys}, indent=2, ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wyscout-wikidata-overlap-report
+          path: ${{ runner.temp }}/wyscout-wikidata-overlap.json
+          if-no-files-found: error
+          retention-days: 7
