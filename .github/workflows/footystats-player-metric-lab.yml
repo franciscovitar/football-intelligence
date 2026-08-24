@@ -1,0 +1,306 @@
+name: FootyStats Player Metric Lab
+
+on:
+  push:
+    branches:
+      - lab/footystats-player-metric-schema
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - name: Audit public FootyStats example feed
+        shell: bash
+        env:
+          FOOTYSTATS_KEY: example
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import math
+          import os
+          import time
+          from collections import Counter
+          from pathlib import Path
+          from typing import Any
+          from urllib.error import HTTPError, URLError
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+
+          BASE = "https://api.football-data-api.com/league-players"
+          KEY = os.environ["FOOTYSTATS_KEY"]
+          USER_AGENT = "FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)"
+          # IDs currently referenced by FootyStats' own public docs/example pages.
+          CANDIDATE_SEASONS = (12325, 2012, 1625)
+          MAX_PAGES = 5
+
+          # Potential Football Intelligence V2 leverage. This is a discovery
+          # checklist, not a semantic mapping approval.
+          TARGET_FIELDS = {
+              "xg_total_overall": "advanced.xg / finishing derivations",
+              "xg_per_90_overall": "xG rate consistency",
+              "xa_total_overall": "xa / creation",
+              "xa_per_90_overall": "xA rate consistency",
+              "npxg_total_overall": "npxg / underlying performance",
+              "npxg_per_90_overall": "npxG rate consistency",
+              "key_passes_total_overall": "key_passes / creation",
+              "progressive_passes_total_overall": "progressive_passes / progression",
+              "passes_total_overall": "passing volume",
+              "passes_completed_total_overall": "pass completion validation",
+              "pass_completion_rate_overall": "pass_completion_pct / passing",
+              "shots_total_overall": "shots_total / shot generation",
+              "shots_on_target_total_overall": "shots_on_target_pct derivation",
+              "dribbles_total_overall": "take-on denominator",
+              "dribbles_successful_total_overall": "dribbles_successful / one_v_one",
+              "dribbles_successful_percentage_overall": "take_on_success_pct candidate",
+              "tackles_total_overall": "tackles / defence",
+              "tackles_successful_total_overall": "tackle success candidate",
+              "interceptions_total_overall": "interceptions / defence",
+              "blocks_total_overall": "blocks / defence",
+              "aerial_duels_won_total_overall": "aerial_duels_won / aerial",
+              "aerial_duels_won_percentage_overall": "aerial_duel_win_pct candidate",
+              "save_percentage_overall": "save_pct / goalkeeping",
+              "saves_total_overall": "goalkeeping validation",
+              "shots_faced_total_overall": "save_pct validation",
+              "detailed_minutes_played_recorded_overall": "detailed-stat coverage denominator",
+              "detailed_matches_played_recorded_overall": "detailed-stat coverage disclosure",
+          }
+
+          def request_json(params: dict[str, str]) -> Any:
+              url = f"{BASE}?{urlencode(params)}"
+              req = Request(url, headers={"Accept": "application/json", "User-Agent": USER_AGENT})
+              last: Exception | None = None
+              for attempt in range(1, 4):
+                  try:
+                      with urlopen(req, timeout=30) as response:
+                          return json.loads(response.read())
+                  except HTTPError as exc:
+                      last = exc
+                      if exc.code not in {429, 500, 502, 503, 504} or attempt == 3:
+                          break
+                  except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+                      last = exc
+                      if attempt == 3:
+                          break
+                  time.sleep(attempt)
+              raise RuntimeError(f"FootyStats request failed: {last}")
+
+          def flatten(obj: Any, prefix: str = "") -> dict[str, Any]:
+              result: dict[str, Any] = {}
+              if isinstance(obj, dict):
+                  for key, value in obj.items():
+                      child = f"{prefix}.{key}" if prefix else key
+                      if isinstance(value, dict):
+                          result.update(flatten(value, child))
+                      else:
+                          result[child] = value
+              return result
+
+          def find_field(flat: dict[str, Any], leaf: str) -> Any:
+              if leaf in flat:
+                  return flat[leaf]
+              suffix = "." + leaf
+              matches = [value for key, value in flat.items() if key.endswith(suffix)]
+              return matches[0] if len(matches) == 1 else None
+
+          def number(value: Any) -> float | None:
+              if isinstance(value, bool) or value is None:
+                  return None
+              if isinstance(value, (int, float)):
+                  return float(value)
+              if isinstance(value, str):
+                  try:
+                      return float(value)
+                  except ValueError:
+                      return None
+              return None
+
+          def pct_error(actual: float, expected: float) -> float:
+              if expected == 0:
+                  return abs(actual - expected)
+              return abs(actual - expected) / abs(expected)
+
+          def formula_audit(rows: list[dict[str, Any]]) -> dict[str, Any]:
+              checks: dict[str, list[float]] = {
+                  "xg_per90_vs_total_and_minutes": [],
+                  "xa_per90_vs_total_and_minutes": [],
+                  "npxg_per90_vs_total_and_minutes": [],
+                  "pass_completion_vs_completed_over_total": [],
+                  "dribble_success_pct_vs_success_over_total": [],
+                  "save_pct_vs_saves_over_shots_faced": [],
+              }
+              denominators = Counter()
+              for row in rows:
+                  flat = flatten(row)
+                  minutes = number(find_field(flat, "minutes_played_overall"))
+                  detailed_minutes = number(find_field(flat, "detailed_minutes_played_recorded_overall"))
+                  for total_key, per90_key, check_key in (
+                      ("xg_total_overall", "xg_per_90_overall", "xg_per90_vs_total_and_minutes"),
+                      ("xa_total_overall", "xa_per_90_overall", "xa_per90_vs_total_and_minutes"),
+                      ("npxg_total_overall", "npxg_per_90_overall", "npxg_per90_vs_total_and_minutes"),
+                  ):
+                      total = number(find_field(flat, total_key))
+                      per90 = number(find_field(flat, per90_key))
+                      if total is None or per90 is None:
+                          continue
+                      candidates: list[tuple[str, float]] = []
+                      if minutes and minutes > 0:
+                          candidates.append(("minutes_played_overall", total * 90.0 / minutes))
+                      if detailed_minutes and detailed_minutes > 0:
+                          candidates.append(("detailed_minutes_played_recorded_overall", total * 90.0 / detailed_minutes))
+                      if candidates:
+                          label, expected = min(candidates, key=lambda item: pct_error(per90, item[1]))
+                          denominators[f"{check_key}:{label}"] += 1
+                          checks[check_key].append(pct_error(per90, expected))
+
+                  for completed_key, total_key, pct_key, check_key in (
+                      ("passes_completed_total_overall", "passes_total_overall", "pass_completion_rate_overall", "pass_completion_vs_completed_over_total"),
+                      ("dribbles_successful_total_overall", "dribbles_total_overall", "dribbles_successful_percentage_overall", "dribble_success_pct_vs_success_over_total"),
+                      ("saves_total_overall", "shots_faced_total_overall", "save_percentage_overall", "save_pct_vs_saves_over_shots_faced"),
+                  ):
+                      numerator = number(find_field(flat, completed_key))
+                      denominator = number(find_field(flat, total_key))
+                      actual = number(find_field(flat, pct_key))
+                      if numerator is None or denominator in {None, 0} or actual is None:
+                          continue
+                      expected = numerator * 100.0 / denominator
+                      checks[check_key].append(pct_error(actual, expected))
+
+              output: dict[str, Any] = {"preferred_denominators": dict(denominators)}
+              for key, errors in checks.items():
+                  output[key] = {
+                      "samples": len(errors),
+                      "median_relative_error": sorted(errors)[len(errors) // 2] if errors else None,
+                      "within_2pct": sum(error <= 0.02 for error in errors),
+                      "within_5pct": sum(error <= 0.05 for error in errors),
+                  }
+              return output
+
+          season_reports: list[dict[str, Any]] = []
+          all_rows: list[dict[str, Any]] = []
+          for season_id in CANDIDATE_SEASONS:
+              rows: list[dict[str, Any]] = []
+              page_status: list[dict[str, Any]] = []
+              for page in range(1, MAX_PAGES + 1):
+                  payload = request_json(
+                      {
+                          "key": KEY,
+                          "season_id": str(season_id),
+                          "include": "stats",
+                          "page": str(page),
+                      }
+                  )
+                  success = payload.get("success") if isinstance(payload, dict) else None
+                  data = payload.get("data") if isinstance(payload, dict) else None
+                  count = len(data) if isinstance(data, list) else 0
+                  page_status.append({"page": page, "success": success, "rows": count})
+                  if not isinstance(data, list) or not data:
+                      break
+                  rows.extend(item for item in data if isinstance(item, dict))
+                  pager = payload.get("pager") if isinstance(payload, dict) else None
+                  if isinstance(pager, dict):
+                      current_page = pager.get("current_page") or pager.get("currentPage")
+                      max_page = pager.get("max_page") or pager.get("maxPage") or pager.get("total_pages")
+                      if isinstance(current_page, int) and isinstance(max_page, int) and current_page >= max_page:
+                          break
+                  if count < 200:
+                      break
+                  time.sleep(0.15)
+
+              if not rows:
+                  season_reports.append({"season_id": season_id, "accessible": False, "pages": page_status})
+                  continue
+
+              all_rows.extend(rows)
+              flattened = [flatten(row) for row in rows]
+              leaf_counts = Counter()
+              path_counts = Counter()
+              non_null_counts = Counter()
+              for flat in flattened:
+                  for path, value in flat.items():
+                      path_counts[path] += 1
+                      leaf_counts[path.rsplit(".", 1)[-1]] += 1
+                      if value is not None:
+                          non_null_counts[path.rsplit(".", 1)[-1]] += 1
+
+              seasons = sorted({str(find_field(flat, "season")) for flat in flattened if find_field(flat, "season") is not None})
+              competition_ids = sorted({str(find_field(flat, "competition_id")) for flat in flattened if find_field(flat, "competition_id") is not None})
+              target_coverage = {
+                  field: {
+                      "present_rows": leaf_counts.get(field, 0),
+                      "non_null_rows": non_null_counts.get(field, 0),
+                      "share_non_null": round(non_null_counts.get(field, 0) / len(rows), 4),
+                      "intended_leverage": purpose,
+                  }
+                  for field, purpose in TARGET_FIELDS.items()
+              }
+              season_reports.append(
+                  {
+                      "season_id": season_id,
+                      "accessible": True,
+                      "rows": len(rows),
+                      "pages": page_status,
+                      "reported_seasons": seasons,
+                      "competition_ids": competition_ids,
+                      "top_level_or_nested_paths": sorted(path_counts),
+                      "target_field_coverage": target_coverage,
+                      "formula_audit": formula_audit(rows),
+                  }
+              )
+
+          if not any(report.get("accessible") for report in season_reports):
+              raise SystemExit("FOOTYSTATS LAB: FAIL - no documented public example season was accessible")
+
+          # No raw rows or player-identifying values are persisted in this report.
+          report = {
+              "status": "PASS",
+              "source": "FootyStats / football-data-api.com public example key",
+              "terms_observed": {
+                  "website_app_use_allowed": True,
+                  "resale_or_redistribution_prohibited": True,
+                  "raw_feed_persisted_in_artifact": False,
+              },
+              "candidate_seasons": season_reports,
+              "aggregate": {
+                  "accessible_seasons": sum(bool(item.get("accessible")) for item in season_reports),
+                  "total_player_rows_observed": len(all_rows),
+              },
+              "decision_scope": "schema/coverage audit only; no Metric Catalog semantic approval",
+          }
+          output = Path(os.environ["RUNNER_TEMP"]) / "footystats-player-metric-lab.json"
+          output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(json.dumps({
+              "status": report["status"],
+              "aggregate": report["aggregate"],
+              "seasons": [
+                  {
+                      "season_id": item["season_id"],
+                      "accessible": item["accessible"],
+                      "rows": item.get("rows"),
+                      "reported_seasons": item.get("reported_seasons"),
+                      "target_non_null": {
+                          key: value["non_null_rows"]
+                          for key, value in item.get("target_field_coverage", {}).items()
+                          if value["non_null_rows"]
+                      },
+                      "formula_audit": item.get("formula_audit"),
+                  }
+                  for item in season_reports
+              ],
+          }, indent=2, sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: footystats-player-metric-lab
+          path: ${{ runner.temp }}/footystats-player-metric-lab.json
+          if-no-files-found: error
+          retention-days: 7
