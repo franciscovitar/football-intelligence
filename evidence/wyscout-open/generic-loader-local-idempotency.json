@@ -1,0 +1,276 @@
+{
+  "database_target": "ephemeral-local-postgresql-17",
+  "main_sha_under_test": "3e11ba62105e58836ccdb8ab16c4d7fdaa5ac8ea",
+  "official_source": "Wyscout Open Data / Figshare",
+  "player_v2_snapshots_published": false,
+  "production_written": false,
+  "scopes": {
+    "FRA_L1": {
+      "first_pass": {
+        "adapter": {
+          "all_checks_passed": true,
+          "conflicting_duplicates": 0,
+          "identities_with_observations": 77,
+          "native_goal_total": 1033,
+          "observations": 415230,
+          "observed_team_goal_total": 1033,
+          "safe_identities": 77,
+          "wrong_country_source_references": 0
+        },
+        "canonical": {
+          "minutes_methodology_version": "wyscout-regular-90-v1.0",
+          "minutes_policy": {
+            "red_card_appearances_excluded": 86,
+            "version": "wyscout-regular-90-ambiguous-missing-v1.0",
+            "zero_duration_appearances_excluded": 71
+          },
+          "rows_written": 22732,
+          "team_links": {
+            "already_linked": 0,
+            "new_canonical_required": 20,
+            "reused_existing_canonical": 0
+          }
+        },
+        "data_mesh": {
+          "note": "Player cross-source reconciliation is intentionally not fabricated: the V2 player crosswalk contract requires validated shared-match evidence.",
+          "reconciliation_decisions_written": 0,
+          "source_observations_written": 415230
+        },
+        "database_scope_counts": {
+          "matches": 380,
+          "player_appearances": 10515,
+          "player_match_stats": 10515,
+          "players": 542,
+          "source_observations": 415230,
+          "team_match_stats": 760,
+          "teams": 20
+        },
+        "product": {
+          "player_v2_snapshots_published": false,
+          "reason": "Historical 2017/18 must not become the implicit latest Player V2 context. Historical product routing is a separate step."
+        },
+        "scope": {
+          "competition": "FRA_L1",
+          "role": "historical_deep",
+          "season": "2017/18"
+        },
+        "source": "wyscout-open",
+        "source_probe": {
+          "counts_verified": true,
+          "events": 632807,
+          "matches": 380,
+          "official_archive_checksum_probe": true,
+          "provider_competition_id": 412,
+          "provider_season_id": 181189,
+          "roster_players": 629,
+          "teams": 20
+        },
+        "status": "PASS",
+        "writes": {
+          "database_target": "local-only",
+          "production_written": false
+        }
+      },
+      "idempotent": true,
+      "second_pass": {
+        "adapter": {
+          "all_checks_passed": true,
+          "conflicting_duplicates": 0,
+          "identities_with_observations": 77,
+          "native_goal_total": 1033,
+          "observations": 415230,
+          "observed_team_goal_total": 1033,
+          "safe_identities": 77,
+          "wrong_country_source_references": 0
+        },
+        "canonical": {
+          "minutes_methodology_version": "wyscout-regular-90-v1.0",
+          "minutes_policy": {
+            "red_card_appearances_excluded": 86,
+            "version": "wyscout-regular-90-ambiguous-missing-v1.0",
+            "zero_duration_appearances_excluded": 71
+          },
+          "rows_written": 22732,
+          "team_links": {
+            "already_linked": 20,
+            "new_canonical_required": 0,
+            "reused_existing_canonical": 0
+          }
+        },
+        "data_mesh": {
+          "note": "Player cross-source reconciliation is intentionally not fabricated: the V2 player crosswalk contract requires validated shared-match evidence.",
+          "reconciliation_decisions_written": 0,
+          "source_observations_written": 415230
+        },
+        "database_scope_counts": {
+          "matches": 380,
+          "player_appearances": 10515,
+          "player_match_stats": 10515,
+          "players": 542,
+          "source_observations": 415230,
+          "team_match_stats": 760,
+          "teams": 20
+        },
+        "product": {
+          "player_v2_snapshots_published": false,
+          "reason": "Historical 2017/18 must not become the implicit latest Player V2 context. Historical product routing is a separate step."
+        },
+        "scope": {
+          "competition": "FRA_L1",
+          "role": "historical_deep",
+          "season": "2017/18"
+        },
+        "source": "wyscout-open",
+        "source_probe": {
+          "counts_verified": true,
+          "events": 632807,
+          "matches": 380,
+          "official_archive_checksum_probe": true,
+          "provider_competition_id": 412,
+          "provider_season_id": 181189,
+          "roster_players": 629,
+          "teams": 20
+        },
+        "status": "PASS",
+        "writes": {
+          "database_target": "local-only",
+          "production_written": false
+        }
+      }
+    },
+    "GER_BL1": {
+      "first_pass": {
+        "adapter": {
+          "all_checks_passed": true,
+          "conflicting_duplicates": 0,
+          "identities_with_observations": 77,
+          "native_goal_total": 855,
+          "observations": 336265,
+          "observed_team_goal_total": 855,
+          "safe_identities": 77,
+          "wrong_country_source_references": 0
+        },
+        "canonical": {
+          "minutes_methodology_version": "wyscout-regular-90-v1.0",
+          "minutes_policy": {
+            "red_card_appearances_excluded": 42,
+            "version": "wyscout-regular-90-ambiguous-missing-v1.0",
+            "zero_duration_appearances_excluded": 82
+          },
+          "rows_written": 18410,
+          "team_links": {
+            "already_linked": 0,
+            "new_canonical_required": 18,
+            "reused_existing_canonical": 0
+          }
+        },
+        "data_mesh": {
+          "note": "Player cross-source reconciliation is intentionally not fabricated: the V2 player crosswalk contract requires validated shared-match evidence.",
+          "reconciliation_decisions_written": 0,
+          "source_observations_written": 336265
+        },
+        "database_scope_counts": {
+          "matches": 306,
+          "player_appearances": 8501,
+          "player_match_stats": 8501,
+          "players": 472,
+          "source_observations": 336265,
+          "team_match_stats": 612,
+          "teams": 18
+        },
+        "product": {
+          "player_v2_snapshots_published": false,
+          "reason": "Historical 2017/18 must not become the implicit latest Player V2 context. Historical product routing is a separate step."
+        },
+        "scope": {
+          "competition": "GER_BL1",
+          "role": "historical_deep",
+          "season": "2017/18"
+        },
+        "source": "wyscout-open",
+        "source_probe": {
+          "counts_verified": true,
+          "events": 519407,
+          "matches": 306,
+          "official_archive_checksum_probe": true,
+          "provider_competition_id": 426,
+          "provider_season_id": 181137,
+          "roster_players": 537,
+          "teams": 18
+        },
+        "status": "PASS",
+        "writes": {
+          "database_target": "local-only",
+          "production_written": false
+        }
+      },
+      "idempotent": true,
+      "second_pass": {
+        "adapter": {
+          "all_checks_passed": true,
+          "conflicting_duplicates": 0,
+          "identities_with_observations": 77,
+          "native_goal_total": 855,
+          "observations": 336265,
+          "observed_team_goal_total": 855,
+          "safe_identities": 77,
+          "wrong_country_source_references": 0
+        },
+        "canonical": {
+          "minutes_methodology_version": "wyscout-regular-90-v1.0",
+          "minutes_policy": {
+            "red_card_appearances_excluded": 42,
+            "version": "wyscout-regular-90-ambiguous-missing-v1.0",
+            "zero_duration_appearances_excluded": 82
+          },
+          "rows_written": 18410,
+          "team_links": {
+            "already_linked": 18,
+            "new_canonical_required": 0,
+            "reused_existing_canonical": 0
+          }
+        },
+        "data_mesh": {
+          "note": "Player cross-source reconciliation is intentionally not fabricated: the V2 player crosswalk contract requires validated shared-match evidence.",
+          "reconciliation_decisions_written": 0,
+          "source_observations_written": 336265
+        },
+        "database_scope_counts": {
+          "matches": 306,
+          "player_appearances": 8501,
+          "player_match_stats": 8501,
+          "players": 472,
+          "source_observations": 336265,
+          "team_match_stats": 612,
+          "teams": 18
+        },
+        "product": {
+          "player_v2_snapshots_published": false,
+          "reason": "Historical 2017/18 must not become the implicit latest Player V2 context. Historical product routing is a separate step."
+        },
+        "scope": {
+          "competition": "GER_BL1",
+          "role": "historical_deep",
+          "season": "2017/18"
+        },
+        "source": "wyscout-open",
+        "source_probe": {
+          "counts_verified": true,
+          "events": 519407,
+          "matches": 306,
+          "official_archive_checksum_probe": true,
+          "provider_competition_id": 426,
+          "provider_season_id": 181137,
+          "roster_players": 537,
+          "teams": 18
+        },
+        "status": "PASS",
+        "writes": {
+          "database_target": "local-only",
+          "production_written": false
+        }
+      }
+    }
+  },
+  "status": "PASS"
+}
