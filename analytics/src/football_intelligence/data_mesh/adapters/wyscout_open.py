@@ -105,11 +105,41 @@ ESP_LL_SCOPE = AdapterScope(
     provider_season_id=181144,
 )
 
+# Provider-native ids below were derived from the real official Figshare
+# country payloads by `football-intelligence-audit-wyscout-core-leagues`
+# after PR #35. The evidence run reproduced every published match/event/
+# roster/team count with zero events outside scope and zero missing team
+# references before these scopes were enabled in adapter code.
+FRA_L1_SCOPE = AdapterScope(
+    canonical_competition_code="FRA_L1",
+    season_label="2017/18",
+    provider_competition_id=412,
+    provider_season_id=181189,
+)
+GER_BL1_SCOPE = AdapterScope(
+    canonical_competition_code="GER_BL1",
+    season_label="2017/18",
+    provider_competition_id=426,
+    provider_season_id=181137,
+)
+ITA_SA_SCOPE = AdapterScope(
+    canonical_competition_code="ITA_SA",
+    season_label="2017/18",
+    provider_competition_id=524,
+    provider_season_id=181248,
+)
+
 # Wyscout's own real Figshare file-naming convention keys the country name
 # into the filename (`matches_England.json`, `matches_Spain.json`, ...).
 # This is a `source_reference` provenance detail specific to this
 # provider's real files, not part of the generic `AdapterScope` contract.
-_SCOPE_FILE_LABELS: dict[str, str] = {"ENG_PL": "England", "ESP_LL": "Spain"}
+_SCOPE_FILE_LABELS: dict[str, str] = {
+    "ENG_PL": "England",
+    "ESP_LL": "Spain",
+    "FRA_L1": "France",
+    "GER_BL1": "Germany",
+    "ITA_SA": "Italy",
+}
 
 
 def _source_file_label(scope: AdapterScope) -> str:
