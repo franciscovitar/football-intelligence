@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - evidence/wyscout-core-leagues-real-audit
+    paths:
+      - .github/workflows/wyscout-core-leagues-evidence.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   audit:
@@ -24,18 +26,55 @@ jobs:
       - name: Install analytics environment
         working-directory: analytics
         run: uv sync --dev --locked
-      - name: Acquire and verify official Wyscout Open assets
+      - name: Acquire and audit official Wyscout Open assets
+        id: evidence
+        shell: bash
         working-directory: analytics
-        run: >-
-          uv run football-intelligence-probe-wyscout-open
-          --cache-dir data/cache/wyscout-open
-          --report "$RUNNER_TEMP/wyscout-england-probe.json"
-      - name: Audit all five official 2017/18 country payloads
-        working-directory: analytics
-        run: >-
-          uv run football-intelligence-audit-wyscout-core-leagues
-          --cache-dir data/cache/wyscout-open
-          --report "$RUNNER_TEMP/wyscout-core-leagues-report.json"
+        run: |
+          set +e
+          uv run football-intelligence-probe-wyscout-open \
+            --cache-dir data/cache/wyscout-open \
+            --report "$RUNNER_TEMP/wyscout-england-probe.json"
+          PROBE_STATUS=$?
+
+          AUDIT_STATUS=99
+          if [ "$PROBE_STATUS" -eq 0 ]; then
+            uv run football-intelligence-audit-wyscout-core-leagues \
+              --cache-dir data/cache/wyscout-open \
+              --report "$RUNNER_TEMP/wyscout-core-leagues-report.json"
+            AUDIT_STATUS=$?
+          fi
+
+          if [ ! -f "$RUNNER_TEMP/wyscout-core-leagues-report.json" ]; then
+            printf '{"status":"NOT_RUN","reason":"probe_failed","probe_exit_code":%s}\n' \
+              "$PROBE_STATUS" > "$RUNNER_TEMP/wyscout-core-leagues-report.json"
+          fi
+
+          echo "probe_status=$PROBE_STATUS" >> "$GITHUB_OUTPUT"
+          echo "audit_status=$AUDIT_STATUS" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Persist evidence on isolated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/wyscout-open
+          cp "$RUNNER_TEMP/wyscout-core-leagues-report.json" \
+            evidence/wyscout-open/core-leagues-2017-18-report.json
+          if [ -f "$RUNNER_TEMP/wyscout-england-probe.json" ]; then
+            cp "$RUNNER_TEMP/wyscout-england-probe.json" \
+              evidence/wyscout-open/england-probe-report.json
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evidence/wyscout-open
+          git commit -m "evidence: record real Wyscout core league audit" || true
+          git push origin HEAD:evidence/wyscout-core-leagues-real-audit
       - name: Print five-league evidence report
         shell: bash
         run: cat "$RUNNER_TEMP/wyscout-core-leagues-report.json"
+      - name: Enforce evidence result
+        shell: bash
+        run: |
+          test "${{ steps.evidence.outputs.probe_status }}" = "0"
+          test "${{ steps.evidence.outputs.audit_status }}" = "0"
