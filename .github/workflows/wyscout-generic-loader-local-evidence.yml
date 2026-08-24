@@ -177,12 +177,14 @@ jobs:
           output.parent.mkdir(parents=True, exist_ok=True)
           output.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
           PY
-      - name: Verify no historical Player V2 snapshots were published
+      - name: Verify loader did not publish Player V2 snapshots
         shell: bash
         run: |
           set -euo pipefail
-          COUNT="$(psql -Atc "select count(*) from intelligence.player_intelligence_v2 where season_label = '2017/18'")"
-          test "$COUNT" = "0"
+          FEATURES="$(psql -Atc "select count(*) from analytics.player_feature_snapshots")"
+          SCORES="$(psql -Atc "select count(*) from analytics.player_score_snapshots")"
+          test "$FEATURES" = "0"
+          test "$SCORES" = "0"
       - name: Persist evidence report on evidence branch only
         shell: bash
         run: |
