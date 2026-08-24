@@ -1,0 +1,221 @@
+name: Generalized Historical Promotion Local Runtime
+
+on:
+  push:
+    branches:
+      - evidence/generalized-historical-promotion-local-runtime
+    paths:
+      - .github/workflows/generalized-historical-promotion-local-runtime.yml
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    name: ${{ matrix.competition }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        competition: [ESP_LL, FRA_L1, GER_BL1, ITA_SA]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: football_intelligence_promotion
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: football_intelligence_promotion
+      LOCAL_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_promotion
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: evidence/generalized-historical-promotion-local-runtime
+      - name: Apply migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Apply core seeds
+        run: psql -v ON_ERROR_STOP=1 -f database/seeds/001_core_catalog.sql
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Install analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+      - name: Promote from fresh local state
+        working-directory: analytics
+        run: >-
+          uv run python -m football_intelligence.jobs.promote_historical_player_v2
+          --competition "${{ matrix.competition }}"
+          --database-url "$LOCAL_DATABASE_URL"
+          --cache-dir data/cache/wyscout-open
+          --report "$RUNNER_TEMP/first.json"
+      - name: Promote again from certified-complete local state
+        working-directory: analytics
+        run: >-
+          uv run python -m football_intelligence.jobs.promote_historical_player_v2
+          --competition "${{ matrix.competition }}"
+          --database-url "$LOCAL_DATABASE_URL"
+          --cache-dir data/cache/wyscout-open
+          --report "$RUNNER_TEMP/second.json"
+      - name: Verify fresh and certified-complete paths
+        shell: bash
+        env:
+          COMPETITION: ${{ matrix.competition }}
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          from pathlib import Path
+
+          competition = os.environ["COMPETITION"]
+          temp = Path(os.environ["RUNNER_TEMP"])
+          first = json.loads((temp / "first.json").read_text())
+          second = json.loads((temp / "second.json").read_text())
+
+          for report in (first, second):
+              assert report["status"] == "PASS", report
+              assert report["competition"] == competition
+              assert report["scope_key"] == f"competition:{competition}:2017/18"
+              assert report["production_written"] is False
+              assert report["target"] == "postgresql://localhost:5432/football_intelligence_promotion"
+              assert report["player_v2"]["ranking_candidates"] == 0
+              assert report["player_v2"]["overall_scores"] == 0
+
+          assert first["prewrite_state"] == {
+              "matches": 0,
+              "player_appearances": 0,
+              "player_match_stats": 0,
+              "player_v2_feature_rows": 0,
+              "player_v2_rows": 0,
+              "players": 0,
+              "season_exists": False,
+              "source_observations": 0,
+              "team_match_stats": 0,
+              "teams": 0,
+          }
+          assert second["prewrite_state"]["season_exists"] is True
+          assert second["prewrite_state"]["matches"] == first["canonical"]["matches"]
+          assert second["prewrite_state"]["teams"] == first["canonical"]["teams"]
+          assert second["prewrite_state"]["players"] == first["canonical"]["players"]
+          assert second["prewrite_state"]["player_appearances"] == first["canonical"][
+              "player_appearances"
+          ]
+          assert second["prewrite_state"]["player_match_stats"] == first["canonical"][
+              "player_match_stats"
+          ]
+          assert second["prewrite_state"]["team_match_stats"] == first["canonical"][
+              "team_match_stats"
+          ]
+          assert second["prewrite_state"]["source_observations"] == first["canonical"][
+              "source_observations"
+          ]
+          assert second["prewrite_state"]["player_v2_rows"] == first["player_v2"][
+              "score_snapshots"
+          ]
+          assert second["prewrite_state"]["player_v2_feature_rows"] == first["player_v2"][
+              "feature_snapshots"
+          ]
+
+          assert first["canonical"] == second["canonical"]
+          for key in (
+              "score_snapshots",
+              "feature_snapshots",
+              "evidence_states",
+              "season_players",
+              "season_players_450_min",
+              "performance_ready",
+              "ranking_candidates",
+              "overall_scores",
+          ):
+              assert first["player_v2"][key] == second["player_v2"][key]
+
+          output = {
+              "status": "PASS",
+              "competition": competition,
+              "fresh_promotion": first,
+              "certified_complete_rerun": second,
+              "idempotent": True,
+              "production_written": False,
+          }
+          path = Path(f"/tmp/{competition}.json")
+          path.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n")
+          PY
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: promotion-${{ matrix.competition }}
+          path: /tmp/${{ matrix.competition }}.json
+          if-no-files-found: error
+          retention-days: 1
+
+  aggregate:
+    runs-on: ubuntu-latest
+    needs: promote
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: evidence/generalized-historical-promotion-local-runtime
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          pattern: promotion-*
+          path: /tmp/historical-promotion
+          merge-multiple: true
+      - name: Aggregate runtime evidence
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          directory = Path("/tmp/historical-promotion")
+          scopes = {}
+          for competition in ("ESP_LL", "FRA_L1", "GER_BL1", "ITA_SA"):
+              payload = json.loads((directory / f"{competition}.json").read_text())
+              assert payload["status"] == "PASS"
+              assert payload["idempotent"] is True
+              assert payload["production_written"] is False
+              scopes[competition] = payload
+
+          output = {
+              "status": "PASS",
+              "promotion_head_under_test": "8a35a58d0e79230278e9adc05cc219b2fb7c0731",
+              "database_target": "four-isolated-ephemeral-postgresql-17-jobs",
+              "production_written": False,
+              "fresh_and_certified_complete_paths_verified": True,
+              "scopes": scopes,
+          }
+          path = Path("evidence/wyscout-open/generalized-historical-promotion-local-runtime.json")
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n")
+          PY
+      - name: Persist evidence on evidence branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evidence/wyscout-open/generalized-historical-promotion-local-runtime.json
+          git commit -m "evidence: certify generalized historical promotion runtime"
+          git push origin HEAD:evidence/generalized-historical-promotion-local-runtime
