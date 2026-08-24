@@ -4,12 +4,16 @@ on:
   push:
     branches:
       - feat/wikidata-wyscout-england-overlap-lab
+  pull_request:
 
 permissions:
   contents: read
 
 jobs:
   audit:
+    if: >-
+      github.event_name == 'push' ||
+      github.head_ref == 'feat/wikidata-wyscout-england-overlap-lab'
     name: Real source overlap audit
     runs-on: ubuntu-latest
     timeout-minutes: 20
