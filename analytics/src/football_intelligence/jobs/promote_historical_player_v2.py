@@ -35,8 +35,8 @@ from football_intelligence.db.provider_repository import ProviderRepository, con
 from football_intelligence.db.target_parsing import parse_database_target
 from football_intelligence.jobs.calculate_player_analytics import _persist_versioned_snapshots
 from football_intelligence.jobs.historical_player_promotion_spec import (
-    HistoricalPlayerPromotionSpec,
     SEASON_LABEL,
+    HistoricalPlayerPromotionSpec,
     historical_player_promotion_spec,
     supported_promotion_competitions,
 )
@@ -444,9 +444,7 @@ def inspect_prewrite_state(
         (spec.competition_code,),
     ).fetchone()
     if competition is None:
-        raise HistoricalPlayerPromotionError(
-            f"competition seed missing: {spec.competition_code}"
-        )
+        raise HistoricalPlayerPromotionError(f"competition seed missing: {spec.competition_code}")
     season = connection.execute(
         "select id from football.seasons where competition_id=%s and label=%s",
         (int(competition[0]), SEASON_LABEL),

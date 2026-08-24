@@ -120,16 +120,16 @@ def test_remote_target_accepts_exact_quadruple_confirmation() -> None:
 
 def test_england_backward_compatible_aliases_match_pinned_spec() -> None:
     spec = historical_player_promotion_spec("ENG_PL")
-    assert EXPECTED_MATCHES == spec.matches
-    assert EXPECTED_TEAMS == spec.teams
-    assert EXPECTED_PLAYERS == spec.players
-    assert EXPECTED_PLAYER_APPEARANCES == spec.player_appearances
-    assert EXPECTED_PLAYER_MATCH_STATS == spec.player_match_stats
-    assert EXPECTED_TEAM_MATCH_STATS == spec.team_match_stats
-    assert EXPECTED_SOURCE_OBSERVATIONS == spec.source_observations
-    assert EXPECTED_SCORE_SNAPSHOTS == spec.score_snapshots
-    assert EXPECTED_FEATURE_SNAPSHOTS == spec.feature_snapshots
-    assert EXPECTED_EVIDENCE_STATES == spec.evidence_state_counts
+    assert spec.matches == EXPECTED_MATCHES
+    assert spec.teams == EXPECTED_TEAMS
+    assert spec.players == EXPECTED_PLAYERS
+    assert spec.player_appearances == EXPECTED_PLAYER_APPEARANCES
+    assert spec.player_match_stats == EXPECTED_PLAYER_MATCH_STATS
+    assert spec.team_match_stats == EXPECTED_TEAM_MATCH_STATS
+    assert spec.source_observations == EXPECTED_SOURCE_OBSERVATIONS
+    assert spec.score_snapshots == EXPECTED_SCORE_SNAPSHOTS
+    assert spec.feature_snapshots == EXPECTED_FEATURE_SNAPSHOTS
+    assert spec.evidence_state_counts == EXPECTED_EVIDENCE_STATES
 
 
 def test_pinned_non_england_specs_match_observed_runtime_fingerprints() -> None:
