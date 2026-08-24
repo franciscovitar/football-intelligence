@@ -50,6 +50,7 @@ _ALLOWED_GRAINS: frozenset[str] = frozenset(
         "event",
     }
 )
+_HASH_CHUNK_SIZE = 1024 * 1024
 
 
 class StaticSnapshotManifestError(ValueError):
@@ -242,7 +243,11 @@ def static_snapshot_manifest_from_dict(payload: dict[str, Any]) -> StaticSnapsho
 def verify_static_snapshot_files(
     manifest: StaticSnapshotManifest, *, base_dir: Path
 ) -> StaticSnapshotVerificationReport:
-    """Verify local cached snapshot bytes against the manifest without mutation."""
+    """Verify local cached snapshot bytes against the manifest without mutation.
+
+    Files are hashed incrementally so multi-gigabyte snapshots never need to be
+    loaded into memory solely to prove integrity.
+    """
 
     results: list[SnapshotFileVerification] = []
     for expected in manifest.files:
@@ -257,13 +262,12 @@ def verify_static_snapshot_files(
                 )
             )
             continue
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
         actual_size = path.stat().st_size
         results.append(
             SnapshotFileVerification(
                 path=expected.path,
                 exists=True,
-                checksum_matches=digest == expected.sha256,
+                checksum_matches=_sha256_file(path) == expected.sha256,
                 byte_size_matches=(
                     None if expected.byte_size is None else actual_size == expected.byte_size
                 ),
@@ -274,6 +278,14 @@ def verify_static_snapshot_files(
         source_code=manifest.source_code,
         files=tuple(results),
     )
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(_HASH_CHUNK_SIZE):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _validate_sorted_unique_non_blank(values: tuple[str, ...], field_name: str) -> None:
