@@ -1,0 +1,41 @@
+name: Wyscout Core Leagues Evidence
+
+on:
+  push:
+    branches:
+      - evidence/wyscout-core-leagues-real-audit
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Real Figshare Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Install analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+      - name: Acquire and verify official Wyscout Open assets
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-probe-wyscout-open
+          --cache-dir data/cache/wyscout-open
+          --report "$RUNNER_TEMP/wyscout-england-probe.json"
+      - name: Audit all five official 2017/18 country payloads
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-audit-wyscout-core-leagues
+          --cache-dir data/cache/wyscout-open
+          --report "$RUNNER_TEMP/wyscout-core-leagues-report.json"
+      - name: Print five-league evidence report
+        shell: bash
+        run: cat "$RUNNER_TEMP/wyscout-core-leagues-report.json"
