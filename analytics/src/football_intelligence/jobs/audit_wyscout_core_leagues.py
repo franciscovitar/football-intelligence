@@ -80,9 +80,7 @@ class WyscoutCoreLeagueAuditReport:
         return bool(self.results) and all(result.passed for result in self.results)
 
 
-def _load_country_payload(
-    cache_dir: Path, *, spec: WyscoutCoreLeagueSpec, kind: str
-) -> list[Any]:
+def _load_country_payload(cache_dir: Path, *, spec: WyscoutCoreLeagueSpec, kind: str) -> list[Any]:
     if kind not in {"matches", "events"}:
         raise ValueError(f"unsupported Wyscout country payload kind {kind!r}")
     filename = spec.match_filename if kind == "matches" else spec.event_filename
@@ -242,10 +240,7 @@ def main() -> None:
         "paper_doi": report.paper_doi,
         "licence": report.licence,
         "season_label": report.season_label,
-        "results": [
-            {**asdict(result), "passed": result.passed}
-            for result in report.results
-        ],
+        "results": [{**asdict(result), "passed": result.passed} for result in report.results],
     }
     if args.report is not None:
         args.report.parent.mkdir(parents=True, exist_ok=True)
