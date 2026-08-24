@@ -1,0 +1,360 @@
+name: Wyscout Missing Leagues V2 Local Certification
+
+on:
+  push:
+    branches:
+      - evidence/wyscout-missing-leagues-v2-certification
+    paths:
+      - .github/workflows/wyscout-missing-leagues-v2-local-certification.yml
+
+permissions:
+  contents: write
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: football_intelligence_wyscout_v2_local
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: football_intelligence_wyscout_v2_local
+      LOCAL_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_wyscout_v2_local
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: evidence/wyscout-missing-leagues-v2-certification
+      - name: Apply migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Apply core seeds
+        run: psql -v ON_ERROR_STOP=1 -f database/seeds/001_core_catalog.sql
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Install analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+
+      - name: Load FRA_L1 once to reproduce certified runtime
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-load-wyscout-historical
+          --competition FRA_L1
+          --database-url "$LOCAL_DATABASE_URL"
+          --cache-dir data/cache/wyscout-open
+          --report "$RUNNER_TEMP/fra-load.json"
+      - name: Load GER_BL1 once to reproduce certified runtime
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-load-wyscout-historical
+          --competition GER_BL1
+          --database-url "$LOCAL_DATABASE_URL"
+          --cache-dir data/cache/wyscout-open
+          --report "$RUNNER_TEMP/ger-load.json"
+      - name: Load ESP_LL first pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-load-wyscout-historical
+          --competition ESP_LL
+          --database-url "$LOCAL_DATABASE_URL"
+          --cache-dir data/cache/wyscout-open
+          --report "$RUNNER_TEMP/esp-first.json"
+      - name: Load ESP_LL second pass for idempotency
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-load-wyscout-historical
+          --competition ESP_LL
+          --database-url "$LOCAL_DATABASE_URL"
+          --cache-dir data/cache/wyscout-open
+          --report "$RUNNER_TEMP/esp-second.json"
+      - name: Load ITA_SA first pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-load-wyscout-historical
+          --competition ITA_SA
+          --database-url "$LOCAL_DATABASE_URL"
+          --cache-dir data/cache/wyscout-open
+          --report "$RUNNER_TEMP/ita-first.json"
+      - name: Load ITA_SA second pass for idempotency
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-load-wyscout-historical
+          --competition ITA_SA
+          --database-url "$LOCAL_DATABASE_URL"
+          --cache-dir data/cache/wyscout-open
+          --report "$RUNNER_TEMP/ita-second.json"
+
+      - name: Calculate FRA_L1 Player V2 first pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-player-analytics
+          --season 2017/18
+          --competition FRA_L1
+          --database-url "$LOCAL_DATABASE_URL"
+          --report "$RUNNER_TEMP/fra-v2-first.json"
+      - name: Calculate FRA_L1 Player V2 second pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-player-analytics
+          --season 2017/18
+          --competition FRA_L1
+          --database-url "$LOCAL_DATABASE_URL"
+          --report "$RUNNER_TEMP/fra-v2-second.json"
+      - name: Calculate GER_BL1 Player V2 first pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-player-analytics
+          --season 2017/18
+          --competition GER_BL1
+          --database-url "$LOCAL_DATABASE_URL"
+          --report "$RUNNER_TEMP/ger-v2-first.json"
+      - name: Calculate GER_BL1 Player V2 second pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-player-analytics
+          --season 2017/18
+          --competition GER_BL1
+          --database-url "$LOCAL_DATABASE_URL"
+          --report "$RUNNER_TEMP/ger-v2-second.json"
+      - name: Calculate ESP_LL Player V2 first pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-player-analytics
+          --season 2017/18
+          --competition ESP_LL
+          --database-url "$LOCAL_DATABASE_URL"
+          --report "$RUNNER_TEMP/esp-v2-first.json"
+      - name: Calculate ESP_LL Player V2 second pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-player-analytics
+          --season 2017/18
+          --competition ESP_LL
+          --database-url "$LOCAL_DATABASE_URL"
+          --report "$RUNNER_TEMP/esp-v2-second.json"
+      - name: Calculate ITA_SA Player V2 first pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-player-analytics
+          --season 2017/18
+          --competition ITA_SA
+          --database-url "$LOCAL_DATABASE_URL"
+          --report "$RUNNER_TEMP/ita-v2-first.json"
+      - name: Calculate ITA_SA Player V2 second pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-player-analytics
+          --season 2017/18
+          --competition ITA_SA
+          --database-url "$LOCAL_DATABASE_URL"
+          --report "$RUNNER_TEMP/ita-v2-second.json"
+
+      - name: Build and verify certification report
+        working-directory: analytics
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          from collections import Counter
+          from pathlib import Path
+
+          import psycopg
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          load_reports = {
+              "FRA_L1": json.loads((temp / "fra-load.json").read_text()),
+              "GER_BL1": json.loads((temp / "ger-load.json").read_text()),
+              "ESP_LL:first": json.loads((temp / "esp-first.json").read_text()),
+              "ESP_LL:second": json.loads((temp / "esp-second.json").read_text()),
+              "ITA_SA:first": json.loads((temp / "ita-first.json").read_text()),
+              "ITA_SA:second": json.loads((temp / "ita-second.json").read_text()),
+          }
+          v2_reports = {
+              "FRA_L1:first": json.loads((temp / "fra-v2-first.json").read_text()),
+              "FRA_L1:second": json.loads((temp / "fra-v2-second.json").read_text()),
+              "GER_BL1:first": json.loads((temp / "ger-v2-first.json").read_text()),
+              "GER_BL1:second": json.loads((temp / "ger-v2-second.json").read_text()),
+              "ESP_LL:first": json.loads((temp / "esp-v2-first.json").read_text()),
+              "ESP_LL:second": json.loads((temp / "esp-v2-second.json").read_text()),
+              "ITA_SA:first": json.loads((temp / "ita-v2-first.json").read_text()),
+              "ITA_SA:second": json.loads((temp / "ita-v2-second.json").read_text()),
+          }
+
+          previously_certified = {
+              "FRA_L1": {
+                  "matches": 380,
+                  "teams": 20,
+                  "players": 542,
+                  "player_appearances": 10515,
+                  "player_match_stats": 10515,
+                  "team_match_stats": 760,
+                  "source_observations": 415230,
+              },
+              "GER_BL1": {
+                  "matches": 306,
+                  "teams": 18,
+                  "players": 472,
+                  "player_appearances": 8501,
+                  "player_match_stats": 8501,
+                  "team_match_stats": 612,
+                  "source_observations": 336265,
+              },
+          }
+          for competition, expected in previously_certified.items():
+              report = load_reports[competition]
+              assert report["status"] == "PASS", (competition, report)
+              assert report["database_scope_counts"] == expected, (
+                  competition,
+                  report["database_scope_counts"],
+                  expected,
+              )
+              assert report["adapter"]["all_checks_passed"] is True
+              assert report["adapter"]["safe_identities"] == 77
+              assert report["adapter"]["identities_with_observations"] == 77
+              assert report["adapter"]["conflicting_duplicates"] == 0
+              assert report["adapter"]["wrong_country_source_references"] == 0
+              assert report["adapter"]["native_goal_total"] == report["adapter"][
+                  "observed_team_goal_total"
+              ]
+
+          for competition in ("ESP_LL", "ITA_SA"):
+              first = load_reports[f"{competition}:first"]
+              second = load_reports[f"{competition}:second"]
+              assert first["status"] == second["status"] == "PASS"
+              assert first["scope"]["competition"] == second["scope"]["competition"] == competition
+              assert first["database_scope_counts"] == second["database_scope_counts"]
+              assert first["database_scope_counts"]["matches"] == 380
+              assert first["database_scope_counts"]["teams"] == 20
+              assert first["database_scope_counts"]["team_match_stats"] == 760
+              assert first["database_scope_counts"]["players"] > 0
+              assert first["database_scope_counts"]["source_observations"] > 0
+              for report in (first, second):
+                  assert report["adapter"]["all_checks_passed"] is True
+                  assert report["adapter"]["safe_identities"] == 77
+                  assert report["adapter"]["identities_with_observations"] == 77
+                  assert report["adapter"]["conflicting_duplicates"] == 0
+                  assert report["adapter"]["wrong_country_source_references"] == 0
+                  assert report["adapter"]["native_goal_total"] == report["adapter"][
+                      "observed_team_goal_total"
+                  ]
+                  assert report["writes"]["production_written"] is False
+                  assert report["product"]["player_v2_snapshots_published"] is False
+
+          for competition in ("FRA_L1", "GER_BL1", "ESP_LL", "ITA_SA"):
+              first = v2_reports[f"{competition}:first"]
+              second = v2_reports[f"{competition}:second"]
+              assert first["model_version"] == second["model_version"] == "player-v2.0"
+              assert first["competition"] == second["competition"] == competition
+              assert first["scope_key"] == second["scope_key"] == f"competition:{competition}:2017/18"
+              assert first["score_snapshot_count"] == second["score_snapshot_count"]
+              assert first["feature_snapshot_count"] == second["feature_snapshot_count"]
+              assert first["evidence_state_counts"] == second["evidence_state_counts"]
+
+          product_counts = {}
+          with psycopg.connect(os.environ["LOCAL_DATABASE_URL"]) as connection:
+              for competition in ("FRA_L1", "GER_BL1", "ESP_LL", "ITA_SA"):
+                  scope_key = f"competition:{competition}:2017/18"
+                  params = (scope_key, "player-v2.0")
+                  def scalar(query: str) -> int:
+                      row = connection.execute(query, params).fetchone()
+                      assert row is not None
+                      return int(row[0])
+
+                  product_counts[competition] = {
+                      "season_players": scalar(
+                          """select count(distinct player_id) from analytics.product_player_detail_v2
+                             where scope_key=%s and model_version=%s and window_key='season'"""
+                      ),
+                      "season_players_450_min": scalar(
+                          """select count(distinct player_id) from analytics.product_player_detail_v2
+                             where scope_key=%s and model_version=%s and window_key='season'
+                               and minutes>=450"""
+                      ),
+                      "performance_ready": scalar(
+                          """select count(*) from analytics.product_player_detail_v2 s
+                             cross join lateral jsonb_each(s.dimension_evidence) e
+                             where s.scope_key=%s and s.model_version=%s and s.window_key='season'
+                               and e.key='performance' and e.value->>'evidence_state'='ready'
+                               and e.value->>'score' is not null"""
+                      ),
+                      "ranking_candidates": scalar(
+                          """select count(*) from analytics.product_player_ranking_candidates_v2
+                             where scope_key=%s and model_version=%s"""
+                      ),
+                      "overall_scores": scalar(
+                          """select count(*) from analytics.product_player_detail_v2
+                             where scope_key=%s and model_version=%s and overall_score is not null"""
+                      ),
+                  }
+
+          scopes = {}
+          for competition in ("FRA_L1", "GER_BL1", "ESP_LL", "ITA_SA"):
+              if competition in previously_certified:
+                  load_first = load_reports[competition]
+                  load_second = None
+                  loader_idempotency = "previously_certified_and_reproduced_once"
+              else:
+                  load_first = load_reports[f"{competition}:first"]
+                  load_second = load_reports[f"{competition}:second"]
+                  loader_idempotency = True
+              v2_first = v2_reports[f"{competition}:first"]
+              v2_second = v2_reports[f"{competition}:second"]
+              scopes[competition] = {
+                  "loader_first": load_first,
+                  "loader_second": load_second,
+                  "loader_idempotent": loader_idempotency,
+                  "player_v2_first": v2_first,
+                  "player_v2_second": v2_second,
+                  "player_v2_idempotent": True,
+                  "product_counts": product_counts[competition],
+              }
+
+          summary = {
+              "status": "PASS",
+              "main_sha_under_test": "3e11ba62105e58836ccdb8ab16c4d7fdaa5ac8ea",
+              "database_target": "ephemeral-local-postgresql-17",
+              "production_written": False,
+              "official_source": "Wyscout Open Data / Figshare",
+              "scope": "missing European historical core leagues",
+              "scopes": scopes,
+          }
+          output = Path("../evidence/wyscout-open/missing-leagues-player-v2-local-certification.json")
+          output.parent.mkdir(parents=True, exist_ok=True)
+          output.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+          PY
+
+      - name: Persist evidence report on evidence branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evidence/wyscout-open/missing-leagues-player-v2-local-certification.json
+          git commit -m "evidence: certify missing Wyscout leagues and Player V2"
+          git push origin HEAD:evidence/wyscout-missing-leagues-v2-certification
