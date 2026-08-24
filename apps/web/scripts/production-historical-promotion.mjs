@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import postgres from "postgres";
 
-const TARGET_COMPETITION = "GER_BL1";
+const TARGET_COMPETITION = "ITA_SA";
 const SEASON_LABEL = "2017/18";
 const MODEL_VERSION = "player-v2.0";
 const CONFIRMATION = "I UNDERSTAND THIS WRITES TO THE REAL PRODUCTION DATABASE";
