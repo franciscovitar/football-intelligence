@@ -1,0 +1,171 @@
+name: FootyStats Player Metric Lab PR2
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: github.head_ref == 'lab/footystats-player-metric-schema'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.13'
+      - name: Audit nested public example stats
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import time
+          from collections import Counter
+          from pathlib import Path
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+
+          BASE = 'https://api.football-data-api.com/league-players'
+          UA = 'FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
+          SEASONS = (12325, 2012, 1625)
+          TARGETS = (
+              'xg_total_overall', 'xg_per_90_overall', 'xa_total_overall',
+              'xa_per_90_overall', 'npxg_total_overall', 'npxg_per_90_overall',
+              'key_passes_total_overall', 'progressive_passes_total_overall',
+              'passes_total_overall', 'passes_completed_total_overall',
+              'pass_completion_rate_overall', 'shots_total_overall',
+              'shots_on_target_total_overall', 'dribbles_total_overall',
+              'dribbles_successful_total_overall',
+              'dribbles_successful_percentage_overall', 'tackles_total_overall',
+              'tackles_successful_total_overall', 'interceptions_total_overall',
+              'blocks_total_overall', 'aerial_duels_won_total_overall',
+              'aerial_duels_won_percentage_overall', 'saves_total_overall',
+              'shots_faced_total_overall', 'save_percentage_overall',
+              'detailed_minutes_played_recorded_overall',
+              'detailed_matches_played_recorded_overall',
+          )
+
+          def fetch(season_id, page):
+              params = urlencode({'key': 'example', 'season_id': season_id, 'include': 'stats', 'page': page})
+              req = Request(f'{BASE}?{params}', headers={'Accept': 'application/json', 'User-Agent': UA})
+              with urlopen(req, timeout=30) as response:
+                  return json.loads(response.read())
+
+          def walk(value, prefix=''):
+              out = []
+              if isinstance(value, dict):
+                  for key, child in value.items():
+                      path = f'{prefix}.{key}' if prefix else key
+                      if isinstance(child, (dict, list)):
+                          out.extend(walk(child, path))
+                      else:
+                          out.append((path, child))
+              elif isinstance(value, list):
+                  for child in value:
+                      path = f'{prefix}[]'
+                      if isinstance(child, (dict, list)):
+                          out.extend(walk(child, path))
+                      else:
+                          out.append((path, child))
+              return out
+
+          def leaf_values(row, name):
+              return [value for path, value in walk(row) if path.rsplit('.', 1)[-1].replace('[]', '') == name]
+
+          reports = []
+          for season_id in SEASONS:
+              rows = []
+              for page in range(1, 5):
+                  payload = fetch(season_id, page)
+                  data = payload.get('data') if isinstance(payload, dict) else None
+                  if not isinstance(data, list) or not data:
+                      break
+                  rows.extend(item for item in data if isinstance(item, dict))
+                  if len(data) < 200:
+                      break
+                  time.sleep(0.2)
+
+              path_counts = Counter()
+              target_present = Counter()
+              target_non_null = Counter()
+              container_shapes = Counter()
+              for row in rows:
+                  for key, value in row.items():
+                      container_shapes[f'top:{key}:{type(value).__name__}'] += 1
+                  seen = set()
+                  non_null_seen = set()
+                  for path, value in walk(row):
+                      path_counts[path] += 1
+                      leaf = path.rsplit('.', 1)[-1].replace('[]', '')
+                      if leaf in TARGETS:
+                          seen.add(leaf)
+                          if value is not None:
+                              non_null_seen.add(leaf)
+                  target_present.update(seen)
+                  target_non_null.update(non_null_seen)
+
+              high_paths = sorted(
+                  path for path in path_counts
+                  if any(token in path.casefold() for token in (
+                      'xg', 'xa', 'progress', 'key_pass', 'tackle', 'interception',
+                      'block', 'dribble', 'aerial', 'save', 'shot', 'pass', 'duel',
+                      'recover', 'pressure', 'carry', 'error', 'chance', 'box',
+                  ))
+              )
+
+              formulas = {}
+              for total_name, rate_name in (
+                  ('xg_total_overall', 'xg_per_90_overall'),
+                  ('xa_total_overall', 'xa_per_90_overall'),
+                  ('npxg_total_overall', 'npxg_per_90_overall'),
+              ):
+                  checked = good = 0
+                  for row in rows:
+                      totals = leaf_values(row, total_name)
+                      rates = leaf_values(row, rate_name)
+                      minutes = leaf_values(row, 'minutes_played_overall')
+                      if len(totals) != 1 or len(rates) != 1 or len(minutes) != 1:
+                          continue
+                      try:
+                          total = float(totals[0]); rate = float(rates[0]); mins = float(minutes[0])
+                      except (TypeError, ValueError):
+                          continue
+                      if mins <= 0:
+                          continue
+                      checked += 1
+                      expected = total * 90 / mins
+                      good += abs(rate - expected) <= max(0.02, abs(expected) * 0.05)
+                  formulas[f'{rate_name}_from_total_minutes'] = {'checked': checked, 'within_tolerance': good}
+
+              reports.append({
+                  'season_id': season_id,
+                  'rows': len(rows),
+                  'reported_seasons': sorted({str(v) for row in rows for v in leaf_values(row, 'season')}),
+                  'top_level_shapes': dict(container_shapes),
+                  'target_coverage': {
+                      name: {
+                          'present_rows': target_present[name],
+                          'non_null_rows': target_non_null[name],
+                          'share_non_null': round(target_non_null[name] / len(rows), 4) if rows else 0,
+                      }
+                      for name in TARGETS
+                  },
+                  'high_leverage_paths': high_paths,
+                  'formula_checks': formulas,
+              })
+
+          report = {'status': 'PASS', 'raw_rows_persisted': False, 'seasons': reports}
+          output = Path(os.environ['RUNNER_TEMP']) / 'footystats-player-metric-lab2.json'
+          output.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n')
+          print(json.dumps(report, indent=2, sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: footystats-player-metric-lab-pr2
+          path: ${{ runner.temp }}/footystats-player-metric-lab2.json
+          if-no-files-found: error
+          retention-days: 7
