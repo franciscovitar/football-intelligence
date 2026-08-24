@@ -60,7 +60,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.format]
 quote-style = "double"
-indent-style = "    "
+indent-style = "space"
 
 [tool.pytest.ini_options]
 addopts = "-ra -q"
