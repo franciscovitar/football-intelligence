@@ -59,6 +59,29 @@ jobs:
           if count != 1:
               raise RuntimeError(f'SIM102 helper patch expected one match, got {count}')
           helper_path.write_text(helper, encoding='utf-8')
+
+          loader_path = Path('analytics/src/football_intelligence/jobs/load_wyscout_historical.py')
+          loader = loader_path.read_text(encoding='utf-8')
+          old_optional_loop = '''    for field_name, expected in optional_exact_expectations.items():
+              actual = getattr(counts, field_name)
+              if expected is not None and actual != expected:
+                  raise WyscoutHistoricalLoadError(
+                      f"expected {expected} {field_name} after load, got {actual}"
+                  )
+          '''
+          new_optional_loop = '''    for field_name, optional_expected in optional_exact_expectations.items():
+              actual = getattr(counts, field_name)
+              if optional_expected is not None and actual != optional_expected:
+                  raise WyscoutHistoricalLoadError(
+                      f"expected {optional_expected} {field_name} after load, got {actual}"
+                  )
+          '''
+          if loader.count(old_optional_loop) != 1:
+              raise RuntimeError('optional invariant loop patch did not match exactly once')
+          loader_path.write_text(
+              loader.replace(old_optional_loop, new_optional_loop),
+              encoding='utf-8',
+          )
           PY
       - name: Remove temporary workflows
         run: >-
