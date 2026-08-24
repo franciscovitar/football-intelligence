@@ -52,7 +52,8 @@ def main() -> None:
 
     if args.report is not None:
         args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        report_content = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+        args.report.write_text(report_content, encoding="utf-8")
 
     if not verification.passed:
         failed = [file.path for file in verification.files if not file.passed]
