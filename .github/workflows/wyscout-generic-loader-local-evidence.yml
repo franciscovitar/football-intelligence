@@ -1,0 +1,194 @@
+name: Wyscout Generic Loader Local Evidence
+
+on:
+  push:
+    branches:
+      - evidence/wyscout-generic-loader-local-idempotency
+    paths:
+      - .github/workflows/wyscout-generic-loader-local-evidence.yml
+
+permissions:
+  contents: write
+
+jobs:
+  local-idempotency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: football_intelligence_wyscout_local
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: football_intelligence_wyscout_local
+      LOCAL_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_wyscout_local
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: evidence/wyscout-generic-loader-local-idempotency
+      - name: Apply migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Apply core seeds
+        run: psql -v ON_ERROR_STOP=1 -f database/seeds/001_core_catalog.sql
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Install analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+      - name: Load FRA_L1 first pass from official Wyscout Open bytes
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-load-wyscout-historical
+          --competition FRA_L1
+          --database-url "$LOCAL_DATABASE_URL"
+          --cache-dir data/cache/wyscout-open
+          --report "$RUNNER_TEMP/fra-first.json"
+      - name: Load FRA_L1 second pass for idempotency
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-load-wyscout-historical
+          --competition FRA_L1
+          --database-url "$LOCAL_DATABASE_URL"
+          --cache-dir data/cache/wyscout-open
+          --report "$RUNNER_TEMP/fra-second.json"
+      - name: Load GER_BL1 first pass from same official cache
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-load-wyscout-historical
+          --competition GER_BL1
+          --database-url "$LOCAL_DATABASE_URL"
+          --cache-dir data/cache/wyscout-open
+          --report "$RUNNER_TEMP/ger-first.json"
+      - name: Load GER_BL1 second pass for idempotency
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-load-wyscout-historical
+          --competition GER_BL1
+          --database-url "$LOCAL_DATABASE_URL"
+          --cache-dir data/cache/wyscout-open
+          --report "$RUNNER_TEMP/ger-second.json"
+      - name: Verify exact local counts and idempotency
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          reports = {
+              "fra_first": json.loads((temp / "fra-first.json").read_text()),
+              "fra_second": json.loads((temp / "fra-second.json").read_text()),
+              "ger_first": json.loads((temp / "ger-first.json").read_text()),
+              "ger_second": json.loads((temp / "ger-second.json").read_text()),
+          }
+
+          expected = {
+              "FRA_L1": {
+                  "matches": 380,
+                  "teams": 20,
+                  "players": 542,
+                  "player_appearances": 10515,
+                  "player_match_stats": 10515,
+                  "team_match_stats": 760,
+                  "source_observations": 415230,
+              },
+              "GER_BL1": {
+                  "matches": 306,
+                  "teams": 18,
+                  "players": 472,
+                  "player_appearances": 8501,
+                  "player_match_stats": 8501,
+                  "team_match_stats": 612,
+                  "source_observations": 336265,
+              },
+          }
+
+          for key, competition in (
+              ("fra_first", "FRA_L1"),
+              ("fra_second", "FRA_L1"),
+              ("ger_first", "GER_BL1"),
+              ("ger_second", "GER_BL1"),
+          ):
+              report = reports[key]
+              assert report["status"] == "PASS", (key, report)
+              assert report["scope"]["competition"] == competition, (key, report["scope"])
+              assert report["database_scope_counts"] == expected[competition], (
+                  key,
+                  report["database_scope_counts"],
+                  expected[competition],
+              )
+              assert report["writes"]["database_target"] == "local-only"
+              assert report["writes"]["production_written"] is False
+              assert report["product"]["player_v2_snapshots_published"] is False
+              assert report["source_probe"]["counts_verified"] is True
+              assert report["adapter"]["all_checks_passed"] is True
+
+          assert reports["fra_first"]["database_scope_counts"] == reports["fra_second"][
+              "database_scope_counts"
+          ]
+          assert reports["ger_first"]["database_scope_counts"] == reports["ger_second"][
+              "database_scope_counts"
+          ]
+
+          summary = {
+              "status": "PASS",
+              "main_sha_under_test": "3e11ba62105e58836ccdb8ab16c4d7fdaa5ac8ea",
+              "database_target": "ephemeral-local-postgresql-17",
+              "production_written": False,
+              "player_v2_snapshots_published": False,
+              "official_source": "Wyscout Open Data / Figshare",
+              "scopes": {
+                  "FRA_L1": {
+                      "first_pass": reports["fra_first"],
+                      "second_pass": reports["fra_second"],
+                      "idempotent": True,
+                  },
+                  "GER_BL1": {
+                      "first_pass": reports["ger_first"],
+                      "second_pass": reports["ger_second"],
+                      "idempotent": True,
+                  },
+              },
+          }
+          output = Path("evidence/wyscout-open/generic-loader-local-idempotency.json")
+          output.parent.mkdir(parents=True, exist_ok=True)
+          output.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+          PY
+      - name: Verify no historical Player V2 snapshots were published
+        shell: bash
+        run: |
+          set -euo pipefail
+          COUNT="$(psql -Atc "select count(*) from intelligence.player_intelligence_v2 where season_label = '2017/18'")"
+          test "$COUNT" = "0"
+      - name: Persist evidence report on evidence branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evidence/wyscout-open/generic-loader-local-idempotency.json
+          git commit -m "evidence: certify generic Wyscout local loader idempotency"
+          git push origin HEAD:evidence/wyscout-generic-loader-local-idempotency
