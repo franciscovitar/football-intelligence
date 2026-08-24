@@ -111,9 +111,7 @@ def scope_config(competition_code: str) -> WyscoutHistoricalScopeConfig:
     return WyscoutHistoricalScopeConfig(spec=spec, scope=scope)
 
 
-def _load_country_payload(
-    cache_dir: Path, *, spec: WyscoutCoreLeagueSpec, kind: str
-) -> list[Any]:
+def _load_country_payload(cache_dir: Path, *, spec: WyscoutCoreLeagueSpec, kind: str) -> list[Any]:
     if kind not in {"matches", "events"}:
         raise ValueError(f"unsupported Wyscout country payload kind {kind!r}")
     filename = spec.match_filename if kind == "matches" else spec.event_filename
@@ -219,8 +217,7 @@ def validate_adapter_observations(
 ) -> WyscoutHistoricalAdapterValidation:
     failures: list[str] = []
     safe_identities = {
-        (mapping.catalog_key, mapping.catalog_granularity)
-        for mapping in adapter_safe_mappings()
+        (mapping.catalog_key, mapping.catalog_granularity) for mapping in adapter_safe_mappings()
     }
     observed_identities: set[tuple[str, str]] = set()
     matches_seen: set[str] = set()
@@ -243,9 +240,7 @@ def validate_adapter_observations(
                 "has no metric_granularity"
             )
         else:
-            observed_identities.add(
-                (observation.metric_name, observation.metric_granularity)
-            )
+            observed_identities.add((observation.metric_name, observation.metric_granularity))
 
         identity = (
             observation.source_code,
@@ -271,13 +266,17 @@ def validate_adapter_observations(
             matches_seen.add(observation.entity_source_id)
         elif observation.entity_type == "team":
             teams_seen.add(observation.entity_source_id.rsplit(":", maxsplit=1)[-1])
-            if observation.metric_name == "goals_for" and isinstance(
-                observation.value, (int, float)
-            ) and not isinstance(observation.value, bool):
+            if (
+                observation.metric_name == "goals_for"
+                and isinstance(observation.value, (int, float))
+                and not isinstance(observation.value, bool)
+            ):
                 observed_team_goal_total += int(observation.value)
-        elif observation.entity_type == "player":
-            if observation.entity_source_id.rsplit(":", maxsplit=1)[-1] == "0":
-                sentinel_player_observations += 1
+        elif (
+            observation.entity_type == "player"
+            and observation.entity_source_id.rsplit(":", maxsplit=1)[-1] == "0"
+        ):
+            sentinel_player_observations += 1
 
         if config.spec.source_file_label not in observation.source_reference:
             wrong_country_source_references += 1
@@ -306,8 +305,7 @@ def validate_adapter_observations(
         )
     if seasons != {config.scope.season_label}:
         failures.append(
-            f"adapter season scope expected={{{config.scope.season_label!r}}} "
-            f"actual={seasons!r}"
+            f"adapter season scope expected={{{config.scope.season_label!r}}} actual={seasons!r}"
         )
     if unexpected_identities:
         failures.append(
