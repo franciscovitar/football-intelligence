@@ -1,0 +1,85 @@
+name: Observe Wyscout Missing Leagues V2
+
+on:
+  push:
+    branches:
+      - evidence/wyscout-missing-leagues-v2-certification
+    paths:
+      - .github/workflows/observe-wyscout-missing-leagues-v2.yml
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EVIDENCE_BRANCH: evidence/wyscout-missing-leagues-v2-certification
+      TARGET_WORKFLOW: wyscout-missing-leagues-v2-local-certification.yml
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: evidence/wyscout-missing-leagues-v2-certification
+      - name: Find and observe certification run
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_ID="$(gh api --method GET \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/${TARGET_WORKFLOW}/runs" \
+            -f branch="${EVIDENCE_BRANCH}" \
+            -f per_page=5 \
+            --jq '.workflow_runs[0].id')"
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "No certification run found" >&2
+            exit 1
+          fi
+          echo "Certification run: $RUN_ID"
+
+          set +e
+          gh run watch "$RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status
+          WATCH_EXIT=$?
+          set -e
+
+          STATUS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" --jq '.status')"
+          CONCLUSION="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" --jq '.conclusion // ""')"
+          URL="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" --jq '.html_url')"
+          HEAD_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" --jq '.head_sha')"
+
+          mkdir -p evidence/wyscout-open
+          if [ "$CONCLUSION" != "success" ]; then
+            gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed \
+              > evidence/wyscout-open/missing-leagues-player-v2-failed.log 2>&1 || true
+          fi
+
+          python - <<PY
+          import json
+          from pathlib import Path
+
+          payload = {
+              "run_id": int("$RUN_ID"),
+              "status": "$STATUS",
+              "conclusion": "$CONCLUSION",
+              "html_url": "$URL",
+              "head_sha": "$HEAD_SHA",
+              "watch_exit": int("$WATCH_EXIT"),
+          }
+          Path("evidence/wyscout-open/missing-leagues-player-v2-run-status.json").write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Persist observed status on evidence branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evidence/wyscout-open/missing-leagues-player-v2-run-status.json
+          if [ -f evidence/wyscout-open/missing-leagues-player-v2-failed.log ]; then
+            git add evidence/wyscout-open/missing-leagues-player-v2-failed.log
+          fi
+          git commit -m "evidence: record Wyscout V2 certification run status"
+          git push origin HEAD:evidence/wyscout-missing-leagues-v2-certification
