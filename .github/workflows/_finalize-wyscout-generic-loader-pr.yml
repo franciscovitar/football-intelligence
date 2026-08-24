@@ -62,26 +62,25 @@ jobs:
 
           loader_path = Path('analytics/src/football_intelligence/jobs/load_wyscout_historical.py')
           loader = loader_path.read_text(encoding='utf-8')
-          old_optional_loop = '''    for field_name, expected in optional_exact_expectations.items():
-              actual = getattr(counts, field_name)
-              if expected is not None and actual != expected:
-                  raise WyscoutHistoricalLoadError(
-                      f"expected {expected} {field_name} after load, got {actual}"
-                  )
-          '''
-          new_optional_loop = '''    for field_name, optional_expected in optional_exact_expectations.items():
-              actual = getattr(counts, field_name)
-              if optional_expected is not None and actual != optional_expected:
-                  raise WyscoutHistoricalLoadError(
-                      f"expected {optional_expected} {field_name} after load, got {actual}"
-                  )
-          '''
-          if loader.count(old_optional_loop) != 1:
-              raise RuntimeError('optional invariant loop patch did not match exactly once')
-          loader_path.write_text(
-              loader.replace(old_optional_loop, new_optional_loop),
-              encoding='utf-8',
+          loader, count = re.subn(
+              r'(?m)^    for field_name, expected in optional_exact_expectations\.items\(\):\n'
+              r'        actual = getattr\(counts, field_name\)\n'
+              r'        if expected is not None and actual != expected:\n'
+              r'            raise WyscoutHistoricalLoadError\(\n'
+              r'                f"expected \{expected\} \{field_name\} after load, got \{actual\}"\n'
+              r'            \)$',
+              '    for field_name, optional_expected in optional_exact_expectations.items():\n'
+              '        actual = getattr(counts, field_name)\n'
+              '        if optional_expected is not None and actual != optional_expected:\n'
+              '            raise WyscoutHistoricalLoadError(\n'
+              '                f"expected {optional_expected} {field_name} after load, got {actual}"\n'
+              '            )',
+              loader,
+              count=1,
           )
+          if count != 1:
+              raise RuntimeError(f'optional invariant loop patch expected one match, got {count}')
+          loader_path.write_text(loader, encoding='utf-8')
           PY
       - name: Remove temporary workflows
         run: >-
