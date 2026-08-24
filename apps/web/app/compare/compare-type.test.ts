@@ -3,18 +3,18 @@ import { test } from "node:test";
 
 import { resolveCompareType } from "./compare-type.ts";
 
-test("no type param defaults to team", () => {
-  assert.equal(resolveCompareType(""), "team");
+test("no type param defaults to player", () => {
+  assert.equal(resolveCompareType(""), "player");
 });
 
 test("?type=team stays team", () => {
   assert.equal(resolveCompareType("team"), "team");
 });
 
-test("?type=player is honored", () => {
+test("?type=player stays player", () => {
   assert.equal(resolveCompareType("player"), "player");
 });
 
-test("an unrecognized type value falls back to team, not player", () => {
-  assert.equal(resolveCompareType("something-else"), "team");
+test("an unrecognized type value falls back to player", () => {
+  assert.equal(resolveCompareType("something-else"), "player");
 });
