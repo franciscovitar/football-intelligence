@@ -1,0 +1,194 @@
+name: FootyStats Player Individual Lab
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: github.head_ref == 'lab/footystats-player-metric-schema'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.13'
+      - name: Audit public individual-player endpoints
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          from pathlib import Path
+          from typing import Any
+          from urllib.error import HTTPError, URLError
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+
+          BASE = 'https://api.football-data-api.com'
+          PLAYER_ID = 216091
+          UA = 'FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
+
+          TARGETS = (
+              'xg_total_overall', 'xg_per_90_overall',
+              'xa_total_overall', 'xa_per_90_overall',
+              'npxg_total_overall', 'npxg_per_90_overall',
+              'key_passes_total_overall', 'progressive_passes_total_overall',
+              'passes_total_overall', 'passes_completed_total_overall',
+              'pass_completion_rate_overall', 'shots_total_overall',
+              'shots_on_target_total_overall', 'shot_accuraccy_percentage_overall',
+              'dribbles_total_overall', 'dribbles_successful_total_overall',
+              'dribbles_successful_percentage_overall', 'tackles_total_overall',
+              'tackles_successful_total_overall', 'interceptions_total_overall',
+              'blocks_total_overall', 'aerial_duels_won_total_overall',
+              'aerial_duels_won_percentage_overall', 'duels_total_overall',
+              'duels_won_total_overall', 'duels_won_percentage_overall',
+              'saves_total_overall', 'shots_faced_total_overall',
+              'save_percentage_overall', 'average_rating_overall',
+          )
+
+          def fetch(endpoint: str, include_stats: bool) -> dict[str, Any]:
+              params: dict[str, str] = {'key': 'example', 'player_id': str(PLAYER_ID)}
+              if include_stats:
+                  params['include'] = 'stats'
+              url = f"{BASE}/{endpoint}?{urlencode(params)}"
+              req = Request(url, headers={'Accept': 'application/json', 'User-Agent': UA})
+              try:
+                  with urlopen(req, timeout=30) as response:
+                      payload = json.loads(response.read())
+                      return {
+                          'http_status': response.status,
+                          'payload': payload,
+                          'error': None,
+                      }
+              except HTTPError as exc:
+                  return {'http_status': exc.code, 'payload': None, 'error': 'HTTPError'}
+              except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+                  return {'http_status': None, 'payload': None, 'error': type(exc).__name__}
+
+          def rows_from_payload(payload: Any) -> list[dict[str, Any]]:
+              if not isinstance(payload, dict):
+                  return []
+              data = payload.get('data')
+              if isinstance(data, list):
+                  return [row for row in data if isinstance(row, dict)]
+              if isinstance(data, dict):
+                  return [data]
+              return []
+
+          def num(value: Any) -> float | None:
+              if value is None or isinstance(value, bool):
+                  return None
+              try:
+                  return float(value)
+              except (TypeError, ValueError):
+                  return None
+
+          def metric_value(row: dict[str, Any], key: str) -> Any:
+              detailed = row.get('detailed')
+              if isinstance(detailed, dict) and key in detailed:
+                  return detailed.get(key)
+              return row.get(key)
+
+          def formula_checks(rows: list[dict[str, Any]]) -> dict[str, Any]:
+              out: dict[str, Any] = {}
+              for total_key, rate_key in (
+                  ('xg_total_overall', 'xg_per_90_overall'),
+                  ('xa_total_overall', 'xa_per_90_overall'),
+                  ('npxg_total_overall', 'npxg_per_90_overall'),
+              ):
+                  checked = good = 0
+                  for row in rows:
+                      total = num(metric_value(row, total_key))
+                      rate = num(metric_value(row, rate_key))
+                      minutes = num(row.get('minutes_played_overall'))
+                      if total is None or rate is None or minutes is None or minutes <= 0:
+                          continue
+                      expected = total * 90.0 / minutes
+                      checked += 1
+                      tolerance = max(0.02, abs(expected) * 0.05)
+                      if abs(rate - expected) <= tolerance:
+                          good += 1
+                  out[f'{rate_key}_from_total_minutes'] = {'checked': checked, 'within_tolerance': good}
+
+              for numerator_key, denominator_key, pct_key in (
+                  ('passes_completed_total_overall', 'passes_total_overall', 'pass_completion_rate_overall'),
+                  ('dribbles_successful_total_overall', 'dribbles_total_overall', 'dribbles_successful_percentage_overall'),
+                  ('duels_won_total_overall', 'duels_total_overall', 'duels_won_percentage_overall'),
+                  ('saves_total_overall', 'shots_faced_total_overall', 'save_percentage_overall'),
+                  ('shots_on_target_total_overall', 'shots_total_overall', 'shot_accuraccy_percentage_overall'),
+              ):
+                  checked = good = 0
+                  for row in rows:
+                      numerator = num(metric_value(row, numerator_key))
+                      denominator = num(metric_value(row, denominator_key))
+                      actual = num(metric_value(row, pct_key))
+                      if numerator is None or denominator is None or actual is None or denominator <= 0:
+                          continue
+                      expected = numerator * 100.0 / denominator
+                      checked += 1
+                      if abs(actual - expected) <= max(1.0, abs(expected) * 0.05):
+                          good += 1
+                  out[f'{pct_key}_from_ratio'] = {'checked': checked, 'within_tolerance': good}
+              return out
+
+          variants = []
+          for endpoint in ('player-stats', 'player'):
+              for include_stats in (False, True):
+                  result = fetch(endpoint, include_stats)
+                  rows = rows_from_payload(result['payload'])
+                  detailed_rows = sum(isinstance(row.get('detailed'), dict) for row in rows)
+                  coverage = {
+                      key: sum(metric_value(row, key) is not None for row in rows)
+                      for key in TARGETS
+                  }
+                  seasons = sorted({str(row.get('season')) for row in rows if row.get('season') is not None})
+                  competition_ids = sorted({str(row.get('competition_id')) for row in rows if row.get('competition_id') is not None})
+                  variants.append({
+                      'endpoint': endpoint,
+                      'include_stats': include_stats,
+                      'http_status': result['http_status'],
+                      'error': result['error'],
+                      'rows': len(rows),
+                      'detailed_rows': detailed_rows,
+                      'seasons': seasons,
+                      'competition_ids': competition_ids,
+                      'target_non_null': {key: value for key, value in coverage.items() if value},
+                      'formula_checks': formula_checks(rows),
+                  })
+
+          accessible = [item for item in variants if item['http_status'] == 200 and item['rows'] > 0]
+          advanced = [item for item in accessible if item['target_non_null']]
+          report = {
+              'status': 'PASS' if accessible else 'FAIL',
+              'source': 'FootyStats public example key',
+              'player_id': PLAYER_ID,
+              'raw_rows_persisted': False,
+              'variants': variants,
+              'decision_signal': {
+                  'any_endpoint_accessible': bool(accessible),
+                  'any_advanced_field_observed': bool(advanced),
+                  'advanced_endpoint_variants': [
+                      {'endpoint': item['endpoint'], 'include_stats': item['include_stats']}
+                      for item in advanced
+                  ],
+              },
+          }
+          path = Path(os.environ['RUNNER_TEMP']) / 'footystats-player-individual-lab.json'
+          path.write_text(json.dumps(report, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(json.dumps(report, indent=2, sort_keys=True))
+          if report['status'] != 'PASS':
+              raise SystemExit(1)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: footystats-player-individual-lab
+          path: ${{ runner.temp }}/footystats-player-individual-lab.json
+          if-no-files-found: error
+          retention-days: 7
