@@ -132,4 +132,6 @@ def historical_player_promotion_spec(competition_code: str) -> HistoricalPlayerP
     try:
         return _SPEC_BY_COMPETITION[competition_code]
     except KeyError as exc:
-        raise KeyError(f"unsupported historical promotion competition {competition_code!r}") from exc
+        raise KeyError(
+            f"unsupported historical promotion competition {competition_code!r}"
+        ) from exc
