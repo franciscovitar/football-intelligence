@@ -1,0 +1,275 @@
+name: Wyscout Five League Pipeline Evidence
+
+on:
+  push:
+    branches:
+      - evidence/wyscout-five-league-pipeline-audit
+    paths:
+      - .github/workflows/wyscout-five-league-pipeline-evidence.yml
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Install analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+      - name: Acquire official Wyscout Open assets
+        id: probe
+        shell: bash
+        working-directory: analytics
+        run: |
+          set +e
+          uv run football-intelligence-probe-wyscout-open \
+            --cache-dir data/cache/wyscout-open \
+            --report "$RUNNER_TEMP/wyscout-england-probe.json"
+          STATUS=$?
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Run real adapter and normalization audit
+        id: pipeline
+        shell: bash
+        working-directory: analytics
+        run: |
+          set +e
+          if [ "${{ steps.probe.outputs.status }}" != "0" ]; then
+            printf '{"status":"NOT_RUN","reason":"probe_failed"}\n' \
+              > "$RUNNER_TEMP/wyscout-five-league-pipeline-report.json"
+            echo "status=99" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          uv run python - <<'PY'
+          from __future__ import annotations
+
+          import gc
+          import json
+          import os
+          from pathlib import Path
+          from typing import Any
+
+          from football_intelligence.data_mesh.adapters.wyscout_open import (
+              DEFAULT_SCOPE,
+              ESP_LL_SCOPE,
+              FRA_L1_SCOPE,
+              GER_BL1_SCOPE,
+              ITA_SA_SCOPE,
+              parse_england_season,
+          )
+          from football_intelligence.jobs.audit_wyscout_core_leagues import (
+              _load_country_payload,
+              _load_reference_payload,
+          )
+          from football_intelligence.normalization.wyscout_historical import (
+              normalize_wyscout_historical_scope,
+          )
+          from football_intelligence.providers.wyscout_open_mapping import adapter_safe_mappings
+          from football_intelligence.providers.wyscout_open_scopes import CORE_LEAGUE_SPECS
+
+          cache_dir = Path("data/cache/wyscout-open")
+          report_path = Path(os.environ["RUNNER_TEMP"]) / "wyscout-five-league-pipeline-report.json"
+          scopes = {
+              "ENG_PL": DEFAULT_SCOPE,
+              "ESP_LL": ESP_LL_SCOPE,
+              "FRA_L1": FRA_L1_SCOPE,
+              "GER_BL1": GER_BL1_SCOPE,
+              "ITA_SA": ITA_SA_SCOPE,
+          }
+          safe_identities = {
+              (mapping.catalog_key, mapping.catalog_granularity)
+              for mapping in adapter_safe_mappings()
+          }
+          players_payload = _load_reference_payload(cache_dir, "*players.json", label="players.json")
+          teams_payload = _load_reference_payload(cache_dir, "*teams.json", label="teams.json")
+
+          results: list[dict[str, Any]] = []
+          for spec in CORE_LEAGUE_SPECS:
+              scope = scopes[spec.competition_code]
+              failures: list[str] = []
+              try:
+                  matches_payload = _load_country_payload(cache_dir, spec=spec, kind="matches")
+                  events_payload = _load_country_payload(cache_dir, spec=spec, kind="events")
+                  observations = parse_england_season(
+                      matches_payload=matches_payload,
+                      events_payload=events_payload,
+                      players_payload=players_payload,
+                      teams_payload=teams_payload,
+                      scope=scope,
+                  )
+
+                  observed_identities = {
+                      (obs.metric_name, obs.metric_granularity)
+                      for obs in observations
+                      if obs.metric_granularity is not None
+                  }
+                  unexpected = sorted(observed_identities - safe_identities)
+                  missing_safe = sorted(safe_identities - observed_identities)
+                  if unexpected:
+                      failures.append(f"unexpected metric identities: {unexpected}")
+                  if missing_safe:
+                      failures.append(f"adapter-safe identities without observations: {missing_safe}")
+
+                  seen: dict[tuple[Any, ...], Any] = {}
+                  duplicate_conflicts = 0
+                  for obs in observations:
+                      key = (
+                          obs.source_code,
+                          obs.entity_type,
+                          obs.entity_source_id,
+                          obs.metric_name,
+                          obs.metric_granularity,
+                      )
+                      if key in seen and seen[key] != obs.value:
+                          duplicate_conflicts += 1
+                      else:
+                          seen.setdefault(key, obs.value)
+                  if duplicate_conflicts:
+                      failures.append(f"conflicting duplicate observations: {duplicate_conflicts}")
+
+                  label = spec.source_file_label
+                  wrong_references = sum(
+                      1
+                      for obs in observations
+                      if obs.source_reference.startswith("wyscout/")
+                      and label not in obs.source_reference
+                  )
+                  if wrong_references:
+                      failures.append(f"wrong country source references: {wrong_references}")
+
+                  native_goal_total = sum(
+                      int(team_entry.get("score", 0))
+                      for match in matches_payload
+                      if isinstance(match, dict)
+                      for team_entry in (
+                          match.get("teamsData", {}).values()
+                          if isinstance(match.get("teamsData"), dict)
+                          else []
+                      )
+                      if isinstance(team_entry, dict) and isinstance(team_entry.get("score"), int)
+                  )
+                  observed_team_goal_total = sum(
+                      int(obs.value)
+                      for obs in observations
+                      if obs.metric_name == "goals_for"
+                      and obs.metric_granularity == "team_match"
+                  )
+                  if native_goal_total != observed_team_goal_total:
+                      failures.append(
+                          "native/team goals mismatch: "
+                          f"{native_goal_total} != {observed_team_goal_total}"
+                      )
+
+                  normalized = normalize_wyscout_historical_scope(
+                      matches_payload=matches_payload,
+                      events_payload=events_payload,
+                      players_payload=players_payload,
+                      teams_payload=teams_payload,
+                      scope=scope,
+                      expected_match_count=spec.expected_match_count,
+                  )
+                  batch = normalized.batch
+                  if len(batch.matches) != spec.expected_match_count:
+                      failures.append(
+                          f"normalized matches {len(batch.matches)} != {spec.expected_match_count}"
+                      )
+                  if len(batch.teams) != spec.expected_team_count:
+                      failures.append(
+                          f"normalized teams {len(batch.teams)} != {spec.expected_team_count}"
+                      )
+                  expected_team_match_rows = spec.expected_match_count * 2
+                  if len(batch.team_match_stats) != expected_team_match_rows:
+                      failures.append(
+                          "team-match rows "
+                          f"{len(batch.team_match_stats)} != {expected_team_match_rows}"
+                      )
+                  if normalized.unresolved_participating_player_ids:
+                      failures.append(
+                          "participating players missing from players.json: "
+                          f"{list(normalized.unresolved_participating_player_ids)}"
+                      )
+                  if len(batch.appearances) != len(batch.player_match_stats):
+                      failures.append(
+                          "appearance/player-match row mismatch: "
+                          f"{len(batch.appearances)} != {len(batch.player_match_stats)}"
+                      )
+
+                  results.append(
+                      {
+                          "competition_code": spec.competition_code,
+                          "provider_competition_id": scope.provider_competition_id,
+                          "provider_season_id": scope.provider_season_id,
+                          "matches": len(batch.matches),
+                          "teams": len(batch.teams),
+                          "players": len(batch.players),
+                          "appearances": len(batch.appearances),
+                          "player_match_stats": len(batch.player_match_stats),
+                          "team_match_stats": len(batch.team_match_stats),
+                          "adapter_observations": len(observations),
+                          "adapter_safe_identities": len(safe_identities),
+                          "observed_safe_identities": len(observed_identities & safe_identities),
+                          "conflicting_duplicates": duplicate_conflicts,
+                          "wrong_country_source_references": wrong_references,
+                          "native_goal_total": native_goal_total,
+                          "observed_team_goal_total": observed_team_goal_total,
+                          "unresolved_participating_player_ids": list(
+                              normalized.unresolved_participating_player_ids
+                          ),
+                          "failures": failures,
+                          "passed": not failures,
+                      }
+                  )
+              except Exception as exc:
+                  results.append(
+                      {
+                          "competition_code": spec.competition_code,
+                          "provider_competition_id": scope.provider_competition_id,
+                          "provider_season_id": scope.provider_season_id,
+                          "failures": [f"{type(exc).__name__}: {exc}"],
+                          "passed": False,
+                      }
+                  )
+              finally:
+                  for name in ("matches_payload", "events_payload", "observations", "normalized"):
+                      if name in locals():
+                          del locals()[name]
+                  gc.collect()
+
+          payload = {
+              "status": "PASS" if results and all(item["passed"] for item in results) else "FAIL",
+              "results": results,
+          }
+          report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(json.dumps(payload, indent=2, sort_keys=True))
+          raise SystemExit(0 if payload["status"] == "PASS" else 1)
+          PY
+          STATUS=$?
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Persist evidence report on isolated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/wyscout-open
+          cp "$RUNNER_TEMP/wyscout-five-league-pipeline-report.json" \
+            evidence/wyscout-open/five-league-pipeline-2017-18-report.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evidence/wyscout-open/five-league-pipeline-2017-18-report.json
+          git commit -m "evidence: record real Wyscout five-league pipeline audit" || true
+          git push origin HEAD:evidence/wyscout-five-league-pipeline-audit
+      - name: Enforce real pipeline result
+        shell: bash
+        run: |
+          test "${{ steps.probe.outputs.status }}" = "0"
+          test "${{ steps.pipeline.outputs.status }}" = "0"
