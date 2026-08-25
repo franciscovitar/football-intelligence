@@ -1,0 +1,92 @@
+name: Temporary Wyscout v0.5 ENG Runtime Evidence
+
+on:
+  push:
+    branches:
+      - evidence/wyscout-spatial-v12-core-runtime
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: football_intelligence_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: football_intelligence_test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_test
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Apply schema and core seed
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$migration" >/dev/null
+          done
+          psql -v ON_ERROR_STOP=1 -f database/seeds/001_core_catalog.sql >/dev/null
+
+      - name: Sync analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+
+      - name: Acquire official Wyscout Open source
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-probe-wyscout-open \
+            --cache-dir "$RUNNER_TEMP/wyscout-cache" \
+            --report "$RUNNER_TEMP/wyscout-probe.json"
+
+      - name: Patch exact v0.5 candidate and ENG-only evidence loop
+        run: |
+          python scripts/tmp_patch_wyscout_v05_candidate.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/tmp_wyscout_v05_core_runtime.py")
+          text = path.read_text(encoding="utf-8")
+          old = 'COMPETITIONS = ("ESP_LL", "ITA_SA", "GER_BL1", "FRA_L1")'
+          new = 'COMPETITIONS = ("ENG_PL",)'
+          if text.count(old) != 1:
+              raise SystemExit(f"expected one competition tuple, found {text.count(old)}")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
+      - name: Run ENG ephemeral PostgreSQL product-path evidence
+        working-directory: analytics
+        run: |
+          uv run python ../scripts/tmp_wyscout_v05_core_runtime.py \
+            --cache-dir "$RUNNER_TEMP/wyscout-cache" \
+            --database-url "$DATABASE_URL" \
+            --report "$RUNNER_TEMP/wyscout-v05-eng-runtime.json"
+
+      - name: Upload evidence report only
+        uses: actions/upload-artifact@v7
+        with:
+          name: wyscout-v05-eng-runtime-evidence
+          path: |
+            ${{ runner.temp }}/wyscout-probe.json
+            ${{ runner.temp }}/wyscout-v05-eng-runtime.json
+          retention-days: 7
