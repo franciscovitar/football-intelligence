@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import time
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -34,6 +35,10 @@ from football_intelligence.providers.wikidata_profiles import (
 
 MAX_QIDS = 50
 HTTP_TIMEOUT_SECONDS = 30
+MAX_ATTEMPTS = 4
+DEFAULT_RETRY_DELAY_SECONDS = 5.0
+MAX_RETRY_DELAY_SECONDS = 30.0
+RETRYABLE_HTTP_STATUSES = {429, 500, 502, 503, 504}
 USER_AGENT = "FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)"
 
 
@@ -115,23 +120,38 @@ def collect_snapshot(
 
 def _fetch_entity(qid: str) -> bytes:
     url = f"{ENTITY_DATA_REFERENCE}/{qid}.json"
-    request = Request(
-        url,
-        headers={
-            "Accept": "application/json",
-            "User-Agent": USER_AGENT,
-        },
-        method="GET",
-    )
-    try:
-        with urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
-            return cast(bytes, response.read())
-    except HTTPError as exc:
-        retry_after = exc.headers.get("Retry-After")
-        suffix = f"; Retry-After={retry_after}" if retry_after else ""
-        raise WikidataCollectionError(f"{qid} HTTP {exc.code}{suffix}") from exc
-    except URLError as exc:
-        raise WikidataCollectionError(f"{qid} network error: {exc.reason}") from exc
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        request = Request(
+            url,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": USER_AGENT,
+            },
+            method="GET",
+        )
+        try:
+            with urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
+                return cast(bytes, response.read())
+        except HTTPError as exc:
+            retry_after = exc.headers.get("Retry-After")
+            if exc.code not in RETRYABLE_HTTP_STATUSES or attempt == MAX_ATTEMPTS:
+                suffix = f"; Retry-After={retry_after}" if retry_after else ""
+                raise WikidataCollectionError(f"{qid} HTTP {exc.code}{suffix}") from exc
+            time.sleep(_retry_delay(attempt=attempt, retry_after=retry_after))
+        except (URLError, TimeoutError) as exc:
+            if attempt == MAX_ATTEMPTS:
+                reason = exc.reason if isinstance(exc, URLError) else str(exc)
+                raise WikidataCollectionError(f"{qid} network error: {reason}") from exc
+            time.sleep(_retry_delay(attempt=attempt, retry_after=None))
+
+    raise AssertionError("bounded Wikidata fetch exhausted without returning or raising")
+
+
+def _retry_delay(*, attempt: int, retry_after: str | None) -> float:
+    if retry_after and retry_after.isdigit():
+        return min(float(retry_after), MAX_RETRY_DELAY_SECONDS)
+    exponential = DEFAULT_RETRY_DELAY_SECONDS * (2 ** (attempt - 1))
+    return min(exponential, MAX_RETRY_DELAY_SECONDS)
 
 
 def _canonical_qids(qids: tuple[str, ...]) -> tuple[str, ...]:

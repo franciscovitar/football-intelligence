@@ -234,7 +234,7 @@ def resolve_wikidata_team_candidate(
             continue
 
         description_text = description.casefold() if isinstance(description, str) else ""
-        if "football" not in description_text:
+        if "football club" not in description_text:
             continue
         if _normalize_wikidata_search_label(label) != target:
             continue

@@ -158,7 +158,7 @@ def test_team_mapping_fails_closed_on_ambiguous_exact_football_candidates() -> N
     assert mapping.wikidata_qid is None
 
 
-def test_team_mapping_fails_closed_on_same_name_football_homonym() -> None:
+def test_team_mapping_ignores_same_name_footballer_when_one_exact_club_exists() -> None:
     mapping = resolve_wikidata_team_candidate(
         wyscout_team_id=1623,
         wyscout_name="Everton",
@@ -176,8 +176,8 @@ def test_team_mapping_fails_closed_on_same_name_football_homonym() -> None:
         ],
     )
 
-    assert mapping.status == "ambiguous_exact_football_club_candidates"
-    assert mapping.wikidata_qid is None
+    assert mapping.status == "resolved"
+    assert mapping.wikidata_qid == "Q5794"
 
 
 def test_candidate_discovery_uses_exact_name_and_filters_known_dob_conflict() -> None:

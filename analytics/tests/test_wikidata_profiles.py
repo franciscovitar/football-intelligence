@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import date
 from pathlib import Path
+from urllib.error import HTTPError
 
 import pytest
 
@@ -295,6 +296,50 @@ def test_missing_label_cannot_become_identity_record() -> None:
             season_end=date(2018, 5, 31),
             team_qid_to_context={},
         )
+
+
+def test_collector_retries_transient_503_then_writes_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    encoded = json.dumps(_document("Q201"), sort_keys=True).encode("utf-8")
+    calls = 0
+
+    class FakeResponse:
+        def __enter__(self) -> FakeResponse:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return encoded
+
+    def fake_urlopen(request: object, timeout: int) -> FakeResponse:
+        nonlocal calls
+        del request, timeout
+        calls += 1
+        if calls == 1:
+            raise HTTPError(
+                "https://www.wikidata.org/wiki/Special:EntityData/Q201.json",
+                503,
+                "Service Unavailable",
+                {"Retry-After": "0"},
+                None,
+            )
+        return FakeResponse()
+
+    monkeypatch.setattr(collect_wikidata_profiles, "urlopen", fake_urlopen)
+    manifest = collect_wikidata_profiles.collect_snapshot(
+        qids=("Q201",),
+        snapshot_id="wikidata-transient-retry-test",
+        competition_codes=("ENG_PL",),
+        season_labels=("2017/18",),
+        output_dir=tmp_path,
+    )
+
+    assert calls == 2
+    assert len(manifest.files) == 1
+    assert (tmp_path / "Q201.json").read_bytes() == encoded
 
 
 def test_collector_is_hard_bounded_before_network_access(tmp_path: Path) -> None:
