@@ -2,32 +2,25 @@ name: PR46 Evidence Boundary Fix
 
 on:
   push:
-    branches:
-      - feat/wyscout-long-pass-v1-1
+    branches: [feat/wyscout-long-pass-v1-1]
 
 permissions:
   contents: write
 
 jobs:
-  fix:
-    if: github.event.head_commit.message == 'chore: run PR46 evidence-boundary fix'
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: analytics
+  patch:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6.0.2
         with:
+          ref: feat/wyscout-long-pass-v1-1
           fetch-depth: 0
-
       - uses: actions/setup-python@v6.2.0
         with:
           python-version: '3.13'
-
       - uses: astral-sh/setup-uv@v9.0.0
-
       - name: Apply diagnosed fixes and regression tests
-        working-directory: .
+        shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -35,10 +28,9 @@ jobs:
           def replace_once(path: str, old: str, new: str) -> None:
               file = Path(path)
               text = file.read_text(encoding="utf-8")
-              if text.count(old) != 1:
-                  raise SystemExit(
-                      f"expected exactly one replacement target in {path}, found {text.count(old)}"
-                  )
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one match, found {count}")
               file.write_text(text.replace(old, new, 1), encoding="utf-8")
 
           adapter = "analytics/src/football_intelligence/data_mesh/adapters/wyscout_open.py"
@@ -265,32 +257,26 @@ jobs:
           ''',
           )
           PY
-
       - name: Sync analytics environment
+        working-directory: analytics
         run: uv sync --dev --locked
-
       - name: Format touched Python
+        working-directory: analytics
         run: uv run ruff format src tests
-
       - name: Lint analytics
+        working-directory: analytics
         run: uv run ruff check .
-
       - name: Verify formatting
+        working-directory: analytics
         run: uv run ruff format --check .
-
       - name: Typecheck analytics
+        working-directory: analytics
         run: uv run mypy src
-
       - name: Run focused regression tests
-        run: >-
-          uv run pytest
-          tests/test_wyscout_long_pass_promotion.py
-          tests/test_wyscout_spatial_v1.py
-          tests/test_player_analytics_v2.py
-          tests/test_data_mesh_adapters_scope.py
-
+        working-directory: analytics
+        run: uv run pytest tests/test_wyscout_long_pass_promotion.py tests/test_wyscout_spatial_v1.py tests/test_player_analytics_v2.py tests/test_data_mesh_adapters_scope.py
       - name: Remove temporary workflow and commit fix
-        working-directory: .
+        shell: bash
         run: |
           git rm .github/workflows/pr46-fix.yml
           git config user.name "github-actions[bot]"
