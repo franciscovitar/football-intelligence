@@ -1,0 +1,60 @@
+name: Temporary Recertify Wyscout v0.4
+
+on:
+  push:
+    branches:
+      - feat/wyscout-final-third-v04
+
+permissions:
+  contents: write
+
+jobs:
+  recertify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: feat/wyscout-final-third-v04
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Sync candidate environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+
+      - name: Acquire official Wyscout source
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-probe-wyscout-open --cache-dir "$GITHUB_WORKSPACE/data/cache/wyscout-open" --report /tmp/wyscout-source.json
+          uv run football-intelligence-audit-wyscout-core-leagues --cache-dir "$GITHUB_WORKSPACE/data/cache/wyscout-open" --report /tmp/wyscout-core-leagues.json
+
+      - name: Prepare certified v0.3 baseline
+        run: |
+          git worktree add /tmp/fi-v03 32f010378a3dc42248dbad6816809d7a10183c87
+          cd /tmp/fi-v03/analytics
+          uv sync --dev --locked
+
+      - name: Emit complete ESP_LL observations from v0.3 and v0.4
+        run: |
+          CACHE="$GITHUB_WORKSPACE/data/cache/wyscout-open"
+          cd /tmp/fi-v03/analytics
+          uv run python "$GITHUB_WORKSPACE/scripts/tmp_recertify_wyscout_v04.py" dump "$CACHE" /tmp/wyscout-v03.json
+          cd "$GITHUB_WORKSPACE/analytics"
+          uv run python "$GITHUB_WORKSPACE/scripts/tmp_recertify_wyscout_v04.py" dump "$CACHE" /tmp/wyscout-v04.json
+
+      - name: Prove v0.3 to v0.4 observational equivalence
+        run: python scripts/tmp_recertify_wyscout_v04.py compare /tmp/wyscout-v03.json /tmp/wyscout-v04.json /tmp/wyscout-v04-recertification.json
+
+      - name: Remove temporary evidence helpers
+        run: |
+          git rm .github/workflows/tmp-recertify-wyscout-v04.yml scripts/tmp_recertify_wyscout_v04.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: remove completed v0.4 recertification helpers"
+          git push origin HEAD:feat/wyscout-final-third-v04
