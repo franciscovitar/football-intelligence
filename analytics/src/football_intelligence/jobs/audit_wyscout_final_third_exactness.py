@@ -239,10 +239,7 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
             evidence_weight += FINAL_THIRD_WEIGHT
         if not season_state.long_missing:
             evidence_weight += LONG_ACCURATE_WEIGHT
-        if (
-            season_state.passes_total > 0
-            and evidence_weight >= PASSING_MIN_EVIDENCE_WEIGHT
-        ):
+        if season_state.passes_total > 0 and evidence_weight >= PASSING_MIN_EVIDENCE_WEIGHT:
             passing_proxy.append(season_state)
 
     return {
@@ -274,9 +271,7 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
             "final_third_exact": sum(
                 not season_state.final_third_missing for season_state in eligible
             ),
-            "long_accurate_exact": sum(
-                not season_state.long_missing for season_state in eligible
-            ),
+            "long_accurate_exact": sum(not season_state.long_missing for season_state in eligible),
             "pass_completion_denominator": sum(
                 season_state.passes_total > 0 for season_state in eligible
             ),
