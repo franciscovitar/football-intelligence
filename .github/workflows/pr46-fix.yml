@@ -1,0 +1,301 @@
+name: PR46 Evidence Boundary Fix
+
+on:
+  push:
+    branches:
+      - feat/wyscout-long-pass-v1-1
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.head_commit.message == 'chore: run PR46 evidence-boundary fix'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: analytics
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.13'
+
+      - uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Apply diagnosed fixes and regression tests
+        working-directory: .
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if text.count(old) != 1:
+                  raise SystemExit(
+                      f"expected exactly one replacement target in {path}, found {text.count(old)}"
+                  )
+              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          adapter = "analytics/src/football_intelligence/data_mesh/adapters/wyscout_open.py"
+          replace_once(
+              adapter,
+              '''_SCOPE_FILE_LABELS: dict[str, str] = {
+              "ENG_PL": "England",
+              "ESP_LL": "Spain",
+              "FRA_L1": "France",
+              "GER_BL1": "Germany",
+              "ITA_SA": "Italy",
+          }
+          ''',
+              '''_SCOPE_FILE_LABELS: dict[str, str] = {
+              "ENG_PL": "England",
+              "ESP_LL": "Spain",
+              "FRA_L1": "France",
+              "GER_BL1": "Germany",
+              "ITA_SA": "Italy",
+          }
+
+          # Spatial v1.1 has completed its real-source promotion audit only for
+          # England 2017/18. Other otherwise-certified Wyscout league scopes must
+          # keep this metric absent until their own audit closes the same gate.
+          _SPATIAL_V1_1_VALIDATED_SCOPES = frozenset({("ENG_PL", "2017/18")})
+          ''',
+          )
+          replace_once(
+              adapter,
+              '''    counts_by_match_player, _launches = _accumulate_player_match_events(events_payload)
+              accurate_long, ambiguous_long = _accumulate_long_pass_accurate(events_payload)
+          ''',
+              '''    counts_by_match_player, _launches = _accumulate_player_match_events(events_payload)
+              spatial_v1_1_enabled = (
+                  scope.canonical_competition_code,
+                  scope.season_label,
+              ) in _SPATIAL_V1_1_VALIDATED_SCOPES
+              if spatial_v1_1_enabled:
+                  accurate_long, ambiguous_long = _accumulate_long_pass_accurate(events_payload)
+              else:
+                  accurate_long, ambiguous_long = {}, frozenset()
+          ''',
+          )
+          replace_once(
+              adapter,
+              '''            long_passes_accurate = None if pair in ambiguous_long else accurate_long.get(pair, 0)
+          ''',
+              '''            long_passes_accurate = (
+                  None
+                  if not spatial_v1_1_enabled or pair in ambiguous_long
+                  else accurate_long.get(pair, 0)
+              )
+          ''',
+          )
+          replace_once(
+              adapter,
+              '''    """The 39 player_match identities in the adapter-safe subset.
+              `players_payload` (the official `players.json` reference file) is
+              optional -- when supplied, hints carry real `player_name` identity.
+              `scope` (Block 20D.3): see `parse_match_observations`."""
+          ''',
+              '''    """Up to 39 player_match identities in the adapter-safe subset.
+              `long_passes_accurate` is emitted only for spatial-v1.1-audited scopes;
+              currently that is ENG_PL 2017/18. `players_payload` (the official
+              `players.json` reference file) is optional -- when supplied, hints carry
+              real `player_name` identity. `scope` (Block 20D.3): see
+              `parse_match_observations`."""
+          ''',
+          )
+
+          derived = "analytics/src/football_intelligence/statistical_engine/derived_metrics.py"
+          replace_once(
+              derived,
+              '''FORMULA_VERSION = "derived-v2.0"
+          ''',
+              '''FORMULA_VERSION = "derived-v2.0"
+
+          # Exact spatial counts must never be published for a multi-match window when
+          # even one contributing match is missing. Keep this list metric-specific so
+          # the promotion does not silently change existing provider semantics.
+          _COMPLETE_OBSERVATION_REQUIRED_RAW_METRICS = frozenset({"long_passes_accurate"})
+          ''',
+          )
+          replace_once(
+              derived,
+              '''    available = dict(values)
+              versions: dict[str, str] = {}
+              counts = dict(observed_counts or {})
+              for formula in DERIVED_FORMULAS:
+          ''',
+              '''    available = dict(values)
+              versions: dict[str, str] = {}
+              counts = dict(observed_counts or {})
+              if observed_counts is not None and required_observations is not None:
+                  for metric_name in _COMPLETE_OBSERVATION_REQUIRED_RAW_METRICS:
+                      if (
+                          metric_name in available
+                          and counts.get(metric_name) != required_observations
+                      ):
+                          available.pop(metric_name)
+              for formula in DERIVED_FORMULAS:
+          ''',
+          )
+
+          tests = "analytics/tests/test_wyscout_long_pass_promotion.py"
+          replace_once(
+              tests,
+              '''from __future__ import annotations
+
+          from football_intelligence.data_mesh.adapters.wyscout_open import (
+          ''',
+              '''from __future__ import annotations
+
+          from datetime import UTC, datetime
+
+          from football_intelligence.data_mesh.adapters.wyscout_open import (
+              ESP_LL_SCOPE,
+          ''',
+          )
+          replace_once(
+              tests,
+              '''from football_intelligence.providers.wyscout_open_mapping import adapter_safe_mappings
+          ''',
+              '''from football_intelligence.player_analytics.engine_v2 import calculate_player_analytics_v2_result
+          from football_intelligence.player_analytics.models import PlayerObservation
+          from football_intelligence.providers.wyscout_open_mapping import adapter_safe_mappings
+          ''',
+          )
+          with Path(tests).open("a", encoding="utf-8") as handle:
+              handle.write(
+                  '''\n\ndef test_long_pass_promotion_does_not_leak_into_unaudited_league_scopes() -> None:\n'''
+                  '''    esp_match = {**_MATCH, "competitionId": 795, "seasonId": 181144}\n'''
+                  '''    observations = parse_player_match_observations(\n'''
+                  '''        [esp_match], _EVENTS, scope=ESP_LL_SCOPE\n'''
+                  '''    )\n'''
+                  '''    assert any(item.metric_name == "passes_total" for item in observations)\n'''
+                  '''    assert all(item.metric_name != "long_passes_accurate" for item in observations)\n'''
+                  '''\n\ndef _v2_observation(\n'''
+                  '''    match_id: int, long_passes_accurate: float | None\n'''
+                  ''') -> PlayerObservation:\n'''
+                  '''    return PlayerObservation(\n'''
+                  '''        player_id=77,\n'''
+                  '''        player_name="Exact Evidence Player",\n'''
+                  '''        match_id=match_id,\n'''
+                  '''        kickoff_at=datetime(2018, 1, match_id, tzinfo=UTC),\n'''
+                  '''        team_id=100,\n'''
+                  '''        minutes=90,\n'''
+                  '''        listed_position="CM",\n'''
+                  '''        possession_pct=50.0,\n'''
+                  '''        stats={"long_passes_accurate": long_passes_accurate},\n'''
+                  '''    )\n'''
+                  '''\n\ndef test_player_v2_never_publishes_partial_long_pass_window_as_exact() -> None:\n'''
+                  '''    partial = calculate_player_analytics_v2_result(\n'''
+                  '''        [_v2_observation(1, 2.0), _v2_observation(2, None)],\n'''
+                  '''        scope_key="competition:ENG_PL:2017/18",\n'''
+                  '''    )\n'''
+                  '''    assert not any(\n'''
+                  '''        feature.window == "season" and feature.metric_name == "long_passes_accurate"\n'''
+                  '''        for feature in partial.features\n'''
+                  '''    )\n'''
+                  '''\n'''
+                  '''    complete = calculate_player_analytics_v2_result(\n'''
+                  '''        [_v2_observation(1, 2.0), _v2_observation(2, 0.0)],\n'''
+                  '''        scope_key="competition:ENG_PL:2017/18",\n'''
+                  '''    )\n'''
+                  '''    season_feature = next(\n'''
+                  '''        feature\n'''
+                  '''        for feature in complete.features\n'''
+                  '''        if feature.window == "season" and feature.metric_name == "long_passes_accurate"\n'''
+                  '''    )\n'''
+                  '''    assert season_feature.raw_value == 2.0\n'''
+              )
+
+          migration = "database/migrations/20260824223000_add_player_long_pass_stats.sql"
+          replace_once(
+              migration,
+              '''    add column long_passes_accurate smallint,
+              add constraint player_match_stats_long_passes_accurate_check
+                  check (long_passes_accurate is null or long_passes_accurate >= 0);
+          ''',
+              '''    add column long_passes_accurate smallint,
+              add constraint player_match_stats_long_passes_accurate_check
+                  check (long_passes_accurate is null or long_passes_accurate >= 0),
+              add constraint player_match_stats_long_passes_accurate_subset_check
+                  check (
+                      long_passes_accurate is null
+                      or passes_accurate is null
+                      or long_passes_accurate <= passes_accurate
+                  );
+          ''',
+          )
+
+          mapping = "analytics/src/football_intelligence/providers/wyscout_open_mapping.py"
+          replace_once(
+              mapping,
+              '''        caveats=(
+                      "Promotion is deliberately metric-specific. progressive_passes and "
+                      "passes_into_final_third remain methodology/audit blocked and are not emitted."
+                  ),
+          ''',
+              '''        caveats=(
+                      "Promotion is deliberately metric- and scope-specific: only ENG_PL 2017/18 "
+                      "is currently audited for emission. Other Wyscout core-league scopes remain "
+                      "suppressed until their own audit passes. progressive_passes and "
+                      "passes_into_final_third remain methodology/audit blocked and are not emitted."
+                  ),
+          ''',
+          )
+
+          docs = "docs/WYSCOUT_SPATIAL_METHODOLOGY_V1.md"
+          replace_once(
+              docs,
+              '''**Production state:** promoted. The ENG_PL 2017/18 real-source audit produced
+          97%+ exact player-match coverage and 74.5631% exact player-season coverage after
+          v1.1's taxonomy refinement, with no unknown historical Pass subtype. Promotion
+          is therefore metric-specific; it does not activate the other spatial rules.
+          ''',
+              '''**Production state:** promoted for ENG_PL 2017/18 only. The real-source audit
+          produced 97%+ exact player-match coverage and 74.5631% exact player-season
+          coverage after v1.1's taxonomy refinement, with no unknown historical Pass
+          subtype. The adapter suppresses this metric for Spain, Italy, Germany and France
+          until each scope passes its own audit. Promotion is therefore metric- and
+          scope-specific; it does not activate the other spatial rules.
+          ''',
+          )
+          PY
+
+      - name: Sync analytics environment
+        run: uv sync --dev --locked
+
+      - name: Format touched Python
+        run: uv run ruff format src tests
+
+      - name: Lint analytics
+        run: uv run ruff check .
+
+      - name: Verify formatting
+        run: uv run ruff format --check .
+
+      - name: Typecheck analytics
+        run: uv run mypy src
+
+      - name: Run focused regression tests
+        run: >-
+          uv run pytest
+          tests/test_wyscout_long_pass_promotion.py
+          tests/test_wyscout_spatial_v1.py
+          tests/test_player_analytics_v2.py
+          tests/test_data_mesh_adapters_scope.py
+
+      - name: Remove temporary workflow and commit fix
+        working-directory: .
+        run: |
+          git rm .github/workflows/pr46-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add analytics database docs
+          git diff --cached --check
+          git commit -m "fix: preserve Wyscout spatial evidence boundaries"
+          git push origin HEAD:feat/wyscout-long-pass-v1-1
