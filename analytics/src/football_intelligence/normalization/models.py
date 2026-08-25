@@ -106,6 +106,7 @@ class PlayerMatchStatsRecord:
     # participants may carry real zero counts.
     aerial_duels: int | None = None
     aerial_duels_won: int | None = None
+    long_passes_accurate: int | None = None
 
 
 @dataclass(frozen=True)

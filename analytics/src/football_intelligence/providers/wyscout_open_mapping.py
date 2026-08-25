@@ -740,9 +740,14 @@ _PASSING_MAPPINGS: tuple[WyscoutMetricMapping, ...] = (
         "long_passes_accurate",
         "player_match",
         "DERIVABLE",
-        "passes_long intersected with passes_accurate",
-        "Inherits passes_long's pending spatial methodology.",
-        methodology_pending=True,
+        "fi-wyscout-spatial-v1.1 long-pass classification intersected with tag 1801",
+        "Promoted after the real ENG_PL 2017/18 spatial audit: Launch; High pass >25 m; "
+        "Simple/Smart pass >45 m; Cross/Hand/Head explicitly non-long; unknown or "
+        "geometry-dependent unclassifiable events remain missing.",
+        caveats=(
+            "Promotion is deliberately metric-specific. progressive_passes and "
+            "passes_into_final_third remain methodology/audit blocked and are not emitted."
+        ),
     ),
     _mapping(
         "progressive_passes",
