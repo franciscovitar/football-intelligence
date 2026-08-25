@@ -1,0 +1,149 @@
+name: Temporary Evidence Wyscout v0.4 ENG Player V2 Runtime
+
+on:
+  push:
+    branches:
+      - feat/wyscout-final-third-v04
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: football_intelligence_evidence
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: football_intelligence_evidence
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_evidence
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - name: Apply migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            echo "Applying $migration"
+            psql -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Apply core seeds
+        run: psql -v ON_ERROR_STOP=1 -f database/seeds/001_core_catalog.sql
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - name: Sync analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+      - name: Load real ENG_PL v0.4 evidence — first pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-load-wyscout-historical
+          --competition ENG_PL
+          --database-url "$DATABASE_URL"
+          --report "$RUNNER_TEMP/wyscout-load-1.json"
+      - name: Capture state after first load
+        working-directory: analytics
+        run: >-
+          uv run python ../scripts/tmp_evidence_wyscout_v04_eng_runtime.py
+          --database-url "$DATABASE_URL"
+          --output "$RUNNER_TEMP/state-load-1.json"
+      - name: Load real ENG_PL v0.4 evidence — second pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-load-wyscout-historical
+          --competition ENG_PL
+          --database-url "$DATABASE_URL"
+          --report "$RUNNER_TEMP/wyscout-load-2.json"
+      - name: Capture state after second load
+        working-directory: analytics
+        run: >-
+          uv run python ../scripts/tmp_evidence_wyscout_v04_eng_runtime.py
+          --database-url "$DATABASE_URL"
+          --output "$RUNNER_TEMP/state-load-2.json"
+      - name: Prove loader idempotency
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          first = json.loads((root / "state-load-1.json").read_text())
+          second = json.loads((root / "state-load-2.json").read_text())
+          keys = ["canonical", "player_match_metric_coverage", "source_metric_counts"]
+          for key in keys:
+              assert first[key] == second[key], (key, first[key], second[key])
+          print("LOADER IDEMPOTENCY: PASS")
+          print(json.dumps({key: second[key] for key in keys}, indent=2, sort_keys=True))
+          PY
+      - name: Calculate historical Player V2 — first pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-player-analytics
+          --season 2017/18
+          --competition ENG_PL
+          --scope-key competition:ENG_PL:2017/18
+          --database-url "$DATABASE_URL"
+          --report "$RUNNER_TEMP/player-v2-1.json"
+      - name: Capture Player V2 runtime — first pass
+        working-directory: analytics
+        run: >-
+          uv run python ../scripts/tmp_evidence_wyscout_v04_eng_runtime.py
+          --database-url "$DATABASE_URL"
+          --output "$RUNNER_TEMP/runtime-1.json"
+      - name: Calculate historical Player V2 — second pass
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-player-analytics
+          --season 2017/18
+          --competition ENG_PL
+          --scope-key competition:ENG_PL:2017/18
+          --database-url "$DATABASE_URL"
+          --report "$RUNNER_TEMP/player-v2-2.json"
+      - name: Capture Player V2 runtime — second pass
+        working-directory: analytics
+        run: >-
+          uv run python ../scripts/tmp_evidence_wyscout_v04_eng_runtime.py
+          --database-url "$DATABASE_URL"
+          --output "$RUNNER_TEMP/runtime-2.json"
+      - name: Prove Player V2 idempotency and print final evidence
+        run: |
+          set -euo pipefail
+          cmp "$RUNNER_TEMP/player-v2-1.json" "$RUNNER_TEMP/player-v2-2.json"
+          cmp "$RUNNER_TEMP/runtime-1.json" "$RUNNER_TEMP/runtime-2.json"
+          echo "PLAYER V2 IDEMPOTENCY: PASS"
+          cat "$RUNNER_TEMP/runtime-2.json"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: wyscout-v04-eng-player-v2-runtime
+          path: |
+            ${{ runner.temp }}/wyscout-load-1.json
+            ${{ runner.temp }}/wyscout-load-2.json
+            ${{ runner.temp }}/state-load-1.json
+            ${{ runner.temp }}/state-load-2.json
+            ${{ runner.temp }}/player-v2-1.json
+            ${{ runner.temp }}/player-v2-2.json
+            ${{ runner.temp }}/runtime-1.json
+            ${{ runner.temp }}/runtime-2.json
+          retention-days: 7
