@@ -1,0 +1,202 @@
+name: Temp Wyscout v0.3 ENG Promotion Upgrade Evidence
+
+on:
+  push:
+    branches:
+      - evidence/wyscout-v03-eng-promotion-upgrade
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: football_intelligence_upgrade
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: football_intelligence_upgrade
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_upgrade
+      WYSCOUT_CACHE: ${{ github.workspace }}/wyscout-cache
+
+    steps:
+      - name: Checkout certified v0.2 baseline
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: 9af9c2e1532b37b17e4316be4061f0ee82e1863f
+          path: baseline
+
+      - name: Checkout v0.3 promotion candidate
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: c4b0260c5e452e5f24f69ccf6fbc6dfcbae8a28c
+          path: candidate
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.13'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Build certified v0.2 database schema
+        working-directory: baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$migration"
+          done
+          psql -v ON_ERROR_STOP=1 -f database/seeds/001_core_catalog.sql
+
+      - name: Sync baseline analytics
+        working-directory: baseline/analytics
+        run: uv sync --dev --locked
+
+      - name: Promote certified ENG_PL v0.2 baseline
+        working-directory: baseline/analytics
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python -m football_intelligence.jobs.promote_historical_player_v2 \
+            --competition ENG_PL \
+            --cache-dir "$WYSCOUT_CACHE" \
+            --database-url "$DATABASE_URL" \
+            --report "$RUNNER_TEMP/baseline-v02.json"
+
+      - name: Assert exact v0.2 fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_obs=$(psql -Atqc "select count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout_open' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364';")
+          scores=$(psql -Atqc "select count(*) from analytics.player_score_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0';")
+          features=$(psql -Atqc "select count(*) from analytics.player_feature_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0';")
+          test "$source_obs" = "412609"
+          test "$scores" = "2048"
+          test "$features" = "26841"
+          echo "CERTIFIED V0.2 FINGERPRINT: PASS source_observations=$source_obs scores=$scores features=$features"
+
+      - name: Apply only v0.3 schema migrations
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 -f database/migrations/20260824213000_add_player_aerial_stats.sql
+          psql -v ON_ERROR_STOP=1 -f database/migrations/20260824223000_add_player_long_pass_stats.sql
+
+      - name: Sync candidate analytics
+        working-directory: candidate/analytics
+        run: uv sync --dev --locked
+
+      - name: Promote v0.2 to v0.3
+        working-directory: candidate/analytics
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python -m football_intelligence.jobs.promote_historical_player_v2 \
+            --competition ENG_PL \
+            --cache-dir "$WYSCOUT_CACHE" \
+            --database-url "$DATABASE_URL" \
+            --report "$RUNNER_TEMP/upgrade-v03-first.json"
+
+      - name: Assert first v0.3 promotion and predecessor recognition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads((Path(os.environ["RUNNER_TEMP"]) / "upgrade-v03-first.json").read_text())
+          expected_prewrite = {
+              "season_exists": True,
+              "matches": 380,
+              "teams": 20,
+              "players": 515,
+              "player_appearances": 10443,
+              "player_match_stats": 10443,
+              "team_match_stats": 760,
+              "source_observations": 412609,
+              "player_v2_rows": 2048,
+              "player_v2_feature_rows": 26841,
+          }
+          assert report["prewrite_state"] == expected_prewrite, report["prewrite_state"]
+          assert report["canonical"]["source_observations"] == 422877, report["canonical"]
+          assert report["player_v2"]["score_snapshots"] == 2048, report["player_v2"]
+          assert report["player_v2"]["feature_snapshots"] == 38737, report["player_v2"]
+          assert report["player_v2"]["season_players"] == 512, report["player_v2"]
+          assert report["player_v2"]["season_players_450_min"] == 385, report["player_v2"]
+          assert report["player_v2"]["performance_ready"] == 385, report["player_v2"]
+          assert report["player_v2"]["ranking_candidates"] == 0, report["player_v2"]
+          assert report["player_v2"]["overall_scores"] == 0, report["player_v2"]
+          print("V0.2 -> V0.3 PROMOTION: PASS")
+          PY
+
+      - name: Capture v0.3 database fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -At -F '|' -c "select 'source_observations', count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout_open' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364' union all select 'long_passes_accurate', count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout_open' and o.metric_name='long_passes_accurate' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364' union all select 'scores', count(*) from analytics.player_score_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0' union all select 'features', count(*) from analytics.player_feature_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0';" | sort > "$RUNNER_TEMP/fingerprint-v03-first.txt"
+          cat "$RUNNER_TEMP/fingerprint-v03-first.txt"
+
+      - name: Promote current v0.3 state again
+        working-directory: candidate/analytics
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run python -m football_intelligence.jobs.promote_historical_player_v2 \
+            --competition ENG_PL \
+            --cache-dir "$WYSCOUT_CACHE" \
+            --database-url "$DATABASE_URL" \
+            --report "$RUNNER_TEMP/upgrade-v03-second.json"
+
+      - name: Prove v0.3 idempotency and current-state recognition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads((Path(os.environ["RUNNER_TEMP"]) / "upgrade-v03-second.json").read_text())
+          expected_prewrite = {
+              "season_exists": True,
+              "matches": 380,
+              "teams": 20,
+              "players": 515,
+              "player_appearances": 10443,
+              "player_match_stats": 10443,
+              "team_match_stats": 760,
+              "source_observations": 422877,
+              "player_v2_rows": 2048,
+              "player_v2_feature_rows": 38737,
+          }
+          assert report["prewrite_state"] == expected_prewrite, report["prewrite_state"]
+          assert report["canonical"]["source_observations"] == 422877, report["canonical"]
+          assert report["player_v2"]["feature_snapshots"] == 38737, report["player_v2"]
+          print("CURRENT V0.3 PREWRITE RECOGNITION: PASS")
+          PY
+          psql -At -F '|' -c "select 'source_observations', count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout_open' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364' union all select 'long_passes_accurate', count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout_open' and o.metric_name='long_passes_accurate' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364' union all select 'scores', count(*) from analytics.player_score_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0' union all select 'features', count(*) from analytics.player_feature_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0';" | sort > "$RUNNER_TEMP/fingerprint-v03-second.txt"
+          cmp "$RUNNER_TEMP/fingerprint-v03-first.txt" "$RUNNER_TEMP/fingerprint-v03-second.txt"
+          cat "$RUNNER_TEMP/fingerprint-v03-second.txt"
+          echo "V0.3 PROMOTION IDEMPOTENCY: PASS"
