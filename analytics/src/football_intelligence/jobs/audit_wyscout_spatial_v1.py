@@ -467,7 +467,9 @@ def _accounting_failures(
     player_match: dict[tuple[int, int], PlayerMatchSpatialAudit],
 ) -> list[str]:
     failures: list[str] = []
-    excluded = missing_identity_passes + sentinel_actor_passes + outside_canonical_participation_passes
+    excluded = (
+        missing_identity_passes + sentinel_actor_passes + outside_canonical_participation_passes
+    )
     if attributable_passes + excluded != pass_count:
         failures.append("raw_pass_accounting_mismatch")
     if valid_geometry_count + invalid_geometry_count != attributable_passes:
