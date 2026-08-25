@@ -1,0 +1,51 @@
+name: Temporary Wyscout Spatial v1.2 Core Leagues Audit
+
+on:
+  push:
+    branches:
+      - lab/wyscout-spatial-v12-core-leagues
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Sync analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+
+      - name: Acquire and verify official Wyscout Open source
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-probe-wyscout-open \
+            --cache-dir "$RUNNER_TEMP/wyscout-cache" \
+            --report "$RUNNER_TEMP/wyscout-probe.json"
+          uv run football-intelligence-audit-wyscout-core-leagues \
+            --cache-dir "$RUNNER_TEMP/wyscout-cache" \
+            --report "$RUNNER_TEMP/wyscout-core-leagues.json"
+
+      - name: Audit spatial v1.2 on ESP ITA GER FRA
+        working-directory: analytics
+        run: |
+          uv run python ../scripts/tmp_audit_wyscout_spatial_v12_core_leagues.py \
+            --cache-dir "$RUNNER_TEMP/wyscout-cache" \
+            --report "$RUNNER_TEMP/wyscout-spatial-v12-core-leagues.json"
+
+      - name: Upload reports only
+        uses: actions/upload-artifact@v7
+        with:
+          name: wyscout-spatial-v12-core-leagues
+          path: |
+            ${{ runner.temp }}/wyscout-probe.json
+            ${{ runner.temp }}/wyscout-core-leagues.json
+            ${{ runner.temp }}/wyscout-spatial-v12-core-leagues.json
+          retention-days: 7
