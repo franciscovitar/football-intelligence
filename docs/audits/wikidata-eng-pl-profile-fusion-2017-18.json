@@ -1,0 +1,60 @@
+{
+  "status": "PASS",
+  "scope": {
+    "competition_code": "ENG_PL",
+    "season_label": "2017/18"
+  },
+  "sources": {
+    "wyscout": "Official Wyscout Open Data / Figshare collection 4415000",
+    "wikidata": "Official Wikidata MediaWiki API, WDQS discovery laboratory, and Special:EntityData Linked Data endpoint"
+  },
+  "methodology": {
+    "team_resolution": "Exact deterministic normalized club label plus football-club description; ambiguous club candidates fail closed",
+    "player_candidate_generation": "Exact deterministic normalized Wyscout name variants, with known DOB contradictions excluded",
+    "identity_promotion": "none",
+    "crosswalk_rule": "Wikidata profile evidence has no shared canonical match ids and therefore cannot become crosswalk_ready by itself",
+    "snapshot": "Bounded immutable 50-QID snapshot with SHA-256 manifest verification"
+  },
+  "overlap": {
+    "wyscout_roster_total": 603,
+    "wyscout_profiles_available": 599,
+    "team_mappings_resolved": 20,
+    "team_total": 20,
+    "players_with_exact_name_candidate": 373,
+    "players_with_unique_candidate": 373,
+    "candidate_state_counts": {
+      "review_required": 368,
+      "insufficient_evidence": 5,
+      "no_exact_name_candidate": 226
+    },
+    "failures": []
+  },
+  "bounded_snapshot_audit": {
+    "snapshot_id": "wikidata-eng-pl-2017-18-review-required-50-postfix",
+    "profile_count": 50,
+    "profiles_with_label": 50,
+    "profiles_with_exact_date_of_birth": 50,
+    "profiles_with_partial_date_of_birth": 0,
+    "profiles_with_ambiguous_or_conflicting_date_of_birth": 0,
+    "profiles_with_citizenship": 50,
+    "profiles_with_position": 50,
+    "profiles_with_revision_id": 50,
+    "profiles_with_team_membership": 50,
+    "team_membership_count": 493,
+    "temporally_bounded_team_membership_count": 450
+  },
+  "verification": {
+    "real_evidence_workflow_run": 32886375627,
+    "real_evidence_artifact_id": 9577761868,
+    "real_evidence_artifact_sha256": "f5b07c9e034a40ac9aace314b3f7b932eb8bc5ae2cdcf2352cdc8309d0c247b4",
+    "fix_pull_request": 51,
+    "fix_quality_workflow_run": 32886633806,
+    "fix_merge_commit": "f2df18f55874fe327c6dd401566a27634aabea7d"
+  },
+  "non_claims": [
+    "This is not measured six-league Wikidata coverage.",
+    "No PlayerCrosswalk entries were created automatically.",
+    "No PostgreSQL or production evidence was written by this laboratory.",
+    "No performance metrics are supplied by this Wikidata profile path."
+  ]
+}
