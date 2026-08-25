@@ -92,6 +92,14 @@ EVENTS = [
         "teamId": 200,
         "tags": [{"id": 1701}],
     },
+    {
+        "matchId": 1001,
+        "eventName": "Duel",
+        "subEventName": "Air duel",
+        "playerId": 21,
+        "teamId": 200,
+        "tags": [{"id": 703}],
+    },
 ]
 
 
@@ -124,6 +132,10 @@ def test_wyscout_historical_normalization_preserves_supported_vs_missing() -> No
     assert stats["12"].shots_total == 1
     assert stats["13"].passes_total == 1
     assert stats["21"].red_cards == 1
+    assert stats["21"].aerial_duels == 1
+    assert stats["21"].aerial_duels_won == 1
+    assert stats["12"].aerial_duels == 0
+    assert stats["12"].aerial_duels_won == 0
 
     # The source/adapter does not support these legacy canonical fields with
     # the required semantics. Missing must stay missing, never become zero.
