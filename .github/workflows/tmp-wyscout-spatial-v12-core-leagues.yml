@@ -1,15 +1,16 @@
 name: Temporary Wyscout Spatial v1.2 Core Leagues Audit
 
 on:
-  push:
+  pull_request:
     branches:
-      - lab/wyscout-spatial-v12-core-leagues
+      - main
 
 permissions:
   contents: read
 
 jobs:
   audit:
+    if: github.head_ref == 'lab/wyscout-spatial-v12-core-leagues'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
