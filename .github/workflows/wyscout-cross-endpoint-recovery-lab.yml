@@ -36,12 +36,19 @@ jobs:
             --cache-dir "$RUNNER_TEMP/wyscout-cache" \
             --report "$RUNNER_TEMP/wyscout-probe.json"
 
-      - name: Audit Cross endpoint recovery
+      - name: Audit broad Cross endpoint recovery
         working-directory: analytics
         run: |
           uv run python -m football_intelligence.jobs.audit_wyscout_cross_endpoint_recovery \
             --cache-dir "$RUNNER_TEMP/wyscout-cache" \
             --report "$RUNNER_TEMP/wyscout-cross-endpoint-recovery.json"
+
+      - name: Audit source-defined Cross strata
+        working-directory: analytics
+        run: |
+          uv run python -m football_intelligence.jobs.audit_wyscout_cross_endpoint_strata \
+            --cache-dir "$RUNNER_TEMP/wyscout-cache" \
+            --report "$RUNNER_TEMP/wyscout-cross-endpoint-strata.json"
 
       - name: Upload reports only
         uses: actions/upload-artifact@v4.6.2
@@ -50,4 +57,5 @@ jobs:
           path: |
             ${{ runner.temp }}/wyscout-probe.json
             ${{ runner.temp }}/wyscout-cross-endpoint-recovery.json
+            ${{ runner.temp }}/wyscout-cross-endpoint-strata.json
           retention-days: 7
