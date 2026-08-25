@@ -18,10 +18,14 @@ This is **not current-season evidence** and must never be presented as such.
 
 Verified on 2026-08-22 in an ephemeral GitHub Actions runner with PostgreSQL 17. The runtime used only the public Wyscout source and a temporary local database; no production/Neon database was accessed or written.
 
+The counts below are the observed `wyscout-open-v0.2` baseline from that
+runtime. The later v0.3 long-pass promotion deliberately requires a fresh
+post-promotion runtime before replacing these historical counts.
+
 Observed first-load invariants:
 
 - official source probe: 380 matches, 643,150 events, 603 roster/squad players — PASS;
-- certified adapter: 412,609 `NormalizedObservation` rows, 77/77 adapter-safe identities observed — PASS;
+- certified v0.2 adapter: 412,609 `NormalizedObservation` rows, 77/77 adapter-safe identities observed — PASS;
 - canonical scope: 380 matches, 20 teams, 515 participating players;
 - 10,443 `player_appearances` and 10,443 `player_match_stats` rows;
 - 760 `team_match_stats` rows;
@@ -55,7 +59,7 @@ Before opening PostgreSQL the loader:
 
 1. runs the existing official Wyscout source probe and requires the published counts to reproduce;
 2. loads the same cached payloads used by the certified adapter audit;
-3. runs the certified `wyscout-open-v0.2` adapter;
+3. runs the current certified Wyscout adapter (`wyscout-open-v0.3` after the spatial v1.1 promotion);
 4. requires every adapter audit check to pass;
 5. normalizes only the explicit subset supported by the existing canonical `football.*` schema.
 

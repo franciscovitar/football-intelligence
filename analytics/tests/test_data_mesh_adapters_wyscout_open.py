@@ -651,15 +651,14 @@ def test_adapter_module_lives_under_data_mesh_adapters() -> None:
     assert wyscout_open.__name__.startswith(adapters_package.__name__)
 
 
-def test_semantic_version_is_bumped_from_the_pre_review_fix_pass_adapter() -> None:
-    # Block 20D.2's review-fix pass changed observable emission semantics
-    # (explicit metric_granularity on every observation, genuine
-    # goalkeeper_match "saves" emission, home_away granularity corrected,
-    # materially enriched identity hints) -- the Block 20B.2b original
-    # version ("wyscout-open-v0.1") must not be shared with these new
-    # semantics.
+def test_semantic_version_tracks_current_certified_adapter_semantics() -> None:
+    # v0.2 introduced Block 20D.2's review fixes. v0.3 adds the independently
+    # audited ENG_PL-only long_passes_accurate emission and was explicitly
+    # re-certified as observationally equivalent to v0.2 in ESP_LL 2017/18,
+    # the Wyscout x StatsBomb comparability-policy scope.
     assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.1"
-    assert wyscout_open.SEMANTIC_VERSION == "wyscout-open-v0.2"
+    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.2"
+    assert wyscout_open.SEMANTIC_VERSION == "wyscout-open-v0.3"
 
 
 # -- S. Block 20D.2: metric_granularity is always explicit on the certified path --
