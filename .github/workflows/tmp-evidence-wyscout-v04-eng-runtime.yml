@@ -1,4 +1,4 @@
-name: Temporary Evidence Wyscout v0.4 ENG Player V2 Runtime
+name: Temporary Final Third Missing Propagation Fix
 
 on:
   push:
@@ -6,144 +6,85 @@ on:
       - feat/wyscout-final-third-v04
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  runtime:
+  fix:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: football_intelligence_evidence
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      PGHOST: localhost
-      PGPORT: 5432
-      PGUSER: postgres
-      PGPASSWORD: postgres
-      PGDATABASE: football_intelligence_evidence
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_evidence
     steps:
       - uses: actions/checkout@v6.0.2
-      - name: Apply migrations
-        shell: bash
-        run: |
-          set -euo pipefail
-          for migration in database/migrations/*.sql; do
-            echo "Applying $migration"
-            psql -v ON_ERROR_STOP=1 -f "$migration"
-          done
-      - name: Apply core seeds
-        run: psql -v ON_ERROR_STOP=1 -f database/seeds/001_core_catalog.sql
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.13"
       - uses: astral-sh/setup-uv@v9.0.0
-        with:
-          enable-cache: true
-      - name: Sync analytics environment
-        working-directory: analytics
-        run: uv sync --dev --locked
-      - name: Load real ENG_PL v0.4 evidence — first pass
-        working-directory: analytics
-        run: >-
-          uv run football-intelligence-load-wyscout-historical
-          --competition ENG_PL
-          --database-url "$DATABASE_URL"
-          --report "$RUNNER_TEMP/wyscout-load-1.json"
-      - name: Capture state after first load
-        working-directory: analytics
-        run: >-
-          uv run python ../scripts/tmp_evidence_wyscout_v04_eng_runtime.py
-          --database-url "$DATABASE_URL"
-          --output "$RUNNER_TEMP/state-load-1.json"
-      - name: Load real ENG_PL v0.4 evidence — second pass
-        working-directory: analytics
-        run: >-
-          uv run football-intelligence-load-wyscout-historical
-          --competition ENG_PL
-          --database-url "$DATABASE_URL"
-          --report "$RUNNER_TEMP/wyscout-load-2.json"
-      - name: Capture state after second load
-        working-directory: analytics
-        run: >-
-          uv run python ../scripts/tmp_evidence_wyscout_v04_eng_runtime.py
-          --database-url "$DATABASE_URL"
-          --output "$RUNNER_TEMP/state-load-2.json"
-      - name: Prove loader idempotency
+      - name: Apply exact missing-propagation fix and regression test
         run: |
           python - <<'PY'
-          import json
-          import os
           from pathlib import Path
 
-          root = Path(os.environ["RUNNER_TEMP"])
-          first = json.loads((root / "state-load-1.json").read_text())
-          second = json.loads((root / "state-load-2.json").read_text())
-          keys = ["canonical", "player_match_metric_coverage", "source_metric_counts"]
-          for key in keys:
-              assert first[key] == second[key], (key, first[key], second[key])
-          print("LOADER IDEMPOTENCY: PASS")
-          print(json.dumps({key: second[key] for key in keys}, indent=2, sort_keys=True))
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one exact match, found {count}")
+              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          derived = "analytics/src/football_intelligence/statistical_engine/derived_metrics.py"
+          replace_once(
+              derived,
+              '_COMPLETE_OBSERVATION_REQUIRED_RAW_METRICS = frozenset({"long_passes_accurate"})',
+              '_COMPLETE_OBSERVATION_REQUIRED_RAW_METRICS = frozenset(\n'
+              '    {"long_passes_accurate", "passes_into_final_third"}\n'
+              ')',
+          )
+
+          test_path = "analytics/tests/test_wyscout_final_third_promotion.py"
+          replace_once(
+              test_path,
+              "from __future__ import annotations\n\n",
+              "from __future__ import annotations\n\n"
+              "from datetime import UTC, datetime\n\n",
+          )
+          replace_once(
+              test_path,
+              "from football_intelligence.data_mesh.adapters.wyscout_open import (\n"
+              "    ESP_LL_SCOPE,\n"
+              "    parse_player_match_observations,\n"
+              ")\n",
+              "from football_intelligence.data_mesh.adapters.wyscout_open import (\n"
+              "    ESP_LL_SCOPE,\n"
+              "    parse_player_match_observations,\n"
+              ")\n"
+              "from football_intelligence.player_analytics.engine_v2 import (\n"
+              "    calculate_player_analytics_v2_result,\n"
+              ")\n"
+              "from football_intelligence.player_analytics.models import PlayerObservation\n",
+          )
+          file = Path(test_path)
+          text = file.read_text(encoding="utf-8")
+          marker = "def test_player_v2_never_publishes_partial_final_third_window_as_exact"
+          if marker in text:
+              raise SystemExit(f"{test_path}: regression test already exists")
+          text += '''\n\ndef _v2_observation(\n    match_id: int, passes_into_final_third: float | None\n) -> PlayerObservation:\n    return PlayerObservation(\n        player_id=77,\n        player_name="Exact Final Third Player",\n        match_id=match_id,\n        kickoff_at=datetime(2018, 1, match_id, tzinfo=UTC),\n        team_id=100,\n        minutes=90,\n        listed_position="CM",\n        possession_pct=50.0,\n        stats={"passes_into_final_third": passes_into_final_third},\n    )\n\n\ndef test_player_v2_never_publishes_partial_final_third_window_as_exact() -> None:\n    partial = calculate_player_analytics_v2_result(\n        [_v2_observation(1, 2.0), _v2_observation(2, None)],\n        scope_key="competition:ENG_PL:2017/18",\n    )\n    assert not any(\n        feature.window == "season" and feature.metric_name == "passes_into_final_third"\n        for feature in partial.features\n    )\n\n    complete = calculate_player_analytics_v2_result(\n        [_v2_observation(1, 2.0), _v2_observation(2, 0.0)],\n        scope_key="competition:ENG_PL:2017/18",\n    )\n    season_feature = next(\n        feature\n        for feature in complete.features\n        if feature.window == "season" and feature.metric_name == "passes_into_final_third"\n    )\n    assert season_feature.raw_value == 2.0\n'''
+          file.write_text(text, encoding="utf-8")
           PY
-      - name: Calculate historical Player V2 — first pass
+      - name: Format analytics code and tests
         working-directory: analytics
-        run: >-
-          uv run football-intelligence-player-analytics
-          --season 2017/18
-          --competition ENG_PL
-          --scope-key competition:ENG_PL:2017/18
-          --database-url "$DATABASE_URL"
-          --report "$RUNNER_TEMP/player-v2-1.json"
-      - name: Capture Player V2 runtime — first pass
-        working-directory: analytics
-        run: >-
-          uv run python ../scripts/tmp_evidence_wyscout_v04_eng_runtime.py
-          --database-url "$DATABASE_URL"
-          --output "$RUNNER_TEMP/runtime-1.json"
-      - name: Calculate historical Player V2 — second pass
-        working-directory: analytics
-        run: >-
-          uv run football-intelligence-player-analytics
-          --season 2017/18
-          --competition ENG_PL
-          --scope-key competition:ENG_PL:2017/18
-          --database-url "$DATABASE_URL"
-          --report "$RUNNER_TEMP/player-v2-2.json"
-      - name: Capture Player V2 runtime — second pass
-        working-directory: analytics
-        run: >-
-          uv run python ../scripts/tmp_evidence_wyscout_v04_eng_runtime.py
-          --database-url "$DATABASE_URL"
-          --output "$RUNNER_TEMP/runtime-2.json"
-      - name: Prove Player V2 idempotency and print final evidence
         run: |
-          set -euo pipefail
-          cmp "$RUNNER_TEMP/player-v2-1.json" "$RUNNER_TEMP/player-v2-2.json"
-          cmp "$RUNNER_TEMP/runtime-1.json" "$RUNNER_TEMP/runtime-2.json"
-          echo "PLAYER V2 IDEMPOTENCY: PASS"
-          cat "$RUNNER_TEMP/runtime-2.json"
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: wyscout-v04-eng-player-v2-runtime
-          path: |
-            ${{ runner.temp }}/wyscout-load-1.json
-            ${{ runner.temp }}/wyscout-load-2.json
-            ${{ runner.temp }}/state-load-1.json
-            ${{ runner.temp }}/state-load-2.json
-            ${{ runner.temp }}/player-v2-1.json
-            ${{ runner.temp }}/player-v2-2.json
-            ${{ runner.temp }}/runtime-1.json
-            ${{ runner.temp }}/runtime-2.json
-          retention-days: 7
+          uv sync --dev --locked
+          uv run ruff format src tests
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Remove temporary evidence helpers and commit product fix
+        run: |
+          rm -f scripts/tmp_evidence_wyscout_v04_eng_runtime.py
+          rm -f .github/workflows/tmp-evidence-wyscout-v04-eng-runtime.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix: preserve missing final-third evidence across windows"
+          git push origin HEAD:feat/wyscout-final-third-v04
