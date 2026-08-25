@@ -130,7 +130,7 @@ _SPECS: tuple[HistoricalPlayerPromotionSpec, ...] = (
 # states, not ranges: a state that differs by even one row still fails closed.
 # ENG retains both its v0.2 and v0.3 predecessors because v0.4 final-third
 # promotion advanced directly from v0.3-era promotion counts. The four other
-# leagues retain their exact v0.4 pre-spatial fingerprints for the v0.5 upgrade.
+# leagues retain their exact certified pre-spatial fingerprints for the v0.5 upgrade.
 _CERTIFIED_PREDECESSORS: dict[str, tuple[HistoricalPlayerPromotionSpec, ...]] = {
     "ENG_PL": (
         HistoricalPlayerPromotionSpec(
