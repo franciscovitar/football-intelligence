@@ -26,6 +26,7 @@ jobs:
         working-directory: analytics
         run: |
           uv run ruff check . --output-format concise > "$RUNNER_TEMP/ruff.txt" 2>&1 || true
+          uv run ruff format --check --diff . > "$RUNNER_TEMP/ruff-format.txt" 2>&1 || true
       - name: Fetch and verify official Wyscout Open England source
         working-directory: analytics
         run: |
@@ -49,6 +50,7 @@ jobs:
             ${{ runner.temp }}/wyscout-probe.json
             ${{ runner.temp }}/wyscout-spatial-v1.json
             ${{ runner.temp }}/ruff.txt
+            ${{ runner.temp }}/ruff-format.txt
           if-no-files-found: warn
           retention-days: 7
       - name: Publish lab diagnostics to PR
@@ -77,6 +79,15 @@ jobs:
               echo
               echo '```text'
               cat "$RUNNER_TEMP/ruff.txt"
+              echo '```'
+              echo '</details>'
+            fi
+            if [[ -s "$RUNNER_TEMP/ruff-format.txt" ]]; then
+              echo
+              echo '<details><summary>Ruff format diff</summary>'
+              echo
+              echo '```diff'
+              cat "$RUNNER_TEMP/ruff-format.txt"
               echo '```'
               echo '</details>'
             fi
