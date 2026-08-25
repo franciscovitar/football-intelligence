@@ -166,16 +166,16 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
         if player_id == SENTINEL_PLAYER_ID:
             excluded_sentinel += 1
             continue
-        state = player_match.get((match_id, player_id))
-        if state is None:
+        match_state = player_match.get((match_id, player_id))
+        if match_state is None:
             excluded_outside_participation += 1
             continue
 
         attributable_passes += 1
-        state.passes_total += 1
+        match_state.passes_total += 1
         accurate = is_accurate(raw_event)
         if accurate:
-            state.passes_accurate += 1
+            match_state.passes_accurate += 1
 
         coordinates = parse_pass_coordinates(raw_event)
         sub_event = _sub_event(raw_event)
@@ -191,9 +191,9 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
 
         final_third_class = classify_pass_into_final_third_exact(raw_event)
         if final_third_class == "into_final_third":
-            state.passes_into_final_third += 1
+            match_state.passes_into_final_third += 1
         elif final_third_class == "ambiguous":
-            state.final_third_missing = True
+            match_state.final_third_missing = True
             unresolved_invalid += 1
             unresolved_by_sub_event[sub_event] += 1
         elif not coordinates.valid:
@@ -206,9 +206,9 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
         )
         if long_class == "long":
             if accurate:
-                state.long_passes_accurate += 1
+                match_state.long_passes_accurate += 1
         elif long_class == "ambiguous":
-            state.long_missing = True
+            match_state.long_missing = True
 
     if pass_count != EXPECTED_PASS_COUNT:
         raise WyscoutFinalThirdAuditError(
@@ -228,19 +228,22 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
 
     season_states = list(player_season.values())
     match_states = list(player_match.values())
-    eligible = [state for state in season_states if state.minutes >= 450]
+    eligible = [season_state for season_state in season_states if season_state.minutes >= 450]
 
-    passing_proxy = []
-    for state in eligible:
+    passing_proxy: list[PlayerSeasonState] = []
+    for season_state in eligible:
         evidence_weight = 0
-        if state.passes_total > 0:
+        if season_state.passes_total > 0:
             evidence_weight += PASS_COMPLETION_WEIGHT
-        if not state.final_third_missing:
+        if not season_state.final_third_missing:
             evidence_weight += FINAL_THIRD_WEIGHT
-        if not state.long_missing:
+        if not season_state.long_missing:
             evidence_weight += LONG_ACCURATE_WEIGHT
-        if state.passes_total > 0 and evidence_weight >= PASSING_MIN_EVIDENCE_WEIGHT:
-            passing_proxy.append(state)
+        if (
+            season_state.passes_total > 0
+            and evidence_weight >= PASSING_MIN_EVIDENCE_WEIGHT
+        ):
+            passing_proxy.append(season_state)
 
     return {
         "execution_status": "PASS",
@@ -268,9 +271,15 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
         "player_season_coverage": _coverage(season_states),
         "eligible_450_minutes": {
             "players": len(eligible),
-            "final_third_exact": sum(not state.final_third_missing for state in eligible),
-            "long_accurate_exact": sum(not state.long_missing for state in eligible),
-            "pass_completion_denominator": sum(state.passes_total > 0 for state in eligible),
+            "final_third_exact": sum(
+                not season_state.final_third_missing for season_state in eligible
+            ),
+            "long_accurate_exact": sum(
+                not season_state.long_missing for season_state in eligible
+            ),
+            "pass_completion_denominator": sum(
+                season_state.passes_total > 0 for season_state in eligible
+            ),
             "passing_without_progressive_proxy": len(passing_proxy),
             "passing_without_progressive_proxy_pct": _pct(len(passing_proxy), len(eligible)),
             "proxy_rule": (
