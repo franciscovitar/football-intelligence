@@ -101,6 +101,11 @@ class PlayerMatchStatsRecord:
     yellow_cards: int | None
     red_cards: int | None
     saves: int | None
+    # Optional additions preserve backwards compatibility for providers that
+    # do not expose aerial subtypes. Missing stays None; confirmed Wyscout
+    # participants may carry real zero counts.
+    aerial_duels: int | None = None
+    aerial_duels_won: int | None = None
 
 
 @dataclass(frozen=True)

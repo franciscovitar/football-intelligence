@@ -69,6 +69,8 @@ _PLAYER_STAT_COLUMNS = (
     "clearances",
     "duels_total",
     "duels_won",
+    "aerial_duels",
+    "aerial_duels_won",
     "fouls_committed",
     "yellow_cards",
     "red_cards",
@@ -608,6 +610,8 @@ def _player_stats_record(
         yellow_cards=values["yellow_cards"],
         red_cards=values["red_cards"],
         saves=values["saves"],
+        aerial_duels=values["aerial_duels"],
+        aerial_duels_won=values["aerial_duels_won"],
     )
 
 
