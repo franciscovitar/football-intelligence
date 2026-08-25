@@ -15,7 +15,7 @@ the repository; it is not a legal opinion.
 | --- | --- | --- | --- | --- | --- | --- |
 | Football-Data.co.uk | Publisher provides direct season CSV downloads and a column key; no explicit redistribution licence was located | Yes | Unknown | Direct `mmz4281/<season>/<division>.csv` download | ENG_PL 2025/26: 380/380 matches, 20 teams; selected match/team fields, no player metrics | Not certified for redistribution |
 | OpenFootball (`football.json`) | Repository dedicates schema/data/scripts to the public domain (CC0) | Yes | Yes (CC0) | Direct raw-JSON download (`raw.githubusercontent.com/openfootball/football.json`) | ENG_PL 2025/26: 380/380 matches, 20 teams; match results only, no team-match stats, no player metrics | Certified (public domain); used only to reconcile Football-Data.co.uk, not as the canonical load source |
-| Wikidata structured data | Wikidata's current licensing page states that structured data in the main/property/lexeme namespaces is released under CC0 1.0 | Yes, bounded | Yes (CC0) | Official `Special:EntityData/<QID>.json` Linked Data interface for an explicit small list of already-known QIDs; Football Intelligence caps one collection run at 50 entities | Player identity/profile corroboration only. The foundation preserves labels, DOB precision, citizenship/position QIDs and temporally qualified P54 team memberships; no performance metrics and no measured six-league coverage claim yet | Approved for bounded static profile-snapshot acquisition; candidate evidence only, no automatic player crosswalk or production promotion |
+| Wikidata structured data | Wikidata's current licensing page states that structured data in the main/property/lexeme namespaces is released under CC0 1.0 | Yes, bounded | Yes (CC0) | Official `Special:EntityData/<QID>.json` Linked Data interface for an explicit small list of already-known QIDs; Football Intelligence caps one collection run at 50 entities | Player identity/profile corroboration only. ENG_PL 2017/18 lab: 20/20 clubs resolved and 373 exact+unique candidates across 599 Wyscout source profiles; bounded 50-QID snapshot audited 50/50 labels, exact DOB, citizenship and position. No performance metrics and no measured six-league coverage claim | Approved for bounded static profile-snapshot acquisition; candidate evidence only, no automatic player crosswalk or production promotion |
 | Wyscout Open Data | Official Figshare collection `4415000` (DOI `10.6084/m9.figshare.c.4415000.v5`), CC BY 4.0 (attribution required) | Yes | Yes (CC BY 4.0) | Public Figshare v2 API (`api.figshare.com/v2`, documented, unauthenticated) | ENG_PL 2017/18: 380/380 matches, 20 teams, 603 players; 77/77 adapter-safe Metric Catalog V2 identities. **412,609 real observations** -- re-verified against the full real cache under the current `metric_granularity`-aware emission/audit contract (Block 20D.2 review-fix pass); historically certified at 411,844 observations under Block 20B.2b's original (pre-`metric_granularity`) contract, before `goalkeeper_match` `saves` was a distinct emitted identity | Certified adapter (historical/deep, approved for automated acquisition per this table); not current-season data, no canonical/production promotion decision made |
 | StatsBomb Open Data | Official repository publishes JSON for research/analysis and requires attribution under its user agreement | Yes | Unknown in this repository (no standalone redistribution licence relied on) | Official GitHub raw JSON, pinned commit SHA | FIFA World Cup 2022 validation sample (Block 16); separately, ENG_PL 2015/16: 380/380 matches, 20 teams; 110/110 adapter-safe Metric Catalog V2 identities. **644,396 real observations** -- re-verified against the full real cache under the current `metric_granularity`-aware emission/audit contract (Block 20D.2 review-fix pass); historically certified at 643,628 observations under Block 20C.2b's original (pre-`metric_granularity`) contract | Certified adapter (historical/deep, approved for automated acquisition per this table) for ENG_PL 2015/16; `STATSBOMB_INTERNAL_ONLY = True` for all StatsBomb evidence -- commercial-use compliance under StatsBomb's stricter User Agreement remains an open product/legal question this repository does not resolve, so no canonical/production promotion decision has been made for either the WC2022 sample or the ENG_PL 2015/16 evidence |
 | Fantasy Premier League | FPL terms prohibit automated systems used to access the game and extract information | No | No permission established | None; collector/client and derived files removed | No domestic player coverage | Prohibited for this implementation |
@@ -26,11 +26,12 @@ Snapshot retrieval details:
 - Football-Data.co.uk: `2026-08-15T00:27:07.021474+00:00`, direct E0 2025/26 CSV.
 - OpenFootball: see `data/real/2025-26/eng_pl_matches_openfootball.json`'s
   `provenance.retrieved_at` (Block 18).
-- Wikidata: no repository-committed or production-promoted player snapshot is
-  claimed by the foundation. `football-intelligence-collect-wikidata-profiles`
-  writes only a caller-selected local snapshot plus the generic checksum
-  manifest; `football-intelligence-audit-wikidata-profiles` verifies those
-  frozen bytes before any later identity review.
+- Wikidata: real `ENG_PL` 2017/18 profile-fusion evidence is recorded in
+  `docs/audits/wikidata-eng-pl-profile-fusion-2017-18.json`. The verified run
+  resolved 20/20 clubs, produced 373 exact+unique profile candidates and then
+  froze/audited a bounded 50-QID local snapshot. The raw entity JSON remains
+  outside the repository; no snapshot or candidate was production-promoted and
+  no automatic crosswalk was created.
 - StatsBomb WC2022: see `data/validation/wc2022/wc2022_validation_sample.json` provenance.
 - FPL: no retained dataset and no automated retrieval path.
 - Wyscout ENG_PL 2017/18 (412,609) / StatsBomb ENG_PL 2015/16 (644,396):
@@ -69,6 +70,7 @@ Primary references re-verified for this integration on 2026-08-24:
 - `https://www.wikidata.org/wiki/Wikidata:Data_access`
 - `https://www.wikidata.org/wiki/Special:EntityData`
 - `https://www.wikidata.org/wiki/Help:Dates`
+- `https://www.mediawiki.org/wiki/Wikimedia_APIs/Rate_limits`
 
 ## API-Football
 
