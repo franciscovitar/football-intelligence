@@ -37,6 +37,7 @@ from football_intelligence.jobs.calculate_player_analytics import _persist_versi
 from football_intelligence.jobs.historical_player_promotion_spec import (
     SEASON_LABEL,
     HistoricalPlayerPromotionSpec,
+    certified_predecessor_promotion_specs,
     historical_player_promotion_spec,
     supported_promotion_competitions,
 )
@@ -535,9 +536,14 @@ def validate_prewrite_state(
 ) -> None:
     if state.is_fresh or state.is_certified_complete_for(spec):
         return
+    if any(
+        state.is_certified_complete_for(predecessor)
+        for predecessor in certified_predecessor_promotion_specs(spec.competition_code)
+    ):
+        return
     raise HistoricalPlayerPromotionError(
-        f"historical production scope {spec.scope_key} is neither fresh nor certified complete; "
-        f"refusing unexpected partial state: {state}"
+        f"historical production scope {spec.scope_key} is neither fresh, current certified, "
+        f"nor an explicitly certified predecessor; refusing unexpected partial state: {state}"
     )
 
 
