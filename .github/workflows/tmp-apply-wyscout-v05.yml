@@ -37,6 +37,27 @@ jobs:
           PY
       - name: Apply deterministic product patch
         run: python scripts/tmp_apply_wyscout_v05_core_scopes.py
+      - name: Align dependent v0.5 contract tests
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          adapter_test = Path('analytics/tests/test_data_mesh_adapters_wyscout_open.py')
+          text = adapter_test.read_text(encoding='utf-8')
+          old = '''    # v0.3 promoted ENG_PL-only long_passes_accurate. v0.4 additionally promotes\n    # ENG_PL-only passes_into_final_third under spatial v1.2 and was explicitly\n    # re-certified as observationally equivalent to v0.3 in ESP_LL 2017/18,\n    # the Wyscout x StatsBomb comparability-policy scope.\n    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.1"\n    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.2"\n    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.3"\n    assert wyscout_open.SEMANTIC_VERSION == "wyscout-open-v0.4"'''
+          new = '''    # v0.5 expands the independently audited Spatial v1.2 metrics to all five\n    # Wyscout Open 2017/18 core-league scopes and was explicitly recertified\n    # against v0.4 on complete ESP_LL real-source evidence.\n    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.1"\n    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.2"\n    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.3"\n    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.4"\n    assert wyscout_open.SEMANTIC_VERSION == "wyscout-open-v0.5"'''
+          if text.count(old) != 1:
+              raise SystemExit('unexpected semantic-version test block')
+          adapter_test.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          promo_test = Path('analytics/tests/test_promote_historical_player_v2.py')
+          text = promo_test.read_text(encoding='utf-8')
+          old = '''    assert certified_predecessor_promotion_specs("ESP_LL") == ()\n    assert certified_predecessor_promotion_specs("FRA_L1") == ()\n    assert certified_predecessor_promotion_specs("GER_BL1") == ()\n    assert certified_predecessor_promotion_specs("ITA_SA") == ()'''
+          new = '''    expected_non_eng_predecessors = {\n        "ESP_LL": (416_407, 29_008),\n        "FRA_L1": (415_230, 28_007),\n        "GER_BL1": (336_265, 24_786),\n        "ITA_SA": (420_506, 27_872),\n    }\n    for competition, expected in expected_non_eng_predecessors.items():\n        predecessors = certified_predecessor_promotion_specs(competition)\n        assert len(predecessors) == 1\n        predecessor = predecessors[0]\n        assert (predecessor.source_observations, predecessor.feature_snapshots) == expected\n        validate_prewrite_state(predecessor_state := PrewriteState(\n            season_exists=True,\n            matches=predecessor.matches,\n            teams=predecessor.teams,\n            players=predecessor.players,\n            player_appearances=predecessor.player_appearances,\n            player_match_stats=predecessor.player_match_stats,\n            team_match_stats=predecessor.team_match_stats,\n            source_observations=predecessor.source_observations,\n            player_v2_rows=predecessor.score_snapshots,\n            player_v2_feature_rows=predecessor.feature_snapshots,\n        ), spec=historical_player_promotion_spec(competition))\n        with pytest.raises(HistoricalPlayerPromotionError, match="partial state"):\n            validate_prewrite_state(\n                PrewriteState(\n                    season_exists=True,\n                    matches=predecessor_state.matches,\n                    teams=predecessor_state.teams,\n                    players=predecessor_state.players,\n                    player_appearances=predecessor_state.player_appearances,\n                    player_match_stats=predecessor_state.player_match_stats,\n                    team_match_stats=predecessor_state.team_match_stats,\n                    source_observations=predecessor_state.source_observations,\n                    player_v2_rows=predecessor_state.player_v2_rows,\n                    player_v2_feature_rows=predecessor_state.player_v2_feature_rows - 1,\n                ),\n                spec=historical_player_promotion_spec(competition),\n            )'''
+          if text.count(old) != 1:
+              raise SystemExit('unexpected non-England predecessor assertions')
+          promo_test.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
       - name: Validate analytics
         working-directory: analytics
         run: |
