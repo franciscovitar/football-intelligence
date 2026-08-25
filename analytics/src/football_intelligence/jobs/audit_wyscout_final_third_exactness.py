@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -36,7 +37,11 @@ FINAL_THIRD_WEIGHT = 25
 LONG_ACCURATE_WEIGHT = 20
 PASSING_MIN_EVIDENCE_WEIGHT = 60
 
-FinalThirdClassification = Literal["into_final_third", "not_into_final_third", "ambiguous"]
+FinalThirdClassification = Literal[
+    "into_final_third",
+    "not_into_final_third",
+    "ambiguous",
+]
 
 
 class WyscoutFinalThirdAuditError(RuntimeError):
@@ -66,7 +71,10 @@ class PlayerSeasonState:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Audit exact Wyscout pass-into-final-third coverage without endpoint imputation."
+        description=(
+            "Audit exact Wyscout pass-into-final-third coverage without "
+            "endpoint imputation."
+        )
     )
     parser.add_argument("--cache-dir", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
@@ -107,7 +115,9 @@ def _pct(numerator: int, denominator: int) -> float:
     return round(100.0 * numerator / denominator, 4) if denominator else 0.0
 
 
-def _coverage(states: list[PlayerMatchState] | list[PlayerSeasonState]) -> dict[str, Any]:
+def _coverage(
+    states: Sequence[PlayerMatchState | PlayerSeasonState],
+) -> dict[str, Any]:
     ready = [state for state in states if not state.final_third_missing]
     positive = sum(state.passes_into_final_third > 0 for state in ready)
     true_zero = sum(state.passes_into_final_third == 0 for state in ready)
@@ -233,14 +243,6 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
         if state.passes_total > 0 and evidence_weight >= PASSING_MIN_EVIDENCE_WEIGHT:
             passing_proxy.append(state)
 
-    old_ambiguous_player_matches = sum(
-        state.final_third_missing for state in match_states
-    ) + sum(
-        1
-        for state in match_states
-        if not state.final_third_missing and False
-    )
-
     return {
         "execution_status": "PASS",
         "methodology_candidate": "fi-wyscout-final-third-exactness-v1",
@@ -290,9 +292,6 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
                 "invalid endpoint + observed start inside final third => exact non-qualifying; "
                 "invalid endpoint + start outside final third => missing"
             ),
-        },
-        "diagnostic_only": {
-            "old_ambiguous_player_matches_placeholder": old_ambiguous_player_matches
         },
     }
 
