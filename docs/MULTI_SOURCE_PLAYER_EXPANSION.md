@@ -233,7 +233,7 @@ The working source families are:
 | Source/family | Intended value | Current onboarding treatment |
 | --- | --- | --- |
 | Wyscout Open | historical/deep event and player evidence | existing certified historical path; reuse |
-| Wikidata structured data | six-league identity/profile corroboration and club-career context | current structured data is CC0; bounded known-QID static snapshot foundation selected for first profile fusion lab; no automatic crosswalk or performance role |
+| Wikidata structured data | six-league identity/profile corroboration and club-career context | current structured data is CC0; ENG_PL 2017/18 real fusion lab + bounded 50-QID snapshot verified; no automatic crosswalk, no performance role, and no six-league coverage claim yet |
 | StatsBomb Open | historical/deep event evidence | existing `internal_only` restrictions remain |
 | Football-Data.co.uk | match/team facts | existing path; no deep player layer |
 | OpenFootball | independent fixture/result reconciliation; possible separate CC0 player-profile corroboration via its player repositories | existing match path; player-profile completeness still requires empirical audit before use |
@@ -272,9 +272,16 @@ The first implementation is intentionally bounded:
   can be `review_required` but not `crosswalk_ready` solely because of profile
   evidence.
 
-This foundation does **not** claim measured six-league coverage yet. The next
-evidence gate is a real bounded snapshot/audit for one competition before any
-crosswalk or product promotion decision.
+This foundation does **not** claim measured six-league coverage. The first real
+competition gate is now complete for `ENG_PL` 2017/18: all 20 clubs resolved,
+373/599 source profiles produced exact+unique Wikidata candidates, and a bounded
+50-QID immutable snapshot passed checksum/profile audit. Of the 599 Wyscout
+profiles, 368 pairs remained correctly `review_required`, 5 were
+`insufficient_evidence`, and 226 had no exact-name candidate. The durable summary
+is `docs/audits/wikidata-eng-pl-profile-fusion-2017-18.json`. No crosswalk or
+product/database promotion was performed. The next evidence gate is expansion to
+another supported core competition, with `ARG_LPF` prioritized because Wyscout
+Open does not provide the same historical deep-player path there.
 
 ## Metric mapping
 
@@ -351,9 +358,12 @@ Coverage is descriptive evidence, never a reason to weaken gates.
 9. Expand the same certified adapter to all supported core competitions.
 10. Add the next source and reconcile/enrich, never replacing trustworthy evidence.
 
-Steps 1-3 now have an implementation checkpoint: Wikidata is the first selected
-profile source. Step 4 remains deliberately unclaimed until a real bounded
-snapshot is acquired and audited outside the repository.
+Steps 1-7 now have an empirical checkpoint for the first fusion laboratory,
+`ENG_PL` 2017/18. The raw 50-entity snapshot remains outside the repository; only
+the compact audit summary is committed. Step 8 (coverage/conflict review at wider
+scope) and expansion to the remaining supported competitions are still open.
+Wikidata remains profile/corroboration evidence only and cannot bypass the shared-
+canonical-match crosswalk requirement.
 
 ## Acceptance criteria for this foundation
 
