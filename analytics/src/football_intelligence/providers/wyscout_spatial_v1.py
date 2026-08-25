@@ -155,12 +155,10 @@ def distance_to_opponent_goal(point: PitchPoint) -> float:
 def _parse_percentage_point(raw: Any) -> PitchPoint | None:
     if not isinstance(raw, dict):
         return None
-    raw_x = raw.get("x")
-    raw_y = raw.get("y")
-    if not _is_number(raw_x) or not _is_number(raw_y):
+    x_pct = _finite_float(raw.get("x"))
+    y_pct = _finite_float(raw.get("y"))
+    if x_pct is None or y_pct is None:
         return None
-    x_pct = float(raw_x)
-    y_pct = float(raw_y)
     if not (0.0 <= x_pct <= 100.0 and 0.0 <= y_pct <= 100.0):
         return None
     return PitchPoint(
@@ -169,5 +167,8 @@ def _parse_percentage_point(raw: Any) -> PitchPoint | None:
     )
 
 
-def _is_number(value: Any) -> bool:
-    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
+def _finite_float(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    result = float(value)
+    return result if math.isfinite(result) else None
