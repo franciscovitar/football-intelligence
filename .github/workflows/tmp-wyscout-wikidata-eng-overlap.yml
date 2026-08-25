@@ -1,0 +1,56 @@
+name: Temporary Wyscout x Wikidata ENG Overlap Evidence
+
+on:
+  push:
+    branches:
+      - evidence/wyscout-wikidata-eng-overlap
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Sync analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+
+      - name: Run real-source Wyscout x Wikidata overlap audit
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-audit-wyscout-wikidata-overlap \
+            --cache-dir "$RUNNER_TEMP/wyscout-wikidata-cache" \
+            --report "$RUNNER_TEMP/wyscout-wikidata-eng-overlap.json"
+
+      - name: Print compact evidence summary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path(os.environ['RUNNER_TEMP']) / 'wyscout-wikidata-eng-overlap.json'
+          report = json.loads(path.read_text())
+          keys = [
+              'status', 'wyscout_roster_total', 'wyscout_profiles_available',
+              'team_mappings_resolved', 'team_total', 'wikidata_discovery_entities',
+              'players_with_exact_name_candidate', 'players_with_unique_candidate',
+              'wikidata_entities_loaded', 'wikidata_exact_dob_coverage',
+              'wikidata_citizenship_coverage', 'wikidata_position_coverage',
+              'wikidata_bounded_team_context_coverage', 'candidate_state_counts', 'failures'
+          ]
+          print(json.dumps({key: report.get(key) for key in keys}, indent=2, sort_keys=True))
+          PY
+
+      - name: Upload report only
+        uses: actions/upload-artifact@v7
+        with:
+          name: wyscout-wikidata-eng-overlap-evidence
+          path: ${{ runner.temp }}/wyscout-wikidata-eng-overlap.json
+          retention-days: 7
