@@ -1,0 +1,41 @@
+name: Temporary Apply Wyscout v0.5 Core Scopes
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'feat/wyscout-spatial-v12-core-scopes-v05'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Apply deterministic product patch
+        run: python scripts/tmp_apply_wyscout_v05_core_scopes.py
+      - name: Validate analytics
+        working-directory: analytics
+        run: |
+          uv sync --dev
+          uv run ruff format src tests
+          uv run ruff check src tests
+          uv run ruff format --check src tests
+          uv run mypy src
+          uv run pytest
+      - name: Remove temporary helpers and commit product state
+        run: |
+          git rm -f scripts/tmp_apply_wyscout_v05_core_scopes.py .github/workflows/tmp-apply-wyscout-v05.yml
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat: promote Wyscout spatial v1.2 across core leagues"
+          git push origin HEAD:${{ github.head_ref }}
