@@ -1,0 +1,85 @@
+name: Temporary Wikidata ENG Bounded Postfix Evidence
+
+on:
+  push:
+    branches:
+      - evidence/wikidata-eng-bounded-postfix
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Sync analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+      - name: Run real Wyscout x Wikidata overlap audit
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-audit-wyscout-wikidata-overlap \
+            --cache-dir "$RUNNER_TEMP/wyscout-wikidata-cache" \
+            --report "$RUNNER_TEMP/wyscout-wikidata-eng-overlap.json"
+      - name: Require all teams resolved and select bounded QIDs
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          report = json.loads((root / 'wyscout-wikidata-eng-overlap.json').read_text())
+          print(json.dumps({
+              'status': report['status'],
+              'team_mappings_resolved': report['team_mappings_resolved'],
+              'team_total': report['team_total'],
+              'players_with_exact_name_candidate': report['players_with_exact_name_candidate'],
+              'players_with_unique_candidate': report['players_with_unique_candidate'],
+              'candidate_state_counts': report['candidate_state_counts'],
+              'failures': report['failures'],
+          }, indent=2, sort_keys=True))
+          assert report['team_mappings_resolved'] == report['team_total'] == 20
+          assert report['status'] == 'PASS'
+          candidates = [row for row in report['results'] if row.get('state') == 'review_required' and row.get('wikidata_qid')]
+          candidates.sort(key=lambda row: (
+              not bool(row.get('wikidata_has_bounded_team_context')),
+              not bool(row.get('wikidata_has_exact_dob')),
+              row['wikidata_qid'],
+          ))
+          qids = [row['wikidata_qid'] for row in candidates[:50]]
+          assert len(qids) == 50 and len(set(qids)) == 50
+          (root / 'wikidata-bounded-qids.json').write_text(json.dumps(qids, indent=2, sort_keys=True) + '\n')
+          print(f'BOUNDED QID SELECTION: PASS count={len(qids)}')
+          PY
+      - name: Collect immutable bounded profile snapshot
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-collect-wikidata-profiles \
+            --qid-file "$RUNNER_TEMP/wikidata-bounded-qids.json" \
+            --snapshot-id "wikidata-eng-pl-2017-18-review-required-50-postfix" \
+            --competition ENG_PL \
+            --season 2017/18 \
+            --output-dir "$RUNNER_TEMP/wikidata-static-snapshot"
+      - name: Audit snapshot integrity and profile coverage
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-audit-wikidata-profiles \
+            --manifest "$RUNNER_TEMP/wikidata-static-snapshot/manifest.json" \
+            --base-dir "$RUNNER_TEMP/wikidata-static-snapshot" \
+            --report "$RUNNER_TEMP/wikidata-static-snapshot-audit.json"
+          cat "$RUNNER_TEMP/wikidata-static-snapshot-audit.json"
+      - name: Upload evidence reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: wikidata-eng-bounded-postfix-evidence
+          path: |
+            ${{ runner.temp }}/wyscout-wikidata-eng-overlap.json
+            ${{ runner.temp }}/wikidata-bounded-qids.json
+            ${{ runner.temp }}/wikidata-static-snapshot/manifest.json
+            ${{ runner.temp }}/wikidata-static-snapshot-audit.json
+          retention-days: 7
