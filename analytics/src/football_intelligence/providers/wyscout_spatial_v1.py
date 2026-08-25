@@ -155,4 +155,4 @@ def _parse_percentage_point(raw: Any) -> PitchPoint | None:
 
 
 def _is_number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
