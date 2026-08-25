@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
 
 jobs:
@@ -22,19 +22,6 @@ jobs:
       - name: Install analytics environment
         working-directory: analytics
         run: uv sync --dev --locked
-      - name: Apply canonical Ruff formatting to lab files
-        working-directory: analytics
-        env:
-          HEAD_BRANCH: ${{ github.head_ref }}
-        run: |
-          uv run ruff format .
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add .
-            git commit -m "style: format Wyscout spatial lab"
-            git push origin "HEAD:${HEAD_BRANCH}"
-          fi
       - name: Capture analytics diagnostics
         working-directory: analytics
         run: |
