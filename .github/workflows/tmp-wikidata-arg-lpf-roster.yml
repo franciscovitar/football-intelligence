@@ -1,0 +1,456 @@
+name: Temporary Wikidata ARG_LPF 2024 Roster Feasibility Lab
+
+on:
+  push:
+    branches:
+      - lab/wikidata-arg-lpf-2024-roster
+
+permissions:
+  contents: read
+
+jobs:
+  roster-feasibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+      - working-directory: analytics
+        run: uv sync --locked
+      - name: Measure temporally provable 2024 Wikidata roster breadth
+        working-directory: analytics
+        env:
+          REPORT_PATH: ${{ runner.temp }}/wikidata-arg-lpf-2024-roster-feasibility.json
+        run: |
+          uv run python - <<'PY'
+          import json
+          import os
+          import statistics
+          import time
+          import urllib.parse
+          import urllib.request
+          from collections import defaultdict
+          from datetime import date
+          from urllib.error import HTTPError, URLError
+
+          from football_intelligence.providers.wikidata_profiles import parse_wikidata_entity_document
+
+          CLUBS = {
+              'Sarmiento de Junín': 'Q519966',
+              'Instituto de Córdoba': 'Q1421829',
+              'Argentinos Juniors': 'Q220621',
+              'Rosario Central': 'Q318307',
+              "Newell's Old Boys": 'Q221882',
+              'Platense': 'Q151907',
+              'Huracán': 'Q327172',
+              'Defensa y Justicia': 'Q1024338',
+              'Godoy Cruz': 'Q80882',
+              'Barracas Central': 'Q2469894',
+              'Independiente': 'Q214978',
+              'Talleres de Córdoba': 'Q1022939',
+              'River Plate': 'Q15799',
+              'Central Córdoba SdE': 'Q5060684',
+              # Explicit Phase-1 exception: current P118 no longer represents its 2024 top-flight status.
+              'Tigre': 'Q80886',
+              'Estudiantes': 'Q214940',
+              'Deportivo Riestra': 'Q4382304',
+              'San Lorenzo': 'Q218282',
+              'Belgrano de Córdoba': 'Q59962',
+              'Racing Club': 'Q276533',
+              'Lanús': 'Q324589',
+              'Independiente Rivadavia': 'Q2454482',
+              'Atlético Tucumán': 'Q757470',
+              'Boca Juniors': 'Q170703',
+              'Gimnasia de La Plata': 'Q18640',
+              'Vélez Sarsfield': 'Q215163',
+              'Unión de Santa Fe': 'Q80899',
+              'Banfield': 'Q692646',
+          }
+
+          SEASON_START = date(2024, 5, 10)
+          SEASON_END = date(2024, 12, 16)
+          GREGORIAN_QID = 'Q1985727'
+          WDQS = 'https://query.wikidata.org/sparql'
+          API = 'https://www.wikidata.org/w/api.php'
+          USER_AGENT = 'FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
+          RETRYABLE = {429, 500, 502, 503, 504}
+          PAGE_SIZE = 1000
+          MAX_PAGES_PER_CLUB = 8
+
+          # Fixed before observing this run. These are lab-only feasibility heuristics,
+          # not a product roster definition or a certified recall threshold.
+          DECISION_HEURISTIC = {
+              'A_viable': {'all_28_clubs_min_compatible_players': 18, 'league_median_compatible_players': 22},
+              'B_enrichment': {
+                  'clubs_with_at_least_5_compatible_players': 24,
+                  'league_median_compatible_players': 8,
+                  'min_profile_field_presence_ratio': 0.60,
+              },
+          }
+
+          def request_json(url: str, *, accept: str = 'application/json') -> dict:
+              for attempt in range(1, 5):
+                  req = urllib.request.Request(url, headers={'Accept': accept, 'User-Agent': USER_AGENT})
+                  try:
+                      with urllib.request.urlopen(req, timeout=45) as response:
+                          payload = json.loads(response.read())
+                          if not isinstance(payload, dict):
+                              raise RuntimeError('remote response root is not an object')
+                          return payload
+                  except HTTPError as exc:
+                      if exc.code not in RETRYABLE or attempt == 4:
+                          raise
+                      retry_after = exc.headers.get('Retry-After')
+                      delay = min(float(retry_after), 30.0) if retry_after and retry_after.isdigit() else min(5.0 * (2 ** (attempt - 1)), 30.0)
+                      time.sleep(delay)
+                  except (URLError, TimeoutError):
+                      if attempt == 4:
+                          raise
+                      time.sleep(min(5.0 * (2 ** (attempt - 1)), 30.0))
+              raise AssertionError('bounded request exhausted')
+
+          def discovery_query(team_qid: str, *, limit: int, offset: int) -> str:
+              return f'''PREFIX wd: <http://www.wikidata.org/entity/>
+          PREFIX p: <http://www.wikidata.org/prop/>
+          PREFIX ps: <http://www.wikidata.org/prop/statement/>
+          PREFIX pqv: <http://www.wikidata.org/prop/qualifier/value/>
+          PREFIX wikibase: <http://wikiba.se/ontology#>
+          SELECT ?player ?statement ?start ?startPrecision ?startCalendar ?end ?endPrecision ?endCalendar WHERE {{
+            ?player p:P54 ?statement .
+            ?statement ps:P54 wd:{team_qid} .
+            FILTER NOT EXISTS {{ ?statement wikibase:rank wikibase:DeprecatedRank }}
+            OPTIONAL {{
+              ?statement pqv:P580 ?startNode .
+              ?startNode wikibase:timeValue ?start ;
+                         wikibase:timePrecision ?startPrecision ;
+                         wikibase:timeCalendarModel ?startCalendar .
+            }}
+            OPTIONAL {{
+              ?statement pqv:P582 ?endNode .
+              ?endNode wikibase:timeValue ?end ;
+                       wikibase:timePrecision ?endPrecision ;
+                       wikibase:timeCalendarModel ?endCalendar .
+            }}
+          }}
+          ORDER BY ?statement ?start ?end
+          LIMIT {limit}
+          OFFSET {offset}'''
+
+          def binding_value(row: dict, key: str) -> str | None:
+              raw = row.get(key)
+              if not isinstance(raw, dict):
+                  return None
+              value = raw.get('value')
+              return value if isinstance(value, str) and value else None
+
+          def qid_from_uri(value: str | None) -> str | None:
+              if value is None:
+                  return None
+              candidate = value.rsplit('/', 1)[-1]
+              return candidate if candidate.startswith('Q') and candidate[1:].isdigit() else None
+
+          def time_key(row: dict, prefix: str) -> tuple[str, int, str] | None:
+              raw_time = binding_value(row, prefix)
+              raw_precision = binding_value(row, f'{prefix}Precision')
+              calendar_qid = qid_from_uri(binding_value(row, f'{prefix}Calendar'))
+              if raw_time is None or raw_precision is None or calendar_qid is None:
+                  return None
+              try:
+                  precision = int(raw_precision)
+              except ValueError:
+                  return None
+              return (raw_time, precision, calendar_qid)
+
+          def date_bounds(value: tuple[str, int, str]) -> tuple[date, date] | None:
+              raw_time, precision, calendar_qid = value
+              if calendar_qid != GREGORIAN_QID or precision not in {9, 10, 11}:
+                  return None
+              try:
+                  year = int(raw_time[0:4])
+                  month = int(raw_time[5:7])
+                  day = int(raw_time[8:10])
+                  if precision == 9:
+                      return (date(year, 1, 1), date(year, 12, 31))
+                  if precision == 10:
+                      import calendar
+                      return (date(year, month, 1), date(year, month, calendar.monthrange(year, month)[1]))
+                  exact = date(year, month, day)
+                  return (exact, exact)
+              except (ValueError, IndexError):
+                  return None
+
+          def classify_statement(statement: dict) -> str:
+              starts = statement['starts']
+              ends = statement['ends']
+              if len(starts) != 1 or len(ends) != 1:
+                  return 'insufficient_temporal_evidence'
+              start_bounds = date_bounds(next(iter(starts)))
+              end_bounds = date_bounds(next(iter(ends)))
+              if start_bounds is None or end_bounds is None:
+                  return 'insufficient_temporal_evidence'
+              start_low, start_high = start_bounds
+              end_low, end_high = end_bounds
+              if start_low > end_high:
+                  return 'insufficient_temporal_evidence'
+              if start_high <= SEASON_END and end_low >= SEASON_START:
+                  return 'guaranteed_overlap_2024'
+              if start_low > SEASON_END or end_high < SEASON_START:
+                  return 'definitely_outside_2024'
+              return 'temporally_ambiguous_2024'
+
+          statements_by_club = {}
+          discovery_rows_by_club = {}
+          truncated_clubs = []
+
+          for club_name, team_qid in CLUBS.items():
+              statements = {}
+              total_rows = 0
+              for page in range(MAX_PAGES_PER_CLUB):
+                  query = discovery_query(team_qid, limit=PAGE_SIZE, offset=page * PAGE_SIZE)
+                  url = f"{WDQS}?{urllib.parse.urlencode({'query': query, 'format': 'json'})}"
+                  payload = request_json(url)
+                  results = payload.get('results')
+                  bindings = results.get('bindings') if isinstance(results, dict) else None
+                  if not isinstance(bindings, list):
+                      raise RuntimeError(f'WDQS returned no bindings list for {club_name}')
+                  total_rows += len(bindings)
+                  for row in bindings:
+                      if not isinstance(row, dict):
+                          continue
+                      player_qid = qid_from_uri(binding_value(row, 'player'))
+                      statement_uri = binding_value(row, 'statement')
+                      if player_qid is None or statement_uri is None:
+                          continue
+                      statement = statements.setdefault(statement_uri, {'player_qid': player_qid, 'starts': set(), 'ends': set()})
+                      if statement['player_qid'] != player_qid:
+                          raise RuntimeError(f'statement {statement_uri} mapped to multiple players')
+                      if (start := time_key(row, 'start')) is not None:
+                          statement['starts'].add(start)
+                      if (end := time_key(row, 'end')) is not None:
+                          statement['ends'].add(end)
+                  if len(bindings) < PAGE_SIZE:
+                      break
+                  time.sleep(0.15)
+              else:
+                  truncated_clubs.append(club_name)
+              statements_by_club[club_name] = statements
+              discovery_rows_by_club[club_name] = total_rows
+              time.sleep(0.20)
+
+          if truncated_clubs:
+              raise RuntimeError(f'bounded WDQS discovery hit cap for clubs: {truncated_clubs}')
+
+          classification_by_club = {}
+          compatible_qids = set()
+          for club_name, statements in statements_by_club.items():
+              classes = defaultdict(int)
+              player_classes = defaultdict(set)
+              player_statement_counts = defaultdict(int)
+              for statement in statements.values():
+                  player_qid = statement['player_qid']
+                  classification = classify_statement(statement)
+                  classes[classification] += 1
+                  player_classes[player_qid].add(classification)
+                  player_statement_counts[player_qid] += 1
+                  if classification == 'guaranteed_overlap_2024':
+                      compatible_qids.add(player_qid)
+              classification_by_club[club_name] = (classes, player_classes, player_statement_counts)
+
+          entities = {}
+          ordered_compatible = sorted(compatible_qids)
+          for offset in range(0, len(ordered_compatible), 50):
+              batch = ordered_compatible[offset:offset + 50]
+              params = {
+                  'action': 'wbgetentities',
+                  'ids': '|'.join(batch),
+                  'props': 'labels|claims|info',
+                  'languages': 'es|en',
+                  'languagefallback': '1',
+                  'format': 'json',
+                  'formatversion': '2',
+              }
+              payload = request_json(f"{API}?{urllib.parse.urlencode(params)}")
+              raw_entities = payload.get('entities')
+              if not isinstance(raw_entities, dict):
+                  raise RuntimeError('wbgetentities returned no entities object')
+              for qid, entity in raw_entities.items():
+                  if isinstance(qid, str) and isinstance(entity, dict):
+                      entities[qid] = entity
+              time.sleep(0.10)
+
+          profiles = {}
+          for qid in ordered_compatible:
+              entity = entities.get(qid)
+              if entity is None:
+                  raise RuntimeError(f'missing compatible player entity {qid}')
+              profiles[qid] = parse_wikidata_entity_document({'entities': {qid: entity}}, expected_qid=qid)
+
+          def has_active_claim(entity: dict, property_id: str) -> bool:
+              claims = entity.get('claims')
+              rows = claims.get(property_id) if isinstance(claims, dict) else None
+              return isinstance(rows, list) and any(isinstance(row, dict) and row.get('rank') != 'deprecated' for row in rows)
+
+          per_club = []
+          unique_compatible_clubs = defaultdict(set)
+          for club_name, team_qid in CLUBS.items():
+              statements = statements_by_club[club_name]
+              classes, player_classes, player_statement_counts = classification_by_club[club_name]
+              discovered_players = set(player_classes)
+              compatible = {qid for qid, values in player_classes.items() if 'guaranteed_overlap_2024' in values}
+              ambiguous = {
+                  qid for qid, values in player_classes.items()
+                  if 'guaranteed_overlap_2024' not in values and 'temporally_ambiguous_2024' in values
+              }
+              insufficient = {
+                  qid for qid, values in player_classes.items()
+                  if 'guaranteed_overlap_2024' not in values
+                  and 'temporally_ambiguous_2024' not in values
+                  and 'insufficient_temporal_evidence' in values
+              }
+              for qid in compatible:
+                  unique_compatible_clubs[qid].add(club_name)
+              profile_rows = [profiles[qid] for qid in compatible]
+              per_club.append({
+                  'club': club_name,
+                  'team_qid': team_qid,
+                  'wdqs_rows': discovery_rows_by_club[club_name],
+                  'players_discovered': len(discovered_players),
+                  'memberships_total': len(statements),
+                  'memberships_temporally_bounded': classes['guaranteed_overlap_2024'] + classes['definitely_outside_2024'] + classes['temporally_ambiguous_2024'],
+                  'memberships_guaranteed_overlap_2024': classes['guaranteed_overlap_2024'],
+                  'memberships_definitely_outside_2024': classes['definitely_outside_2024'],
+                  'memberships_temporally_ambiguous_2024': classes['temporally_ambiguous_2024'],
+                  'memberships_insufficient_temporal_evidence': classes['insufficient_temporal_evidence'],
+                  'players_compatible_2024': len(compatible),
+                  'players_temporally_ambiguous_2024': len(ambiguous),
+                  'players_insufficient_temporal_evidence': len(insufficient),
+                  'players_multiple_membership_statements': sum(count > 1 for count in player_statement_counts.values()),
+                  'compatible_profiles_with_any_dob': sum(bool(profile.dates_of_birth) for profile in profile_rows),
+                  'compatible_profiles_with_exact_dob': sum(profile.exact_date_of_birth is not None for profile in profile_rows),
+                  'compatible_profiles_with_position': sum(bool(profile.position_qids) for profile in profile_rows),
+                  'compatible_profiles_with_citizenship': sum(bool(profile.citizenship_qids) for profile in profile_rows),
+                  'compatible_profiles_with_height_claim': sum(has_active_claim(entities[profile.qid], 'P2048') for profile in profile_rows),
+              })
+
+          compatible_counts = [row['players_compatible_2024'] for row in per_club]
+          discovered_counts = [row['players_discovered'] for row in per_club]
+          unique_compatible = set(unique_compatible_clubs)
+          unique_profiles = [profiles[qid] for qid in unique_compatible]
+          profile_denominator = len(unique_profiles)
+          profile_presence = {
+              'any_dob': sum(bool(profile.dates_of_birth) for profile in unique_profiles),
+              'exact_dob': sum(profile.exact_date_of_birth is not None for profile in unique_profiles),
+              'position': sum(bool(profile.position_qids) for profile in unique_profiles),
+              'citizenship': sum(bool(profile.citizenship_qids) for profile in unique_profiles),
+              'height_claim': sum(has_active_claim(entities[profile.qid], 'P2048') for profile in unique_profiles),
+          }
+          profile_ratios = {
+              key: (value / profile_denominator if profile_denominator else 0.0)
+              for key, value in profile_presence.items()
+          }
+
+          all_discovered_qids = set()
+          for _, player_classes, _ in classification_by_club.values():
+              all_discovered_qids.update(player_classes)
+
+          aggregate = {
+              'clubs': len(CLUBS),
+              'unique_players_discovered': len(all_discovered_qids),
+              'unique_players_compatible_2024': len(unique_compatible),
+              'unique_players_compatible_multiple_clubs_2024': sum(len(clubs) > 1 for clubs in unique_compatible_clubs.values()),
+              'players_discovered_per_club': {
+                  'min': min(discovered_counts),
+                  'median': statistics.median(discovered_counts),
+                  'max': max(discovered_counts),
+              },
+              'players_compatible_2024_per_club': {
+                  'min': min(compatible_counts),
+                  'median': statistics.median(compatible_counts),
+                  'max': max(compatible_counts),
+              },
+              'clubs_with_at_least_5_compatible_players': sum(value >= 5 for value in compatible_counts),
+              'clubs_with_at_least_18_compatible_players': sum(value >= 18 for value in compatible_counts),
+              'memberships_total': sum(row['memberships_total'] for row in per_club),
+              'memberships_temporally_bounded': sum(row['memberships_temporally_bounded'] for row in per_club),
+              'memberships_guaranteed_overlap_2024': sum(row['memberships_guaranteed_overlap_2024'] for row in per_club),
+              'memberships_definitely_outside_2024': sum(row['memberships_definitely_outside_2024'] for row in per_club),
+              'memberships_temporally_ambiguous_2024': sum(row['memberships_temporally_ambiguous_2024'] for row in per_club),
+              'memberships_insufficient_temporal_evidence': sum(row['memberships_insufficient_temporal_evidence'] for row in per_club),
+              'compatible_profile_presence': profile_presence,
+              'compatible_profile_presence_ratio': profile_ratios,
+          }
+
+          a_gate = (
+              aggregate['clubs_with_at_least_18_compatible_players'] == 28
+              and aggregate['players_compatible_2024_per_club']['median'] >= 22
+          )
+          b_gate = (
+              aggregate['clubs_with_at_least_5_compatible_players'] >= 24
+              and aggregate['players_compatible_2024_per_club']['median'] >= 8
+              and min(profile_ratios['any_dob'], profile_ratios['position'], profile_ratios['citizenship']) >= 0.60
+          )
+          decision = 'A_viable' if a_gate else ('B_useful_as_enrichment' if b_gate else 'C_insufficient')
+
+          report = {
+              'lab': 'ARG_LPF 2024 — Wikidata roster feasibility',
+              'generated_from_git_sha': os.environ.get('GITHUB_SHA'),
+              'competition': 'ARG_LPF',
+              'season': '2024',
+              'season_window': {'start': SEASON_START.isoformat(), 'end': SEASON_END.isoformat()},
+              'club_resolution': {
+                  'source_clubs': 28,
+                  'club_qids': 28,
+                  'automatic_strong_resolution': 27,
+                  'explicit_exception_mapping': {'Tigre': 'Q80886'},
+                  'note': 'Current P118 is used only as Phase-1 disambiguation evidence, never as historical 2024 roster evidence.',
+              },
+              'method': {
+                  'source_role': 'Wikidata profile/identity and temporally qualified P54 evidence only',
+                  'deprecated_p54_excluded': True,
+                  'membership_without_exactly_one_bounded_p580_and_p582_is_2024_compatible': False,
+                  'year_month_day_precision_preserved': True,
+                  'missing_is_not_zero': True,
+                  'wdqs_page_size': PAGE_SIZE,
+                  'wdqs_max_pages_per_club': MAX_PAGES_PER_CLUB,
+                  'discovery_truncated': False,
+                  'ground_truth_roster_recall_measured': False,
+              },
+              'decision_heuristic': DECISION_HEURISTIC,
+              'aggregate': aggregate,
+              'per_club': per_club,
+              'decision': decision,
+              'limitations': [
+                  'This measures Wikidata breadth and temporally provable P54 overlap, not recall against an authoritative 2024 squad ground truth.',
+                  'Open-ended or otherwise insufficiently qualified P54 memberships are intentionally not promoted to 2024 roster evidence.',
+                  'Wikidata provides no Football Intelligence canonical match IDs and cannot create crosswalk_ready players by itself.',
+                  'No PostgreSQL, PlayerCrosswalk, canonical player, or Player V2 record is written by this lab.',
+              ],
+          }
+
+          report_path = os.environ['REPORT_PATH']
+          with open(report_path, 'w', encoding='utf-8') as handle:
+              json.dump(report, handle, ensure_ascii=False, indent=2, sort_keys=True)
+              handle.write('\n')
+
+          print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+          print(
+              'ARG_LPF WIKIDATA ROSTER LAB: PASS '
+              f"decision={decision} unique_compatible={aggregate['unique_players_compatible_2024']} "
+              f"compatible_per_club_min={aggregate['players_compatible_2024_per_club']['min']} "
+              f"median={aggregate['players_compatible_2024_per_club']['median']} "
+              f"max={aggregate['players_compatible_2024_per_club']['max']}"
+          )
+          PY
+      - name: Upload bounded roster feasibility evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wikidata-arg-lpf-2024-roster-feasibility-${{ github.run_id }}
+          path: ${{ runner.temp }}/wikidata-arg-lpf-2024-roster-feasibility.json
+          if-no-files-found: warn
+          retention-days: 30
