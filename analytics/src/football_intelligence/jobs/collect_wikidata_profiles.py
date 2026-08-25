@@ -150,7 +150,9 @@ def _fetch_entity(qid: str) -> bytes:
 def _retry_delay(*, attempt: int, retry_after: str | None) -> float:
     if retry_after and retry_after.isdigit():
         return min(float(retry_after), MAX_RETRY_DELAY_SECONDS)
-    exponential = DEFAULT_RETRY_DELAY_SECONDS * (2 ** (attempt - 1))
+    exponential = DEFAULT_RETRY_DELAY_SECONDS
+    for _ in range(attempt - 1):
+        exponential *= 2.0
     return min(exponential, MAX_RETRY_DELAY_SECONDS)
 
 
