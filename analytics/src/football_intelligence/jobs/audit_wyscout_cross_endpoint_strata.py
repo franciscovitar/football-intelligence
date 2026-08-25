@@ -114,7 +114,14 @@ def _group_events(events_payload: list[Any]) -> dict[int, list[dict[str, Any]]]:
 
 def _tag_profile(event: dict[str, Any]) -> tuple[bool | None, bool, str]:
     tags = _tag_ids(event)
-    height = "blocked" if BLOCKED_TAG in tags else "high" if HIGH_TAG in tags else "low" if LOW_TAG in tags else "other"
+    if BLOCKED_TAG in tags:
+        height = "blocked"
+    elif HIGH_TAG in tags:
+        height = "high"
+    elif LOW_TAG in tags:
+        height = "low"
+    else:
+        height = "other"
     return _accuracy(event), BLOCKED_TAG in tags, height
 
 
@@ -140,6 +147,21 @@ def _source_profile(events: list[dict[str, Any]]) -> dict[str, Any]:
             for tags, count in tag_sets.most_common(12)
         ],
     }
+
+
+def _matching_strata(event: dict[str, Any], candidate: Candidate) -> tuple[str, ...]:
+    if _accuracy(event) is not False or candidate.same_team:
+        return ()
+    blocked = BLOCKED_TAG in _tag_ids(event)
+    names = ["inaccurate_immediate_opponent"]
+    qualifier = "blocked" if blocked else "not_blocked"
+    names.append(f"inaccurate_{qualifier}_immediate_opponent")
+    if candidate.sub_event_name in TARGET_SUB_EVENTS:
+        names.append(f"inaccurate_immediate_{candidate.sub_event_name}")
+        names.append(
+            f"inaccurate_{qualifier}_immediate_{candidate.sub_event_name}"
+        )
+    return tuple(names)
 
 
 def run_audit(cache_dir: Path) -> dict[str, Any]:
@@ -185,23 +207,8 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
         strata[f"inaccurate_not_blocked_immediate_{sub_event}"] = []
 
     for event, candidate, endpoint in known_rows:
-        if _accuracy(event) is not False or candidate.same_team:
-            continue
-        blocked = BLOCKED_TAG in _tag_ids(event)
-        strata["inaccurate_immediate_opponent"].append((event, candidate, endpoint))
-        blocked_key = (
-            "inaccurate_blocked_immediate_opponent"
-            if blocked
-            else "inaccurate_not_blocked_immediate_opponent"
-        )
-        strata[blocked_key].append((event, candidate, endpoint))
-        if candidate.sub_event_name in TARGET_SUB_EVENTS:
-            base = f"inaccurate_immediate_{candidate.sub_event_name}"
-            strata[base].append((event, candidate, endpoint))
-            qualifier = "blocked" if blocked else "not_blocked"
-            strata[f"inaccurate_{qualifier}_immediate_{candidate.sub_event_name}"].append(
-                (event, candidate, endpoint)
-            )
+        for name in _matching_strata(event, candidate):
+            strata[name].append((event, candidate, endpoint))
 
     stratum_reports: dict[str, Any] = {}
     for name, rows in strata.items():
@@ -211,11 +218,19 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
             "precision_gate_passed": _precision_gate(diagnostics),
         }
 
-    zero_candidate_sub_events = Counter(candidate.sub_event_name for _, candidate in zero_candidates)
-    zero_candidate_event_names = Counter(candidate.event_name for _, candidate in zero_candidates)
+    zero_candidate_sub_events = Counter(
+        candidate.sub_event_name for _, candidate in zero_candidates
+    )
+    zero_candidate_event_names = Counter(
+        candidate.event_name for _, candidate in zero_candidates
+    )
     zero_blocked_by_sub_event: dict[str, dict[str, int]] = {}
     for sub_event in TARGET_SUB_EVENTS:
-        rows = [(event, candidate) for event, candidate in zero_candidates if candidate.sub_event_name == sub_event]
+        rows = [
+            (event, candidate)
+            for event, candidate in zero_candidates
+            if candidate.sub_event_name == sub_event
+        ]
         blocked = sum(BLOCKED_TAG in _tag_ids(event) for event, _ in rows)
         zero_blocked_by_sub_event[sub_event] = {
             "events": len(rows),
@@ -223,10 +238,56 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
             "not_blocked": len(rows) - blocked,
         }
 
-    passing_strata = [name for name, report in stratum_reports.items() if report["precision_gate_passed"]]
+    zero_matches_by_stratum = Counter()
+    for event, candidate in zero_candidates:
+        zero_matches_by_stratum.update(_matching_strata(event, candidate))
+
+    passing_strata = [
+        name
+        for name, report in stratum_reports.items()
+        if report["precision_gate_passed"]
+    ]
+    applicable_passing_strata: list[str] = []
+    applicability_notes: dict[str, str] = {}
+    for name in passing_strata:
+        zero_matches = zero_matches_by_stratum[name]
+        if zero_matches == 0:
+            applicability_notes[name] = "passes controls but has no zero-zero target rows"
+            continue
+        if "_blocked_" in name or "_not_blocked_" in name:
+            applicable_passing_strata.append(name)
+            applicability_notes[name] = "passes controls and directly matches zero-zero rows"
+            continue
+        if name.startswith("inaccurate_immediate_"):
+            suffix = name.removeprefix("inaccurate_immediate_")
+            blocked_name = f"inaccurate_blocked_immediate_{suffix}"
+            not_blocked_name = f"inaccurate_not_blocked_immediate_{suffix}"
+            blocked_zero = zero_matches_by_stratum[blocked_name]
+            not_blocked_zero = zero_matches_by_stratum[not_blocked_name]
+            blocked_passes = stratum_reports[blocked_name]["precision_gate_passed"]
+            not_blocked_passes = stratum_reports[not_blocked_name][
+                "precision_gate_passed"
+            ]
+            if (blocked_zero == 0 or blocked_passes) and (
+                not_blocked_zero == 0 or not_blocked_passes
+            ):
+                applicable_passing_strata.append(name)
+                applicability_notes[name] = (
+                    "passes controls and every represented zero-zero qualifier also passes"
+                )
+            else:
+                applicability_notes[name] = (
+                    "passes aggregate controls but fails qualifier-specific transfer to "
+                    "the zero-zero population"
+                )
+
     return {
         "execution_status": "PASS",
-        "methodology_status": "STRATUM_CANDIDATE" if passing_strata else "NO_VALIDATED_STRATUM",
+        "methodology_status": (
+            "APPLICABLE_STRATUM_CANDIDATE"
+            if applicable_passing_strata
+            else "NO_APPLICABLE_VALIDATED_STRATUM"
+        ),
         "scope": {"competition": "ENG_PL", "season": "2017/18"},
         "source": {
             "matches": validation.match_count,
@@ -245,6 +306,8 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
             "within_3m_pct_min": 98.0,
             "p95_error_m_max": 3.0,
             "passing_strata": passing_strata,
+            "applicable_passing_strata": applicable_passing_strata,
+            "applicability_notes": applicability_notes,
         },
         "zero_zero_immediate_outcome_consistent_candidates": {
             "available": len(zero_candidates),
@@ -252,10 +315,12 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
             "event_names": dict(zero_candidate_event_names.most_common()),
             "sub_event_names": dict(zero_candidate_sub_events.most_common()),
             "blocked_by_target_sub_event": zero_blocked_by_sub_event,
+            "matches_by_control_stratum": dict(zero_matches_by_stratum),
         },
         "warning": (
-            "A passing stratum is only a candidate for further methodology review. "
-            "This lab does not emit reconstructed endpoints or spatial metrics."
+            "A passing control stratum is only transferable when its represented zero-zero "
+            "qualifier strata also pass. This lab does not emit reconstructed endpoints or "
+            "spatial metrics."
         ),
     }
 
@@ -273,7 +338,10 @@ def main() -> None:
     ) as exc:
         raise SystemExit(f"WYSCOUT CROSS STRATA AUDIT: FAIL - {exc}") from exc
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    args.report.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     print(json.dumps(report, indent=2, sort_keys=True))
     print(f"REPORT: {args.report}")
 
