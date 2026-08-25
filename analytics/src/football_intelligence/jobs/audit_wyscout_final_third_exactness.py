@@ -72,8 +72,7 @@ class PlayerSeasonState:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Audit exact Wyscout pass-into-final-third coverage without "
-            "endpoint imputation."
+            "Audit exact Wyscout pass-into-final-third coverage without endpoint imputation."
         )
     )
     parser.add_argument("--cache-dir", type=Path, required=True)
@@ -281,9 +280,7 @@ def run_audit(cache_dir: Path) -> dict[str, Any]:
             ),
         },
         "metric_total_ready_only": sum(
-            state.passes_into_final_third
-            for state in match_states
-            if not state.final_third_missing
+            state.passes_into_final_third for state in match_states if not state.final_third_missing
         ),
         "safety": {
             "endpoint_imputation": False,
