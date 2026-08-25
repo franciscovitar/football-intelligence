@@ -81,7 +81,7 @@ SOURCE_TYPE: SourceType = "objective_structured"
 # `player_external_id`/`player_name`, `home_team_*`/`away_team_*`,
 # `kickoff_date`). Old and new observations must not share a provenance
 # version.
-SEMANTIC_VERSION = "wyscout-open-v0.4"
+SEMANTIC_VERSION = "wyscout-open-v0.5"
 COMPETITION_CODE = "ENG_PL"
 SEASON_LABEL = "2017/18"
 
@@ -147,10 +147,19 @@ _SCOPE_FILE_LABELS: dict[str, str] = {
     "ITA_SA": "Italy",
 }
 
-# Spatial v1.2 has completed its real-source promotion audit only for
-# England 2017/18. Other otherwise-certified Wyscout league scopes must
-# keep spatial-v1.2 metrics absent until their own audit closes the same gate.
-_SPATIAL_V1_2_VALIDATED_SCOPES = frozenset({("ENG_PL", "2017/18")})
+# Spatial v1.2 completed independent real-source audits and ephemeral
+# PostgreSQL product-path verification for all five supported 2017/18 core
+# leagues. Promotion remains scope-specific: no other season/competition may
+# inherit these derived metrics without its own audit.
+_SPATIAL_V1_2_VALIDATED_SCOPES = frozenset(
+    {
+        ("ENG_PL", "2017/18"),
+        ("ESP_LL", "2017/18"),
+        ("FRA_L1", "2017/18"),
+        ("GER_BL1", "2017/18"),
+        ("ITA_SA", "2017/18"),
+    }
+)
 
 
 def _source_file_label(scope: AdapterScope) -> str:
@@ -1351,8 +1360,9 @@ def parse_player_match_observations(
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
     """Up to 40 player_match identities in the adapter-safe subset.
-    Spatial-v1.2 metrics are emitted only for audited scopes; currently that
-    is ENG_PL 2017/18. `players_payload` (the official
+    Spatial-v1.2 metrics are emitted only for independently audited scopes;
+    currently that is the five Wyscout Open core leagues in 2017/18.
+    `players_payload` (the official
     `players.json` reference file) is optional -- when supplied, hints carry
     real `player_name` identity. `scope` (Block 20D.3): see
     `parse_match_observations`."""

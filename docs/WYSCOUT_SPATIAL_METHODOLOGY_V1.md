@@ -9,10 +9,11 @@ evidence**, never a provider-native observed value.
 
 Current methodology id: `fi-wyscout-spatial-v1.2`
 
-Validation scope: `ENG_PL` 2017/18. England now closes the methodology gate for
-`long_passes_accurate` and `passes_into_final_third`; `progressive_passes`
-remains non-emitting because exact evidence is still insufficient. No result
-here automatically generalizes to Spain, Italy, Germany, or France.
+Validation scope: the five Wyscout Open core domestic leagues in 2017/18
+(`ENG_PL`, `ESP_LL`, `FRA_L1`, `GER_BL1`, `ITA_SA`) independently close the
+methodology gate for `long_passes_accurate` and `passes_into_final_third`.
+`progressive_passes` remains non-emitting because exact evidence is still
+insufficient. No result here generalizes to another season or competition.
 
 ## Version note
 

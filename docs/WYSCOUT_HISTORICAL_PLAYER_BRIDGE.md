@@ -78,7 +78,7 @@ Before opening PostgreSQL the loader:
 
 1. runs the existing official Wyscout source probe and requires the published counts to reproduce;
 2. loads the same cached payloads used by the certified adapter audit;
-3. runs the current certified Wyscout adapter (`wyscout-open-v0.4` after the spatial v1.2 final-third promotion);
+3. runs the current certified Wyscout adapter (`wyscout-open-v0.5` after Spatial v1.2 five-league promotion);
 4. requires every adapter audit check to pass;
 5. normalizes only the explicit subset supported by the existing canonical `football.*` schema.
 

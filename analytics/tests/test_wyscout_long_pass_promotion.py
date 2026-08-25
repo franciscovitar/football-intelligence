@@ -83,7 +83,7 @@ def test_long_pass_promotion_is_metric_specific_and_versioned() -> None:
     assert ("passes_into_final_third", "player_match") in safe
     assert ("long_passes_accurate", "player_match") in _EMITTED_IDENTITIES
     assert ("passes_into_final_third", "player_match") in _EMITTED_IDENTITIES
-    assert SEMANTIC_VERSION == "wyscout-open-v0.4"
+    assert SEMANTIC_VERSION == "wyscout-open-v0.5"
 
 
 def test_long_pass_emission_preserves_positive_zero_and_missing() -> None:
@@ -101,11 +101,11 @@ def test_long_pass_emission_preserves_positive_zero_and_missing() -> None:
     assert values["1001:21"] == 0
 
 
-def test_long_pass_promotion_does_not_leak_into_unaudited_league_scopes() -> None:
+def test_long_pass_emission_is_enabled_in_audited_esp_scope() -> None:
     esp_match = {**_MATCH, "competitionId": 795, "seasonId": 181144}
     observations = parse_player_match_observations([esp_match], _EVENTS, scope=ESP_LL_SCOPE)
     assert any(item.metric_name == "passes_total" for item in observations)
-    assert all(item.metric_name != "long_passes_accurate" for item in observations)
+    assert any(item.metric_name == "long_passes_accurate" for item in observations)
 
 
 def _v2_observation(match_id: int, long_passes_accurate: float | None) -> PlayerObservation:

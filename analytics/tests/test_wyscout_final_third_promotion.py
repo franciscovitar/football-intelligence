@@ -118,10 +118,10 @@ def test_final_third_emission_preserves_positive_zero_and_missing() -> None:
     assert values["1001:21"] == 0
 
 
-def test_final_third_emission_does_not_leak_into_unaudited_scope() -> None:
+def test_final_third_emission_is_enabled_in_audited_esp_scope() -> None:
     esp_match = {**_MATCH, "competitionId": 795, "seasonId": 181144}
     observations = parse_player_match_observations([esp_match], _EVENTS, scope=ESP_LL_SCOPE)
-    assert all(item.metric_name != "passes_into_final_third" for item in observations)
+    assert any(item.metric_name == "passes_into_final_third" for item in observations)
 
 
 def _v2_observation(match_id: int, passes_into_final_third: float | None) -> PlayerObservation:
