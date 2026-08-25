@@ -191,6 +191,11 @@ Spatial v1 preserves the project guarantees:
 - `playerId=0` is a source sentinel, never a real player;
 - ratios are emitted only when the denominator is strictly greater than zero.
 
+For `long_passes_accurate`, an aggregated Player V2 window is exact only when
+the metric is observed in every contributing player-match. If any contributing
+match is missing, the aggregate metric stays missing for that window rather
+than summing the known matches into a partial value that looks complete.
+
 No statistical or geometric imputation is permitted.
 
 ## 8. Metrics deliberately not activated yet
