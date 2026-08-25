@@ -1,0 +1,53 @@
+name: Wyscout Cross Endpoint Recovery Lab
+
+on:
+  push:
+    branches:
+      - lab/wyscout-cross-endpoint-recovery
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.13'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+
+      - name: Fetch and verify official Wyscout Open source
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-probe-wyscout-open \
+            --cache-dir "$RUNNER_TEMP/wyscout-cache" \
+            --report "$RUNNER_TEMP/wyscout-probe.json"
+
+      - name: Audit Cross endpoint recovery
+        working-directory: analytics
+        run: |
+          uv run python -m football_intelligence.jobs.audit_wyscout_cross_endpoint_recovery \
+            --cache-dir "$RUNNER_TEMP/wyscout-cache" \
+            --report "$RUNNER_TEMP/wyscout-cross-endpoint-recovery.json"
+
+      - name: Upload reports only
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: wyscout-cross-endpoint-recovery
+          path: |
+            ${{ runner.temp }}/wyscout-probe.json
+            ${{ runner.temp }}/wyscout-cross-endpoint-recovery.json
+          retention-days: 7
