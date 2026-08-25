@@ -1,0 +1,171 @@
+name: Temporary Verify Wyscout v0.4 ENG After Missing Fix
+
+on:
+  push:
+    branches:
+      - feat/wyscout-final-third-v04
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: football_intelligence_evidence
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: football_intelligence_evidence
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_evidence
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Apply migrations and seeds
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$migration" >/dev/null
+          done
+          psql -v ON_ERROR_STOP=1 -f database/seeds/001_core_catalog.sql >/dev/null
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Sync and run targeted regression tests
+        working-directory: analytics
+        run: |
+          uv sync --dev --locked
+          uv run pytest tests/test_wyscout_final_third_promotion.py tests/test_wyscout_long_pass_promotion.py
+      - name: Load real ENG_PL v0.4 evidence
+        working-directory: analytics
+        run: >-
+          uv run football-intelligence-load-wyscout-historical
+          --competition ENG_PL
+          --database-url "$DATABASE_URL"
+          --report "$RUNNER_TEMP/wyscout-load.json"
+      - name: Calculate Player V2 twice
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-player-analytics \
+            --season 2017/18 \
+            --competition ENG_PL \
+            --scope-key competition:ENG_PL:2017/18 \
+            --database-url "$DATABASE_URL" \
+            --report "$RUNNER_TEMP/player-v2-1.json"
+          uv run football-intelligence-player-analytics \
+            --season 2017/18 \
+            --competition ENG_PL \
+            --scope-key competition:ENG_PL:2017/18 \
+            --database-url "$DATABASE_URL" \
+            --report "$RUNNER_TEMP/player-v2-2.json"
+          cmp "$RUNNER_TEMP/player-v2-1.json" "$RUNNER_TEMP/player-v2-2.json"
+          echo "PLAYER V2 IDEMPOTENCY: PASS"
+      - name: Verify real evidence and print final Player V2 state
+        run: |
+          set -euo pipefail
+          echo "=== PLAYER-MATCH SPATIAL COVERAGE ==="
+          psql -v ON_ERROR_STOP=1 -P pager=off -c "
+            select
+              count(*) as player_match_rows,
+              count(passes_into_final_third) as final_third_known,
+              count(*) filter (where passes_into_final_third is null) as final_third_missing,
+              count(*) filter (where passes_into_final_third = 0) as final_third_zero,
+              count(*) filter (where passes_into_final_third > 0) as final_third_positive,
+              count(long_passes_accurate) as long_accurate_known,
+              count(*) filter (where long_passes_accurate is null) as long_accurate_missing
+            from football.player_match_stats;
+          "
+          echo "=== SEASON FEATURE COVERAGE ==="
+          psql -v ON_ERROR_STOP=1 -P pager=off -c "
+            select metric_name,
+                   count(*) as feature_rows,
+                   count(*) filter (where raw_value is not null) as raw_rows,
+                   count(*) filter (where percentile is not null) as percentile_rows
+            from analytics.player_feature_snapshots
+            where scope_key='competition:ENG_PL:2017/18'
+              and model_version='player-v2.0'
+              and window_key='season'
+              and metric_name in (
+                'pass_completion_pct', 'long_passes_accurate',
+                'passes_into_final_third', 'progressive_passes'
+              )
+            group by metric_name
+            order by metric_name;
+          "
+          echo "=== PASSING DIMENSION STATES ==="
+          psql -v ON_ERROR_STOP=1 -P pager=off -c "
+            select
+              dimension.value ->> 'evidence_state' as evidence_state,
+              count(*) as players,
+              count(*) filter (where dimension.value ->> 'score' is not null) as scored
+            from analytics.player_score_snapshots s
+            cross join lateral jsonb_each(s.dimension_evidence) dimension
+            where s.scope_key='competition:ENG_PL:2017/18'
+              and s.model_version='player-v2.0'
+              and s.window_key='season'
+              and dimension.key='passing'
+            group by dimension.value ->> 'evidence_state'
+            order by evidence_state;
+          "
+          echo "=== SOURCE OBSERVATION COUNTS ==="
+          psql -v ON_ERROR_STOP=1 -P pager=off -c "
+            select o.metric_name, count(*) as observations
+            from ingestion.source_observations o
+            join ingestion.providers p on p.id=o.provider_id
+            where p.code='wyscout-open'
+              and o.entity_identity_hints ->> 'season_label'='2017/18'
+              and o.entity_identity_hints ->> 'competition_external_id'='364'
+              and o.metric_name in (
+                'passes_into_final_third', 'progressive_passes', 'long_passes_accurate'
+              )
+            group by o.metric_name
+            order by o.metric_name;
+          "
+          final_third_features=$(psql -At -v ON_ERROR_STOP=1 -c "
+            select count(*)
+            from analytics.player_feature_snapshots
+            where scope_key='competition:ENG_PL:2017/18'
+              and model_version='player-v2.0'
+              and window_key='season'
+              and metric_name='passes_into_final_third';
+          ")
+          if [ "$final_third_features" -ge 512 ]; then
+            echo "FAIL: final-third season aggregation still publishes incomplete windows ($final_third_features)"
+            exit 1
+          fi
+          progressive_source=$(psql -At -v ON_ERROR_STOP=1 -c "
+            select count(*)
+            from ingestion.source_observations o
+            join ingestion.providers p on p.id=o.provider_id
+            where p.code='wyscout-open'
+              and o.entity_identity_hints ->> 'competition_external_id'='364'
+              and o.metric_name='progressive_passes';
+          ")
+          test "$progressive_source" = "0"
+          echo "MISSING PROPAGATION + PROGRESSIVE SUPPRESSION: PASS"
+      - name: Remove temporary workflow
+        if: success()
+        run: |
+          rm .github/workflows/tmp-verify-wyscout-v04-eng-after-missing-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: remove completed v0.4 ENG verification workflow"
+          git push origin HEAD:feat/wyscout-final-third-v04
