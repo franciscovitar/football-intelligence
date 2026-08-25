@@ -17,72 +17,228 @@ jobs:
       - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.13"
-      - name: Map OpenFootball ARG_LPF 2024 club names to Wikidata search candidates
+      - name: Resolve OpenFootball ARG_LPF 2024 clubs conservatively
         run: |
           python - <<'PY'
           import json
+          import re
           import time
           import unicodedata
           import urllib.parse
           import urllib.request
           from urllib.error import HTTPError, URLError
 
-          TEAMS = [
-              'Sarmiento de Junín', 'Instituto de Córdoba', 'Argentinos Juniors',
-              'Rosario Central', "Newell's Old Boys", 'Platense', 'Huracán',
-              'Defensa y Justicia', 'Godoy Cruz', 'Barracas Central', 'Independiente',
-              'Talleres de Córdoba', 'River Plate', 'Central Córdoba SdE', 'Tigre',
-              'Estudiantes', 'Deportivo Riestra', 'San Lorenzo', 'Belgrano de Córdoba',
-              'Racing Club', 'Lanús', 'Independiente Rivadavia', 'Atlético Tucumán',
-              'Boca Juniors', 'Gimnasia de La Plata', 'Vélez Sarsfield',
-              'Unión de Santa Fe', 'Banfield',
-          ]
+          # 28 source names are taken from openfootball/south-america
+          # argentina/2024_ar1.txt. Search aliases below are explicit aliases
+          # from openfootball/clubs south-america/argentina/ar.clubs.txt.
+          CLUBS = {
+              'Sarmiento de Junín': ['Sarmiento Junín', 'Club Atlético Sarmiento (Junín)', 'CA Sarmiento'],
+              'Instituto de Córdoba': ['Instituto', 'Instituto Atlético Central Córdoba', 'Instituto ACC'],
+              'Argentinos Juniors': ['Asociación Atlética Argentinos Juniors', 'AA Argentinos Juniors'],
+              'Rosario Central': ['Club Atlético Rosario Central', 'CA Rosario Central'],
+              "Newell's Old Boys": ["Club Atlético Newell's Old Boys", "CA Newell's Old Boys", "Newells Old Boys"],
+              'Platense': ['Club Atlético Platense', 'CA Platense'],
+              'Huracán': ['Club Atlético Huracán', 'CA Huracán'],
+              'Defensa y Justicia': ['Club Social y Deportivo Defensa y Justicia', 'CSD Defensa y Justicia'],
+              'Godoy Cruz': ['Club Deportivo Godoy Cruz Antonio Tomba', 'Godoy Cruz Antonio Tomba', 'CD Godoy Cruz'],
+              'Barracas Central': ['Club Atlético Barracas Central'],
+              'Independiente': ['Club Atlético Independiente', 'CA Independiente de Avellaneda'],
+              'Talleres de Córdoba': ['Club Atlético Talleres', 'CA Talleres', 'Talleres Cordoba'],
+              'River Plate': ['Club Atlético River Plate', 'CA River Plate (Buenos Aires)'],
+              'Central Córdoba SdE': ['Club Atlético Central Córdoba', 'Central Córdoba de Santiago del Estero', 'Central Córdoba (SdE)'],
+              'Tigre': ['Club Atlético Tigre', 'CA Tigre'],
+              'Estudiantes': ['Club Estudiantes de La Plata', 'Estudiantes de La Plata', 'Estudiantes LP'],
+              'Deportivo Riestra': ['Deportivo Riestra Asociación de Fomento Barrio Colón'],
+              'San Lorenzo': ['Club Atlético San Lorenzo de Almagro', 'San Lorenzo de Almagro', 'CA San Lorenzo de Almagro'],
+              'Belgrano de Córdoba': ['Club Atlético Belgrano', 'Belgrano (Córdoba)', 'CA Belgrano'],
+              'Racing Club': ['Racing Club de Avellaneda', 'Racing Club'],
+              'Lanús': ['Club Atlético Lanús', 'CA Lanús'],
+              'Independiente Rivadavia': ['Club Sportivo Independiente Rivadavia', 'Independiente Rivadavia (Mendoza)'],
+              'Atlético Tucumán': ['Club Atlético Tucumán', 'Atl. Tucumán'],
+              'Boca Juniors': ['Club Atlético Boca Juniors', 'CA Boca Juniors'],
+              'Gimnasia de La Plata': ['Club de Gimnasia y Esgrima La Plata', 'Gimnasia y Esgrima La Plata', 'Gimnasia La Plata'],
+              'Vélez Sarsfield': ['Club Atlético Vélez Sarsfield', 'CA Vélez Sarsfield'],
+              'Unión de Santa Fe': ['Club Atlético Unión', 'Unión Santa Fe', 'CA Unión'],
+              'Banfield': ['Club Atlético Banfield', 'CA Banfield'],
+          }
+
           API = 'https://www.wikidata.org/w/api.php'
+          ARGENTINA_QID = 'Q414'
+          ASSOCIATION_FOOTBALL_CLUB_QID = 'Q476028'
+          ASSOCIATION_FOOTBALL_QID = 'Q2736'
           UA = 'FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
+          RETRYABLE = {429, 500, 502, 503, 504}
 
-          def fold(value: str) -> str:
+          def norm(value: str) -> str:
               decomposed = unicodedata.normalize('NFKD', value)
-              return ''.join(ch for ch in decomposed if not unicodedata.combining(ch)).casefold()
+              folded = ''.join(ch for ch in decomposed if not unicodedata.combining(ch)).casefold()
+              return re.sub(r'[^a-z0-9]+', ' ', folded).strip()
 
-          def request(team: str):
-              params = urllib.parse.urlencode({
-                  'action': 'wbsearchentities', 'search': team, 'language': 'es',
-                  'uselang': 'es', 'type': 'item', 'limit': '10',
-                  'format': 'json', 'formatversion': '2',
-              })
-              url = f'{API}?{params}'
-              last = None
+          def request_json(params: dict[str, str]) -> dict:
+              url = f"{API}?{urllib.parse.urlencode(params)}"
               for attempt in range(1, 5):
-                  req = urllib.request.Request(url, headers={'Accept':'application/json','User-Agent':UA})
+                  req = urllib.request.Request(url, headers={'Accept': 'application/json', 'User-Agent': UA})
                   try:
                       with urllib.request.urlopen(req, timeout=30) as response:
-                          return json.loads(response.read())
+                          payload = json.loads(response.read())
+                          if not isinstance(payload, dict):
+                              raise RuntimeError('Wikidata response root is not an object')
+                          return payload
                   except HTTPError as exc:
-                      last = exc
-                      if exc.code not in {429,500,502,503,504} or attempt == 4:
+                      retry_after = exc.headers.get('Retry-After')
+                      if exc.code not in RETRYABLE or attempt == 4:
                           raise
-                      time.sleep(min(float(attempt), 5.0))
-                  except (URLError, TimeoutError) as exc:
-                      last = exc
+                      if retry_after and retry_after.isdigit():
+                          delay = min(float(retry_after), 30.0)
+                      else:
+                          delay = min(5.0 * (2 ** (attempt - 1)), 30.0)
+                      time.sleep(delay)
+                  except (URLError, TimeoutError):
                       if attempt == 4:
                           raise
-                      time.sleep(float(attempt))
-              raise RuntimeError(last)
+                      time.sleep(min(5.0 * (2 ** (attempt - 1)), 30.0))
+              raise AssertionError('bounded request exhausted')
 
-          output = []
-          for team in TEAMS:
-              payload = request(team)
-              candidates = []
-              for row in payload.get('search', []):
-                  desc = row.get('description') or ''
-                  if 'football club' not in fold(desc) and 'club de futbol' not in fold(desc):
+          def search(alias: str, language: str) -> set[str]:
+              payload = request_json({
+                  'action': 'wbsearchentities',
+                  'search': alias,
+                  'language': language,
+                  'uselang': language,
+                  'type': 'item',
+                  'limit': '20',
+                  'format': 'json',
+                  'formatversion': '2',
+              })
+              return {
+                  row['id'] for row in payload.get('search', [])
+                  if isinstance(row, dict) and isinstance(row.get('id'), str) and row['id'].startswith('Q')
+              }
+
+          def claim_item_qids(entity: dict, property_id: str) -> set[str]:
+              claims = entity.get('claims')
+              if not isinstance(claims, dict):
+                  return set()
+              rows = claims.get(property_id)
+              if not isinstance(rows, list):
+                  return set()
+              result = set()
+              for row in rows:
+                  if not isinstance(row, dict) or row.get('rank') == 'deprecated':
                       continue
-                  candidates.append({
-                      'qid': row.get('id'), 'label': row.get('label'),
-                      'description': desc,
+                  mainsnak = row.get('mainsnak')
+                  if not isinstance(mainsnak, dict) or mainsnak.get('snaktype') != 'value':
+                      continue
+                  datavalue = mainsnak.get('datavalue')
+                  value = datavalue.get('value') if isinstance(datavalue, dict) else None
+                  qid = value.get('id') if isinstance(value, dict) else None
+                  if isinstance(qid, str) and qid.startswith('Q'):
+                      result.add(qid)
+              return result
+
+          def names(entity: dict) -> set[str]:
+              values = set()
+              for field in ('labels', 'aliases'):
+                  container = entity.get(field)
+                  if not isinstance(container, dict):
+                      continue
+                  for lang in ('es', 'en'):
+                      raw = container.get(lang)
+                      rows = raw if isinstance(raw, list) else [raw]
+                      for row in rows:
+                          value = row.get('value') if isinstance(row, dict) else None
+                          if isinstance(value, str) and value.strip():
+                              values.add(norm(value))
+              return values
+
+          def fetch_entities(qids: set[str]) -> dict[str, dict]:
+              ordered = sorted(qids)
+              entities = {}
+              for offset in range(0, len(ordered), 50):
+                  batch = ordered[offset:offset + 50]
+                  payload = request_json({
+                      'action': 'wbgetentities',
+                      'ids': '|'.join(batch),
+                      'props': 'labels|aliases|claims',
+                      'languages': 'es|en',
+                      'languagefallback': '1',
+                      'format': 'json',
+                      'formatversion': '2',
                   })
-              output.append({'source_name': team, 'club_candidates': candidates})
-              time.sleep(0.10)
-          print(json.dumps(output, indent=2, ensure_ascii=False, sort_keys=True))
-          print('TEAM SEARCH LAB: PASS teams=', len(output))
+                  raw_entities = payload.get('entities')
+                  if isinstance(raw_entities, dict):
+                      for qid, entity in raw_entities.items():
+                          if isinstance(qid, str) and isinstance(entity, dict):
+                              entities[qid] = entity
+                  time.sleep(0.10)
+              return entities
+
+          candidate_qids_by_club = {}
+          for source_name, explicit_aliases in CLUBS.items():
+              queries = [source_name, *explicit_aliases]
+              qids = set()
+              for query in queries:
+                  qids.update(search(query, 'es'))
+                  qids.update(search(query, 'en'))
+                  time.sleep(0.05)
+              candidate_qids_by_club[source_name] = qids
+
+          all_qids = set().union(*candidate_qids_by_club.values())
+          entities = fetch_entities(all_qids)
+
+          results = []
+          for source_name, explicit_aliases in CLUBS.items():
+              accepted_names = {norm(value) for value in [source_name, *explicit_aliases]}
+              validated = []
+              rejected = []
+              for qid in sorted(candidate_qids_by_club[source_name]):
+                  entity = entities.get(qid, {})
+                  entity_names = names(entity)
+                  country_qids = claim_item_qids(entity, 'P17')
+                  instance_qids = claim_item_qids(entity, 'P31')
+                  sport_qids = claim_item_qids(entity, 'P641')
+                  exact_alias_match = bool(accepted_names & entity_names)
+                  argentina = ARGENTINA_QID in country_qids
+                  football = (
+                      ASSOCIATION_FOOTBALL_CLUB_QID in instance_qids
+                      or ASSOCIATION_FOOTBALL_QID in sport_qids
+                  )
+                  evidence = {
+                      'qid': qid,
+                      'exact_explicit_alias': exact_alias_match,
+                      'argentina_p17': argentina,
+                      'football_p31_or_p641': football,
+                      'p31': sorted(instance_qids),
+                      'p641': sorted(sport_qids),
+                  }
+                  if exact_alias_match and argentina and football:
+                      validated.append(evidence)
+                  elif exact_alias_match:
+                      rejected.append(evidence)
+
+              if len(validated) == 1:
+                  state = 'resolved'
+                  qid = validated[0]['qid']
+              elif len(validated) > 1:
+                  state = 'ambiguous'
+                  qid = None
+              else:
+                  state = 'unresolved'
+                  qid = None
+              results.append({
+                  'source_name': source_name,
+                  'state': state,
+                  'qid': qid,
+                  'validated_candidates': validated,
+                  'exact_name_rejections': rejected,
+              })
+
+          resolved = sum(row['state'] == 'resolved' for row in results)
+          ambiguous = sum(row['state'] == 'ambiguous' for row in results)
+          unresolved = sum(row['state'] == 'unresolved' for row in results)
+          print(json.dumps(results, indent=2, ensure_ascii=False, sort_keys=True))
+          print(
+              f'TEAM RESOLUTION LAB: PASS clubs={len(results)} resolved={resolved} '
+              f'ambiguous={ambiguous} unresolved={unresolved}'
+          )
           PY
