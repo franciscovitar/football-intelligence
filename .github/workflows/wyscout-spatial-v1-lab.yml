@@ -1,0 +1,44 @@
+name: Wyscout Spatial V1 Lab
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: github.head_ref == 'lab/wyscout-spatial-v1-eng-audit'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Install analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+      - name: Fetch and verify official Wyscout Open England source
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-probe-wyscout-open \
+            --cache-dir "$RUNNER_TEMP/wyscout-cache" \
+            --report "$RUNNER_TEMP/wyscout-probe.json"
+      - name: Audit spatial methodology v1 on real ENG_PL 2017/18
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-audit-wyscout-spatial-v1 \
+            --cache-dir "$RUNNER_TEMP/wyscout-cache" \
+            --report "$RUNNER_TEMP/wyscout-spatial-v1.json"
+      - name: Upload reports only
+        uses: actions/upload-artifact@v4
+        with:
+          name: wyscout-spatial-v1-eng-audit
+          path: |
+            ${{ runner.temp }}/wyscout-probe.json
+            ${{ runner.temp }}/wyscout-spatial-v1.json
+          if-no-files-found: error
+          retention-days: 7
