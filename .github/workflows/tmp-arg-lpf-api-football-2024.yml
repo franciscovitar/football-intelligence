@@ -1,0 +1,66 @@
+name: Temporary ARG_LPF API-Football 2024 Evidence
+
+on:
+  push:
+    branches:
+      - evidence/arg-lpf-api-football-2024
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Require existing provider credential
+        run: test -n "$API_FOOTBALL_KEY" || { echo "API_FOOTBALL_KEY secret is required"; exit 1; }
+
+      - name: Sync analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+
+      - name: Audit three completed ARG_LPF 2024 fixtures read-only
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-audit \
+            --league-id 128 \
+            --competition-code ARG_LPF \
+            --season 2024 \
+            --sample-fixtures 3 \
+            --raw-dir "$RUNNER_TEMP/arg-lpf-api-football-raw" \
+            --report "$RUNNER_TEMP/arg-lpf-api-football-2024.json"
+
+      - name: Print normalized player coverage
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'arg-lpf-api-football-2024.json').read_text())
+          print(json.dumps({
+              'league_id': report['league_id'],
+              'season': report['season'],
+              'sample_fixture_ids': report['sample_fixture_ids'],
+              'request_count': report['request_count'],
+              'quota': report['quota'],
+              'provider_declared_coverage': report['provider_declared_coverage'],
+              'normalized_counts': report['normalized_counts'],
+              'normalized_coverage': report['normalized_coverage'],
+              'persistence': report['persistence'],
+          }, indent=2, sort_keys=True))
+          PY
+
+      - name: Upload report only
+        uses: actions/upload-artifact@v7
+        with:
+          name: arg-lpf-api-football-2024-evidence
+          path: ${{ runner.temp }}/arg-lpf-api-football-2024.json
+          retention-days: 7
