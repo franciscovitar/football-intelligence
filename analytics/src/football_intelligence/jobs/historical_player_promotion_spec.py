@@ -3,6 +3,11 @@
 These numbers are not inferred during a production write. They are pinned from
 independent ephemeral-PostgreSQL evidence runs over the official Wyscout Open
 2017/18 bytes and the repository's current Player V2 engine.
+
+A previously promoted scope may have an older, independently certified
+fingerprint. Those predecessor fingerprints are listed explicitly and are only
+used to authorize a known upgrade path; arbitrary partial states still fail
+closed.
 """
 
 from __future__ import annotations
@@ -47,9 +52,9 @@ _SPECS: tuple[HistoricalPlayerPromotionSpec, ...] = (
         player_appearances=10_443,
         player_match_stats=10_443,
         team_match_stats=760,
-        source_observations=412_609,
+        source_observations=422_877,
         score_snapshots=2_048,
-        feature_snapshots=26_841,
+        feature_snapshots=38_737,
         season_players=512,
         season_players_450_min=385,
         performance_ready=385,
@@ -121,6 +126,32 @@ _SPECS: tuple[HistoricalPlayerPromotionSpec, ...] = (
     ),
 )
 
+# Exact predecessor accepted for the already-promoted ENG_PL v0.2 state.
+# The v0.3 runtime changed only the Data Mesh observation count and Player V2
+# feature count; every other certified invariant remained identical. Keeping
+# the full fingerprint here means a state that differs by even one row from
+# the known v0.2 publication still fails closed.
+_CERTIFIED_PREDECESSORS: dict[str, tuple[HistoricalPlayerPromotionSpec, ...]] = {
+    "ENG_PL": (
+        HistoricalPlayerPromotionSpec(
+            competition_code="ENG_PL",
+            matches=380,
+            teams=20,
+            players=515,
+            player_appearances=10_443,
+            player_match_stats=10_443,
+            team_match_stats=760,
+            source_observations=412_609,
+            score_snapshots=2_048,
+            feature_snapshots=26_841,
+            season_players=512,
+            season_players_450_min=385,
+            performance_ready=385,
+            evidence_states=(("insufficient_data", 1_754), ("partial", 294)),
+        ),
+    ),
+}
+
 _SPEC_BY_COMPETITION = {spec.competition_code: spec for spec in _SPECS}
 
 
@@ -135,3 +166,13 @@ def historical_player_promotion_spec(competition_code: str) -> HistoricalPlayerP
         raise KeyError(
             f"unsupported historical promotion competition {competition_code!r}"
         ) from exc
+
+
+def certified_predecessor_promotion_specs(
+    competition_code: str,
+) -> tuple[HistoricalPlayerPromotionSpec, ...]:
+    """Return only explicitly certified predecessor fingerprints for one scope."""
+
+    if competition_code not in _SPEC_BY_COMPETITION:
+        raise KeyError(f"unsupported historical promotion competition {competition_code!r}")
+    return _CERTIFIED_PREDECESSORS.get(competition_code, ())
