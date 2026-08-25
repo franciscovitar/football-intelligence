@@ -41,7 +41,7 @@ from football_intelligence.data_mesh.comparability_policy import (
 # 2017/18 comparability evidence was gathered against. Deliberately NOT
 # `comparability_policy.WYSCOUT_CERTIFIED_POLICY_VERSION` and NOT either
 # adapter's live `SEMANTIC_VERSION` -- see module docstring.
-_CERTIFIED_WYSCOUT_VERSION = "wyscout-open-v0.4"
+_CERTIFIED_WYSCOUT_VERSION = "wyscout-open-v0.5"
 _CERTIFIED_STATSBOMB_VERSION = "statsbomb-open-v0.4"
 
 _WYSCOUT = SourceRef(source_code=WYSCOUT_SOURCE_CODE, semantic_version=_CERTIFIED_WYSCOUT_VERSION)
@@ -78,7 +78,7 @@ def test_canonical_source_refs_is_deterministic_regardless_of_input_order() -> N
 
 
 def test_certified_pair_exact_policy_resolves_for_home_score() -> None:
-    # wyscout-open-v0.4 + statsbomb-open-v0.4 -> current policies match.
+    # wyscout-open-v0.5 + statsbomb-open-v0.4 -> current policies match.
     policy = comparability_policy(
         _WYSCOUT, _STATSBOMB, metric_name="home_score", metric_granularity="match"
     )
@@ -101,12 +101,12 @@ def test_reversed_certified_order_still_matches() -> None:
 
 
 def test_future_wyscout_version_bump_no_longer_matches() -> None:
-    # wyscout-open-v0.5 + statsbomb-open-v0.4 (real, certified StatsBomb
+    # wyscout-open-v0.6 + statsbomb-open-v0.4 (real, certified StatsBomb
     # side, only Wyscout bumped) -> no old policy match, methodology_pending
     # territory (this module returns None; the orchestrator maps that to
     # methodology_pending).
     future_wyscout = SourceRef(
-        source_code=WYSCOUT_SOURCE_CODE, semantic_version="wyscout-open-v0.5"
+        source_code=WYSCOUT_SOURCE_CODE, semantic_version="wyscout-open-v0.6"
     )
     policy = comparability_policy(
         future_wyscout, _STATSBOMB, metric_name="home_score", metric_granularity="match"
@@ -115,7 +115,7 @@ def test_future_wyscout_version_bump_no_longer_matches() -> None:
 
 
 def test_future_statsbomb_version_bump_no_longer_matches() -> None:
-    # wyscout-open-v0.4 (real, certified Wyscout side) + statsbomb-open-v0.5
+    # wyscout-open-v0.5 (real, certified Wyscout side) + statsbomb-open-v0.5
     # -> no old policy match.
     future_statsbomb = SourceRef(
         source_code=STATSBOMB_SOURCE_CODE, semantic_version="statsbomb-open-v0.5"
@@ -127,9 +127,9 @@ def test_future_statsbomb_version_bump_no_longer_matches() -> None:
 
 
 def test_both_sources_future_bumped_no_longer_matches() -> None:
-    # wyscout-open-v0.5 + statsbomb-open-v0.5 -> no old policy match.
+    # wyscout-open-v0.6 + statsbomb-open-v0.5 -> no old policy match.
     future_wyscout = SourceRef(
-        source_code=WYSCOUT_SOURCE_CODE, semantic_version="wyscout-open-v0.5"
+        source_code=WYSCOUT_SOURCE_CODE, semantic_version="wyscout-open-v0.6"
     )
     future_statsbomb = SourceRef(
         source_code=STATSBOMB_SOURCE_CODE, semantic_version="statsbomb-open-v0.5"

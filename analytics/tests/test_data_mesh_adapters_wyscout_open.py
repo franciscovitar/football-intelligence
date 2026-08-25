@@ -652,14 +652,14 @@ def test_adapter_module_lives_under_data_mesh_adapters() -> None:
 
 
 def test_semantic_version_tracks_current_certified_adapter_semantics() -> None:
-    # v0.3 promoted ENG_PL-only long_passes_accurate. v0.4 additionally promotes
-    # ENG_PL-only passes_into_final_third under spatial v1.2 and was explicitly
-    # re-certified as observationally equivalent to v0.3 in ESP_LL 2017/18,
-    # the Wyscout x StatsBomb comparability-policy scope.
+    # v0.5 expands the independently audited Spatial v1.2 metrics to all five
+    # Wyscout Open 2017/18 core-league scopes and was explicitly recertified
+    # against v0.4 on complete ESP_LL real-source evidence.
     assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.1"
     assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.2"
     assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.3"
-    assert wyscout_open.SEMANTIC_VERSION == "wyscout-open-v0.4"
+    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.4"
+    assert wyscout_open.SEMANTIC_VERSION == "wyscout-open-v0.5"
 
 
 # -- S. Block 20D.2: metric_granularity is always explicit on the certified path --

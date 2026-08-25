@@ -49,7 +49,7 @@ An adapter's `SEMANTIC_VERSION` bump (e.g. Wyscout `v0.1 -> v0.2`, Block
 20D.2's micro-audit pass) means observable emission semantics changed. A
 comparability policy reviewed against `wyscout-open-v0.2`/
 `statsbomb-open-v0.4`'s real output says nothing about whether a future
-`wyscout-open-v0.5` still agrees the same way -- so every entry is keyed on
+`wyscout-open-v0.6` still agrees the same way -- so every entry is keyed on
 the exact semantic versions its evidence was gathered against.
 
 **Those versions are pinned LITERAL string constants
@@ -103,15 +103,17 @@ ComparisonMode = Literal["exact", "not_comparable", "methodology_pending"]
 # docstring ("Why this is ALSO scoped by each source's semantic_version")
 # for why a live import here would be exactly backwards. Only an explicit,
 # reviewed future re-certification may change these two lines.
-# v0.4 was explicitly re-certified on 2026-08-25 by running v0.3 and v0.4
-# over the complete real ESP_LL 2017/18 Wyscout source. All 416,407
-# NormalizedObservation rows were identical field-by-field except semantic_version
-# (canonical SHA-256: 29b23d96326fb82b94e6529ad951e4c1b3812d0617fff79a5d34d23bc2763eb5).
-# Both ENG_PL-only spatial identities (long_passes_accurate and
-# passes_into_final_third) emitted zero observations in ESP_LL, so the reviewed
-# provider-pair policies remain observationally valid for v0.4 rather than being
-# assumed so.
-WYSCOUT_CERTIFIED_POLICY_VERSION = "wyscout-open-v0.4"
+# v0.5 was explicitly re-certified on 2026-08-25 against v0.4 over the
+# complete real ESP_LL 2017/18 Wyscout source. All 416,407 previously emitted
+# non-spatial NormalizedObservation facts were identical after excluding only
+# semantic_version; v0.5 added exactly the two independently audited spatial
+# identities (10,380 long_passes_accurate + 10,383 passes_into_final_third).
+# The non-spatial canonical digest was identical on both sides:
+# 7594f0bf71c6c0deffee5c0d44d8784aaa4b04edf7d1d9766801cbbdabbb5c69.
+# Existing Wyscout x StatsBomb comparability policies therefore carry forward
+# only for identities already reviewed under v0.4; the new spatial identities
+# still have no cross-provider policy and fail closed to methodology_pending.
+WYSCOUT_CERTIFIED_POLICY_VERSION = "wyscout-open-v0.5"
 STATSBOMB_CERTIFIED_POLICY_VERSION = "statsbomb-open-v0.4"
 
 

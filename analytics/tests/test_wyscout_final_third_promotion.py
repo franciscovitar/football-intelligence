@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from football_intelligence.data_mesh.adapters.scope import AdapterScope
 from football_intelligence.data_mesh.adapters.wyscout_open import (
     ESP_LL_SCOPE,
     parse_player_match_observations,
@@ -118,10 +119,28 @@ def test_final_third_emission_preserves_positive_zero_and_missing() -> None:
     assert values["1001:21"] == 0
 
 
-def test_final_third_emission_does_not_leak_into_unaudited_scope() -> None:
+def test_final_third_emission_is_enabled_in_audited_esp_scope() -> None:
     esp_match = {**_MATCH, "competitionId": 795, "seasonId": 181144}
     observations = parse_player_match_observations([esp_match], _EVENTS, scope=ESP_LL_SCOPE)
-    assert all(item.metric_name != "passes_into_final_third" for item in observations)
+    assert any(item.metric_name == "passes_into_final_third" for item in observations)
+
+
+def test_spatial_emission_does_not_leak_to_unaudited_esp_season() -> None:
+    unaudited_scope = AdapterScope(
+        canonical_competition_code="ESP_LL",
+        season_label="2018/19",
+        provider_competition_id=795,
+        provider_season_id=999_999,
+    )
+    unaudited_match = {**_MATCH, "competitionId": 795, "seasonId": 999_999}
+    observations = parse_player_match_observations(
+        [unaudited_match], _EVENTS, scope=unaudited_scope
+    )
+    assert any(item.metric_name == "passes_total" for item in observations)
+    assert all(
+        item.metric_name not in {"long_passes_accurate", "passes_into_final_third"}
+        for item in observations
+    )
 
 
 def _v2_observation(match_id: int, passes_into_final_third: float | None) -> PlayerObservation:

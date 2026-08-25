@@ -2,59 +2,70 @@
 
 Status: implementation path for **historical/deep** Wyscout Open evidence only.
 
-Scope implemented by the loader:
+The legacy local loader remains intentionally scoped to:
 
-- competition: `ENG_PL`
-- season: `2017/18`
-- provider: `wyscout-open`
-- official source: Figshare collection `4415000`
-- collection DOI: `10.6084/m9.figshare.c.4415000.v5`
-- licence: CC BY 4.0
-- certified source invariants: 380 matches, 20 teams, 603 roster/squad players, 643,150 events
+- competition: `ENG_PL`;
+- season: `2017/18`;
+- provider: `wyscout-open`;
+- official source: Figshare collection `4415000`;
+- collection DOI: `10.6084/m9.figshare.c.4415000.v5`;
+- licence: CC BY 4.0;
+- certified England source invariants: 380 matches, 20 teams, 603 roster/squad players, 643,150 events.
 
-This is **not current-season evidence** and must never be presented as such.
+This is **not current-season evidence** and must never be presented as such. Multileague production promotion uses the separate, scope-explicit `promote_historical_player_v2` path documented in `docs/HISTORICAL_PLAYER_PRODUCTION_PROMOTION.md`; expanding that path does not silently broaden this legacy loader command.
 
-## Observed real-runtime verification
+## Historical England verification
 
-Verified on 2026-08-22 in an ephemeral GitHub Actions runner with PostgreSQL 17. The runtime used only the public Wyscout source and a temporary local database; no production/Neon database was accessed or written.
+The original real runtime was executed in an ephemeral GitHub Actions runner with PostgreSQL 17 using only the public Wyscout source and a temporary local database.
 
-The first block below preserves the observed `wyscout-open-v0.2` baseline for
-historical traceability. A later 2026-08-25 post-promotion runtime separately
-verified the current v0.4 adapter and Player V2 path; those current counts are
-recorded immediately after the baseline rather than rewriting history.
-
-Observed first-load invariants:
+The pre-spatial baseline established:
 
 - official source probe: 380 matches, 643,150 events, 603 roster/squad players — PASS;
-- certified v0.2 adapter: 412,609 `NormalizedObservation` rows, 77/77 adapter-safe identities observed — PASS;
-- canonical scope: 380 matches, 20 teams, 515 participating players;
-- 10,443 `player_appearances` and 10,443 `player_match_stats` rows;
-- 760 `team_match_stats` rows;
-- 412,609 Data Mesh `source_observations`, equal to adapter output;
-- conservative minutes policy withheld exposure for 41 red-card appearances and 99 zero-duration standardized appearances rather than inventing minutes;
-- zero Player V2 score/feature snapshots were published.
+- 380 matches, 20 teams, 515 participating players in the canonical scope;
+- 10,443 `player_appearances` and 10,443 `player_match_stats`;
+- 760 `team_match_stats`;
+- 412,609 Data Mesh observations in the original certified state;
+- conservative minutes withheld unsafe exposure for red-card and zero-duration standardized appearances;
+- full loader rerun idempotency PASS.
 
-Full-load idempotency was then verified by executing the same loader a second time against the same temporary database. All scoped counts remained identical, `football.teams` remained at 20 rows, Wyscout team-provider mappings remained at 20, and all 20 teams were recognized as already linked. Runtime evidence: GitHub Actions run `32596409687`.
+Subsequent promotions advanced the same England scope without rewriting that historical evidence:
 
-Current v0.4 post-promotion verification (2026-08-25, ephemeral PostgreSQL 17):
+- v0.3 long-pass state: 422,877 Data Mesh observations / 38,737 Player V2 features;
+- v0.4 final-third-capable runtime: 433,126 Data Mesh observations / 40,513 Player V2 features;
+- v0.5 keeps the same England spatial methodology/output while expanding the two independently audited spatial metrics to the other four core leagues.
 
-- historical load: 380 matches, 20 teams, 515 participating players — PASS;
-- 10,443 `player_appearances` and 10,443 `player_match_stats` rows;
-- 433,126 Data Mesh `source_observations`;
+For the current England Spatial v1.2 path:
+
 - `long_passes_accurate`: 10,268 known player-match rows, 175 missing;
 - `passes_into_final_third`: 10,249 known player-match rows, 194 missing;
-- exact Player V2 season features: 384 `long_passes_accurate`, 377 `passes_into_final_third`;
-- Passing dimension: 231 partial, 281 insufficient-data, 0 ready/scored;
-- `progressive_passes` remained absent;
-- repeated Player V2 calculation produced byte-identical reports — PASS.
+- exact Player V2 season features: 384 long-pass, 377 final-third;
+- Passing: 231 partial, 281 insufficient-data, 0 ready/scored;
+- `progressive_passes`: absent;
+- repeated Player V2 calculation: idempotent PASS.
 
-A separate ESP_LL 2017/18 recertification compared `wyscout-open-v0.3` and
-`wyscout-open-v0.4` over all 416,407 observations and found every field identical
-except `semantic_version`; both ENG-only spatial metrics emitted zero observations
-in Spain. Canonical payload SHA-256 remained
-`29b23d96326fb82b94e6529ad951e4c1b3812d0617fff79a5d34d23bc2763eb5`.
+## v0.5 multileague evidence
 
-## Command
+Spatial v1.2 was independently audited on `ESP_LL`, `FRA_L1`, `GER_BL1`, and `ITA_SA` 2017/18 before their adapter scopes were enabled in the v0.5 candidate. Real product-path runs exercised adapter -> normalization -> PostgreSQL -> Player Analytics read path -> Player V2 for each league and produced these stable current fingerprints:
+
+| Scope | Data Mesh observations | V2 scores | V2 features |
+| --- | ---: | ---: | ---: |
+| `ENG_PL` | 433,126 | 2,048 | 40,513 |
+| `ESP_LL` | 437,170 | 2,224 | 43,881 |
+| `FRA_L1` | 435,814 | 2,148 | 42,300 |
+| `GER_BL1` | 352,942 | 1,888 | 37,413 |
+| `ITA_SA` | 441,225 | 2,132 | 41,996 |
+
+Those are code/runtime certification fingerprints. They are **not** a claim that all five scopes have been written to production.
+
+The v0.4 -> v0.5 ESP_LL semantic-version recertification compared complete real-source output and found all 416,407 previously emitted non-spatial `NormalizedObservation` facts identical after excluding only `semantic_version`. v0.5 added exactly 10,380 `long_passes_accurate` and 10,383 `passes_into_final_third` observations for the independently audited Spain scope. The non-spatial canonical digest was unchanged:
+
+```text
+7594f0bf71c6c0deffee5c0d44d8784aaa4b04edf7d1d9766801cbbdabbb5c69
+```
+
+Existing Wyscout x StatsBomb comparability policies therefore carry forward only for identities already reviewed before v0.5. The new spatial identities still have no cross-provider comparability policy and fail closed to `methodology_pending`.
+
+## Local loader command
 
 From `analytics/`:
 
@@ -64,7 +75,7 @@ uv run football-intelligence-load-wyscout-historical \
   --report /tmp/wyscout-historical-load.json
 ```
 
-The job may acquire/reuse the official Figshare cache through the existing Wyscout probe, but the PostgreSQL target is strictly local-only:
+The job may acquire/reuse the official Figshare cache through the existing Wyscout probe, but its PostgreSQL target is strictly local-only:
 
 - `--database-url` is explicit and required;
 - ambient `DATABASE_URL` is never read;
@@ -72,55 +83,43 @@ The job may acquire/reuse the official Figshare cache through the existing Wysco
 - remote/production writes are rejected;
 - no Vercel/Neon operation is performed.
 
-## Safety sequence
-
-Before opening PostgreSQL the loader:
-
-1. runs the existing official Wyscout source probe and requires the published counts to reproduce;
-2. loads the same cached payloads used by the certified adapter audit;
-3. runs the current certified Wyscout adapter (`wyscout-open-v0.4` after the spatial v1.2 final-third promotion);
-4. requires every adapter audit check to pass;
-5. normalizes only the explicit subset supported by the existing canonical `football.*` schema.
-
-Only then does one local PostgreSQL transaction begin.
+Before opening PostgreSQL it runs the official Wyscout source probe, loads the certified cached payloads, validates the current Wyscout adapter, and normalizes only fields supported by the canonical schema. Only then does one local PostgreSQL transaction begin.
 
 ## Canonical identity
 
-Existing clubs are reused with the repository's deterministic `normalize_team_name()` rules. No fuzzy matching, similarity threshold, or LLM identity resolution is allowed.
+Existing clubs are reused with deterministic `normalize_team_name()` rules. No fuzzy matching, similarity threshold, or LLM identity resolution is allowed.
 
 If one Wyscout name maps to more than one canonical team, the job stops. If a Wyscout provider id already points at a canonical team whose normalized identity conflicts with the source name, the job stops.
 
-When an existing canonical club is reused, its canonical `name`, `short_name`, and `country_code` are preserved. Historical Wyscout variants/nulls do not overwrite current canonical display metadata.
+When an existing canonical club is reused, canonical display metadata is preserved. Historical Wyscout variants/nulls do not overwrite current names.
 
-Players are **not** name-matched across providers. Wyscout players are keyed through their Wyscout provider ids. A future cross-provider merge must use validated player-crosswalk evidence; absence of such evidence stays unresolved.
+Players are **not** name-matched across providers. Wyscout players are keyed through Wyscout provider ids. Cross-provider merge requires independently validated player-crosswalk evidence; absent evidence remains unresolved.
 
-## Missing vs zero
+## Missing versus zero
 
-The canonical bridge only fills fields whose Wyscout semantics are already certified. Unsupported/ambiguous fields stay `NULL`.
+The bridge only fills fields whose semantics are certified. Unsupported or ambiguous values stay `NULL`.
 
-Examples intentionally kept missing in the legacy canonical row include player tackles, blocks, dribbles and fouls drawn. A missing field is never converted into a synthetic zero merely to improve scoring coverage.
+A missing field is never converted into zero to improve coverage. All certified adapter observations are additionally persisted in `ingestion.source_observations` with granularity, source reference and semantic version so evidence that does not fit the older canonical table is not discarded.
 
-All certified adapter observations are additionally persisted in `ingestion.source_observations` with `metric_granularity`, source reference and semantic version, so evidence that does not fit the older canonical table is not discarded.
+Spatial v1.2 keeps this guarantee through Player V2: `long_passes_accurate` and `passes_into_final_third` season/window aggregates are emitted only when every contributing player-match has an exact value for that metric.
 
 ## Minutes methodology
 
-Wyscout confirms regular matches and substitution minutes, but not an exact final-whistle timestamp. The canonical normalization therefore derives **standardized regular-90 analytics minutes** (`wyscout-regular-90-v1.0`): starter at minute 0, substitute at the published substitution minute, end at substitution-out minute or standardized 90.
+Wyscout confirms regular matches and substitution minutes but not an exact final-whistle timestamp. Normalization therefore uses standardized regular-90 analytics minutes (`wyscout-regular-90-v1.0`): starter at 0, substitute at the published substitution minute, end at substitution-out minute or standardized 90.
 
-Two exposures remain deliberately unavailable rather than guessed (`wyscout-regular-90-ambiguous-missing-v1.0`):
+Two exposures remain deliberately unavailable (`wyscout-regular-90-ambiguous-missing-v1.0`):
 
-- red-card appearances whose exact end exposure is not certified by the participation primitive;
+- red-card appearances whose exact end exposure is not certified;
 - appearances whose stoppage-time substitution clamps to a zero standardized interval.
 
-Those appearances and their real stats remain stored, but `minutes=NULL`, so per-90 analytics cannot fabricate exposure.
+Those appearances and their real statistics remain stored, but `minutes=NULL`, so per-90 analytics cannot fabricate exposure. This policy can make product-runtime season-feature coverage slightly lower than a geometry-only audit; that is expected.
 
-## Why Player V2 snapshots are not published by this loader
+## Product publication boundary
 
-The current product query chooses the most recently calculated real Player V2 context. It does not yet have an explicit historical-season routing contract. If this historical loader calculated 2017/18 snapshots now, the product could select them as its implicit active player context even though the main product is scoped around the latest completed season.
+The legacy loader intentionally stops at canonical data + Data Mesh evidence. Historical Player V2 publication belongs to the scope-explicit promotion job because the product must know which historical competition-season context it is exposing.
 
-Therefore this loader intentionally stops at **canonical data + Data Mesh evidence**. It writes zero Player V2 product snapshots.
-
-The next product step is explicit historical context selection/routing. Only after that exists should ENG_PL 2017/18 Player V2 snapshots be calculated and exposed to the web.
+A scope supported by the adapter/promotion code is not automatically live. Remote production writes still require the explicit guarded production procedure, followed by read-only database verification and browser QA.
 
 ## Known limitation
 
-Wyscout 2017/18 materially improves real player evidence, but it does not support every intended Player V2 metric/dimension (for example xG/xA/model-dependent and several progression/one-v-one/defensive primitives remain unavailable or pending). The scoring model must not be weakened or partially renormalized just to produce an overall ranking.
+Wyscout 2017/18 materially improves real player evidence but does not support every intended Player V2 input. In particular, `progressive_passes` remains blocked, and several xG/xA/model-dependent, progression, one-v-one and defensive primitives remain unavailable or methodology-pending. The scoring model must not be weakened or partially renormalized merely to produce an overall ranking.
