@@ -260,10 +260,12 @@ jobs:
       - name: Sync analytics environment
         working-directory: analytics
         run: uv sync --dev --locked
-      - name: Format touched Python
+      - name: Autofix lint and format
         working-directory: analytics
-        run: uv run ruff format src tests
-      - name: Lint analytics
+        run: |
+          uv run ruff check --fix .
+          uv run ruff format src tests
+      - name: Verify lint
         working-directory: analytics
         run: uv run ruff check .
       - name: Verify formatting
