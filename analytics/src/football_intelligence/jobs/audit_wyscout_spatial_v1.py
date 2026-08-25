@@ -118,10 +118,7 @@ def audit_spatial_v1(*, matches_payload: list[Any], events_payload: list[Any]) -
     if not participating_pairs:
         raise WyscoutSpatialAuditError("no canonical participating player-match identities found")
 
-    player_match = {
-        pair: PlayerMatchSpatialAudit()
-        for pair in participating_pairs
-    }
+    player_match = {pair: PlayerMatchSpatialAudit() for pair in participating_pairs}
     invalid_coordinate_reasons: Counter[str] = Counter()
     invalid_geometry_by_sub_event: Counter[str] = Counter()
     sub_event_lengths: dict[str, SubEventLengthAudit] = defaultdict(SubEventLengthAudit)
@@ -258,9 +255,7 @@ def audit_spatial_v1(*, matches_payload: list[Any], events_payload: list[Any]) -
     all_spatial_ready = [
         row
         for row in season_rows.values()
-        if not row.progressive_missing
-        and not row.final_third_missing
-        and not row.long_missing
+        if not row.progressive_missing and not row.final_third_missing and not row.long_missing
     ]
     passing_proxy = [row for row in all_spatial_ready if row.passes_total > 0]
 
@@ -396,9 +391,7 @@ def audit_spatial_v1(*, matches_payload: list[Any], events_payload: list[Any]) -
         "player_v2_passing_evidence_input_proxy": {
             "player_seasons": len(season_rows),
             "all_three_spatial_inputs_ready": len(all_spatial_ready),
-            "all_three_spatial_inputs_ready_pct": _pct(
-                len(all_spatial_ready), len(season_rows)
-            ),
+            "all_three_spatial_inputs_ready_pct": _pct(len(all_spatial_ready), len(season_rows)),
             "all_three_spatial_plus_pass_completion_denominator": len(passing_proxy),
             "all_three_spatial_plus_pass_completion_denominator_pct": _pct(
                 len(passing_proxy), len(season_rows)
@@ -416,9 +409,7 @@ def _tag_ids(event: dict[str, Any]) -> set[int]:
     if not isinstance(tags, list):
         return set()
     return {
-        int(tag["id"])
-        for tag in tags
-        if isinstance(tag, dict) and isinstance(tag.get("id"), int)
+        int(tag["id"]) for tag in tags if isinstance(tag, dict) and isinstance(tag.get("id"), int)
     }
 
 
@@ -476,11 +467,7 @@ def _accounting_failures(
     player_match: dict[tuple[int, int], PlayerMatchSpatialAudit],
 ) -> list[str]:
     failures: list[str] = []
-    excluded = (
-        missing_identity_passes
-        + sentinel_actor_passes
-        + outside_canonical_participation_passes
-    )
+    excluded = missing_identity_passes + sentinel_actor_passes + outside_canonical_participation_passes
     if attributable_passes + excluded != pass_count:
         failures.append("raw_pass_accounting_mismatch")
     if valid_geometry_count + invalid_geometry_count != attributable_passes:
@@ -616,7 +603,12 @@ def main() -> None:
             matches_payload=matches_payload,
             events_payload=events_payload,
         )
-    except (WyscoutMappingAuditError, WyscoutSpatialAuditError, OSError, json.JSONDecodeError) as exc:
+    except (
+        WyscoutMappingAuditError,
+        WyscoutSpatialAuditError,
+        OSError,
+        json.JSONDecodeError,
+    ) as exc:
         print(f"WYSCOUT SPATIAL V1 AUDIT: FAIL - {exc}")
         raise SystemExit(1) from exc
 
