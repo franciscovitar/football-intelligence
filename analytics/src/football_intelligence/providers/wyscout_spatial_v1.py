@@ -1,8 +1,8 @@
 """Pure spatial primitives for the Wyscout Open Data v1 laboratory.
 
-These helpers implement ``fi-wyscout-spatial-v1.0`` as specified in
-``docs/WYSCOUT_SPATIAL_METHODOLOGY_V1.md``. They do not emit canonical
-observations and do not write to the database.
+These helpers implement the currently audited Football Intelligence Wyscout
+spatial methodology. They do not emit canonical observations and do not write
+to the database.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import math
 from dataclasses import dataclass
 from typing import Any, Literal
 
-METHODOLOGY_ID = "fi-wyscout-spatial-v1.0"
+METHODOLOGY_ID = "fi-wyscout-spatial-v1.1"
 PITCH_LENGTH_M = 105.0
 PITCH_WIDTH_M = 68.0
 HALFWAY_X_M = PITCH_LENGTH_M / 2.0
@@ -20,6 +20,14 @@ OPPONENT_GOAL_X_M = PITCH_LENGTH_M
 OPPONENT_GOAL_Y_M = PITCH_WIDTH_M / 2.0
 
 ACCURATE_TAG = 1801
+
+# Historical Open Data subevents do not expose the current Long Ground subtype
+# independently. Keep the fallback narrow: Simple pass is the generic historical
+# pass subtype, while Wyscout explicitly documents that Smart pass can also be a
+# long ground pass. Cross, Hand pass and Head pass are distinct pass concepts and
+# must never become long-ground passes solely because their geometry exceeds 45 m.
+_GROUND_LONG_CANDIDATE_SUBEVENTS = frozenset({"Simple pass", "Smart pass"})
+_EXPLICIT_NON_LONG_SUBEVENTS = frozenset({"Cross", "Hand pass", "Head pass"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,25 +113,32 @@ def classify_long_pass(
     sub_event_name: str | None,
     coordinates: CoordinateParseResult,
 ) -> LongPassClassification:
-    """Classify one Wyscout ``Pass`` under the conservative v1 rule.
+    """Classify a historical Wyscout ``Pass`` conservatively.
 
-    ``Launch`` is directly a Wyscout long-pass type and therefore remains
-    classifiable even when geometry is unavailable. ``Cross`` is directly
-    excluded from geometry-based reclassification. ``High pass`` and all
-    remaining non-cross historical pass subtypes require valid geometry.
+    Current Wyscout semantics define long passes as Launch, High (>25 m), or
+    Long Ground (>45 m). Historical Open Data has Launch and High pass but no
+    dedicated Long Ground subtype. ``Simple pass`` and ``Smart pass`` are the
+    only historical subtypes v1.1 permits to become long-ground passes from
+    geometry. Cross, Hand pass and Head pass remain distinct non-long concepts.
+    Unknown subtypes stay ambiguous instead of inheriting ground semantics.
     """
 
     if sub_event_name == "Launch":
         return "long"
-    if sub_event_name == "Cross":
+    if sub_event_name in _EXPLICIT_NON_LONG_SUBEVENTS:
         return "not_long"
-    if not coordinates.valid or coordinates.start is None or coordinates.end is None:
-        return "ambiguous"
 
-    length = pass_length_m(coordinates.start, coordinates.end)
     if sub_event_name == "High pass":
-        return "long" if length > 25.0 else "not_long"
-    return "long" if length > 45.0 else "not_long"
+        if not coordinates.valid or coordinates.start is None or coordinates.end is None:
+            return "ambiguous"
+        return "long" if pass_length_m(coordinates.start, coordinates.end) > 25.0 else "not_long"
+
+    if sub_event_name in _GROUND_LONG_CANDIDATE_SUBEVENTS:
+        if not coordinates.valid or coordinates.start is None or coordinates.end is None:
+            return "ambiguous"
+        return "long" if pass_length_m(coordinates.start, coordinates.end) > 45.0 else "not_long"
+
+    return "ambiguous"
 
 
 def is_accurate(event: dict[str, Any]) -> bool:
