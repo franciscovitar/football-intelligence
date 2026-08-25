@@ -60,11 +60,10 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
-# The real-source audit is a disposable PR laboratory and is never merged to
-# main. Keep the single long exception tuple readable while the lab runs; the
-# durable production branch is created separately after the audit decision.
+# This executable exists only on the unmerged real-source laboratory branch.
+# The durable production branch is created separately after the audit decision.
 [tool.ruff.lint.per-file-ignores]
-"src/football_intelligence/jobs/audit_wyscout_spatial_v1.py" = ["E501"]
+"**/audit_wyscout_spatial_v1.py" = ["E501"]
 
 [tool.ruff.format]
 quote-style = "double"
