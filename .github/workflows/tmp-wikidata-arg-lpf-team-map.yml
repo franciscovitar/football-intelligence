@@ -1,0 +1,88 @@
+name: Temporary Wikidata ARG_LPF Team Mapping Lab
+
+on:
+  push:
+    branches:
+      - lab/wikidata-arg-lpf-2024-roster
+
+permissions:
+  contents: read
+
+jobs:
+  map-clubs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - name: Map OpenFootball ARG_LPF 2024 club names to Wikidata search candidates
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          import unicodedata
+          import urllib.parse
+          import urllib.request
+          from urllib.error import HTTPError, URLError
+
+          TEAMS = [
+              'Sarmiento de Junín', 'Instituto de Córdoba', 'Argentinos Juniors',
+              'Rosario Central', "Newell's Old Boys", 'Platense', 'Huracán',
+              'Defensa y Justicia', 'Godoy Cruz', 'Barracas Central', 'Independiente',
+              'Talleres de Córdoba', 'River Plate', 'Central Córdoba SdE', 'Tigre',
+              'Estudiantes', 'Deportivo Riestra', 'San Lorenzo', 'Belgrano de Córdoba',
+              'Racing Club', 'Lanús', 'Independiente Rivadavia', 'Atlético Tucumán',
+              'Boca Juniors', 'Gimnasia de La Plata', 'Vélez Sarsfield',
+              'Unión de Santa Fe', 'Banfield',
+          ]
+          API = 'https://www.wikidata.org/w/api.php'
+          UA = 'FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
+
+          def fold(value: str) -> str:
+              decomposed = unicodedata.normalize('NFKD', value)
+              return ''.join(ch for ch in decomposed if not unicodedata.combining(ch)).casefold()
+
+          def request(team: str):
+              params = urllib.parse.urlencode({
+                  'action': 'wbsearchentities', 'search': team, 'language': 'es',
+                  'uselang': 'es', 'type': 'item', 'limit': '10',
+                  'format': 'json', 'formatversion': '2',
+              })
+              url = f'{API}?{params}'
+              last = None
+              for attempt in range(1, 5):
+                  req = urllib.request.Request(url, headers={'Accept':'application/json','User-Agent':UA})
+                  try:
+                      with urllib.request.urlopen(req, timeout=30) as response:
+                          return json.loads(response.read())
+                  except HTTPError as exc:
+                      last = exc
+                      if exc.code not in {429,500,502,503,504} or attempt == 4:
+                          raise
+                      time.sleep(min(float(attempt), 5.0))
+                  except (URLError, TimeoutError) as exc:
+                      last = exc
+                      if attempt == 4:
+                          raise
+                      time.sleep(float(attempt))
+              raise RuntimeError(last)
+
+          output = []
+          for team in TEAMS:
+              payload = request(team)
+              candidates = []
+              for row in payload.get('search', []):
+                  desc = row.get('description') or ''
+                  if 'football club' not in fold(desc) and 'club de futbol' not in fold(desc):
+                      continue
+                  candidates.append({
+                      'qid': row.get('id'), 'label': row.get('label'),
+                      'description': desc,
+                  })
+              output.append({'source_name': team, 'club_candidates': candidates})
+              time.sleep(0.10)
+          print(json.dumps(output, indent=2, ensure_ascii=False, sort_keys=True))
+          print('TEAM SEARCH LAB: PASS teams=', len(output))
+          PY
