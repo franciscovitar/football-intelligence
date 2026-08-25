@@ -738,9 +738,7 @@ def _accumulate_passes_into_final_third(
         ):
             continue
         pair = (match_id, player_id)
-        classification = classify_pass_into_final_third(
-            parse_pass_coordinates(event)
-        )
+        classification = classify_pass_into_final_third(parse_pass_coordinates(event))
         if classification == "ambiguous":
             ambiguous.add(pair)
         elif classification == "into_final_third":
@@ -1370,9 +1368,7 @@ def parse_player_match_observations(
     ) in _SPATIAL_V1_2_VALIDATED_SCOPES
     if spatial_v1_2_enabled:
         accurate_long, ambiguous_long = _accumulate_long_pass_accurate(events_payload)
-        final_third, ambiguous_final_third = _accumulate_passes_into_final_third(
-            events_payload
-        )
+        final_third, ambiguous_final_third = _accumulate_passes_into_final_third(events_payload)
     else:
         accurate_long, ambiguous_long = {}, frozenset()
         final_third, ambiguous_final_third = {}, frozenset()

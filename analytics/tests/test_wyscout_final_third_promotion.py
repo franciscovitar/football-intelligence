@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from football_intelligence.data_mesh.adapters.wyscout_open import (
     ESP_LL_SCOPE,
     parse_player_match_observations,
 )
+from football_intelligence.player_analytics.engine_v2 import (
+    calculate_player_analytics_v2_result,
+)
+from football_intelligence.player_analytics.models import PlayerObservation
 from football_intelligence.providers.wyscout_spatial_v1 import (
     classify_pass_into_final_third,
     parse_pass_coordinates,
@@ -116,3 +122,39 @@ def test_final_third_emission_does_not_leak_into_unaudited_scope() -> None:
     esp_match = {**_MATCH, "competitionId": 795, "seasonId": 181144}
     observations = parse_player_match_observations([esp_match], _EVENTS, scope=ESP_LL_SCOPE)
     assert all(item.metric_name != "passes_into_final_third" for item in observations)
+
+
+def _v2_observation(match_id: int, passes_into_final_third: float | None) -> PlayerObservation:
+    return PlayerObservation(
+        player_id=77,
+        player_name="Exact Final Third Player",
+        match_id=match_id,
+        kickoff_at=datetime(2018, 1, match_id, tzinfo=UTC),
+        team_id=100,
+        minutes=90,
+        listed_position="CM",
+        possession_pct=50.0,
+        stats={"passes_into_final_third": passes_into_final_third},
+    )
+
+
+def test_player_v2_never_publishes_partial_final_third_window_as_exact() -> None:
+    partial = calculate_player_analytics_v2_result(
+        [_v2_observation(1, 2.0), _v2_observation(2, None)],
+        scope_key="competition:ENG_PL:2017/18",
+    )
+    assert not any(
+        feature.window == "season" and feature.metric_name == "passes_into_final_third"
+        for feature in partial.features
+    )
+
+    complete = calculate_player_analytics_v2_result(
+        [_v2_observation(1, 2.0), _v2_observation(2, 0.0)],
+        scope_key="competition:ENG_PL:2017/18",
+    )
+    season_feature = next(
+        feature
+        for feature in complete.features
+        if feature.window == "season" and feature.metric_name == "passes_into_final_third"
+    )
+    assert season_feature.raw_value == 2.0

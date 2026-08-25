@@ -44,9 +44,7 @@ class CoordinateParseResult:
 
 
 LongPassClassification = Literal["long", "not_long", "ambiguous"]
-FinalThirdClassification = Literal[
-    "into_final_third", "not_into_final_third", "ambiguous"
-]
+FinalThirdClassification = Literal["into_final_third", "not_into_final_third", "ambiguous"]
 
 
 def parse_pass_coordinates(event: dict[str, Any]) -> CoordinateParseResult:
