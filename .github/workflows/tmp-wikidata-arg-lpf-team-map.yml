@@ -66,6 +66,7 @@ jobs:
           ARGENTINA_QID = 'Q414'
           ASSOCIATION_FOOTBALL_CLUB_QID = 'Q476028'
           ASSOCIATION_FOOTBALL_QID = 'Q2736'
+          ARGENTINE_PRIMERA_QID = 'Q223170'
           UA = 'FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
           RETRYABLE = {429, 500, 502, 503, 504}
 
@@ -136,19 +137,18 @@ jobs:
                       result.add(qid)
               return result
 
-          def names(entity: dict) -> set[str]:
+          def spanish_names(entity: dict) -> set[str]:
               values = set()
               for field in ('labels', 'aliases'):
                   container = entity.get(field)
                   if not isinstance(container, dict):
                       continue
-                  for lang in ('es', 'en'):
-                      raw = container.get(lang)
-                      rows = raw if isinstance(raw, list) else [raw]
-                      for row in rows:
-                          value = row.get('value') if isinstance(row, dict) else None
-                          if isinstance(value, str) and value.strip():
-                              values.add(norm(value))
+                  raw = container.get('es')
+                  rows = raw if isinstance(raw, list) else [raw]
+                  for row in rows:
+                      value = row.get('value') if isinstance(row, dict) else None
+                      if isinstance(value, str) and value.strip():
+                          values.add(norm(value))
               return values
 
           def fetch_entities(qids: set[str]) -> dict[str, dict]:
@@ -193,25 +193,29 @@ jobs:
               rejected = []
               for qid in sorted(candidate_qids_by_club[source_name]):
                   entity = entities.get(qid, {})
-                  entity_names = names(entity)
+                  entity_names = spanish_names(entity)
                   country_qids = claim_item_qids(entity, 'P17')
                   instance_qids = claim_item_qids(entity, 'P31')
                   sport_qids = claim_item_qids(entity, 'P641')
+                  league_qids = claim_item_qids(entity, 'P118')
                   exact_alias_match = bool(accepted_names & entity_names)
                   argentina = ARGENTINA_QID in country_qids
                   football = (
                       ASSOCIATION_FOOTBALL_CLUB_QID in instance_qids
                       or ASSOCIATION_FOOTBALL_QID in sport_qids
                   )
+                  argentina_top_flight = ARGENTINE_PRIMERA_QID in league_qids
                   evidence = {
                       'qid': qid,
-                      'exact_explicit_alias': exact_alias_match,
+                      'exact_explicit_spanish_alias': exact_alias_match,
                       'argentina_p17': argentina,
                       'football_p31_or_p641': football,
+                      'argentine_primera_p118': argentina_top_flight,
                       'p31': sorted(instance_qids),
                       'p641': sorted(sport_qids),
+                      'p118': sorted(league_qids),
                   }
-                  if exact_alias_match and argentina and football:
+                  if exact_alias_match and argentina and football and argentina_top_flight:
                       validated.append(evidence)
                   elif exact_alias_match:
                       rejected.append(evidence)
