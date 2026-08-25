@@ -119,7 +119,7 @@ Before authorizing a production write for any scope, require all of the followin
 9. read-only production preflight showing an acceptable fresh/current/predecessor target state;
 10. explicit human authorization for the remote production write.
 
-The five-league same-database predecessor-to-v0.5 upgrade simulation is a separate final evidence gate for this v0.5 expansion. Until that run itself closes PASS, its result must not be inferred from the independent per-league runtime evidence.
+The five-league same-database predecessor-to-v0.5 upgrade simulation closed **PASS** in GitHub Actions run `32879286381` on 2026-08-25. The ephemeral PostgreSQL 17 run reconstructed `ENG_PL` from its certified v0.3 state and `ESP_LL`/`FRA_L1`/`GER_BL1`/`ITA_SA` from their exact certified pre-spatial states, verified those baseline fingerprints, upgraded all five scopes to the current v0.5 fingerprints, verified `long_passes_accurate` and `passes_into_final_third` were present while `progressive_passes` remained absent, reran all five current states, and proved exact fingerprint idempotency. No production database was accessed or written.
 
 ## Product semantics
 
