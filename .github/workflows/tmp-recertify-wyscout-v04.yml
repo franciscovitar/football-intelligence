@@ -1,0 +1,345 @@
+name: Temporary Recertify Wyscout v0.4
+
+on:
+  push:
+    branches:
+      - feat/wyscout-final-third-v04
+
+permissions:
+  contents: write
+
+jobs:
+  recertify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: feat/wyscout-final-third-v04
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Sync candidate analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+
+      - name: Acquire and verify official Wyscout source
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-probe-wyscout-open \
+            --cache-dir "$GITHUB_WORKSPACE/data/cache/wyscout-open" \
+            --report /tmp/wyscout-source.json
+          uv run football-intelligence-audit-wyscout-core-leagues \
+            --cache-dir "$GITHUB_WORKSPACE/data/cache/wyscout-open" \
+            --report /tmp/wyscout-core-leagues.json
+
+      - name: Prepare certified v0.3 baseline worktree
+        run: |
+          git worktree add /tmp/fi-v03 32f010378a3dc42248dbad6816809d7a10183c87
+          cd /tmp/fi-v03/analytics
+          uv sync --dev --locked
+
+      - name: Write canonical ESP_LL output dumper
+        run: |
+          cat > /tmp/dump_wyscout_esp.py <<'PY'
+          from __future__ import annotations
+
+          import json
+          import sys
+          from dataclasses import asdict
+          from datetime import datetime
+          from pathlib import Path
+          from typing import Any
+
+          from football_intelligence.data_mesh.adapters import wyscout_open
+          from football_intelligence.jobs.audit_wyscout_core_leagues import (
+              _load_country_payload,
+              _load_reference_payload,
+          )
+          from football_intelligence.providers.wyscout_open_scopes import CORE_LEAGUE_SPECS
+
+
+          def normalize(value: Any) -> Any:
+              if isinstance(value, datetime):
+                  return value.isoformat()
+              if isinstance(value, dict):
+                  return {str(key): normalize(item) for key, item in sorted(value.items())}
+              if isinstance(value, (list, tuple)):
+                  return [normalize(item) for item in value]
+              return value
+
+
+          cache_dir = Path(sys.argv[1])
+          output = Path(sys.argv[2])
+          spec = next(spec for spec in CORE_LEAGUE_SPECS if spec.competition_code == "ESP_LL")
+          matches = _load_country_payload(cache_dir, spec=spec, kind="matches")
+          events = _load_country_payload(cache_dir, spec=spec, kind="events")
+          players = _load_reference_payload(cache_dir, "*players.json", label="players.json")
+          teams = _load_reference_payload(cache_dir, "*teams.json", label="teams.json")
+          observations = wyscout_open.parse_england_season(
+              matches_payload=matches,
+              events_payload=events,
+              players_payload=players,
+              teams_payload=teams,
+              scope=wyscout_open.ESP_LL_SCOPE,
+          )
+          versions = sorted({obs.semantic_version for obs in observations})
+          canonical = []
+          for obs in observations:
+              row = asdict(obs)
+              row.pop("semantic_version")
+              canonical.append(normalize(row))
+          canonical.sort(key=lambda row: json.dumps(row, sort_keys=True, separators=(",", ":")))
+          payload = {
+              "semantic_versions": versions,
+              "observation_count": len(canonical),
+              "long_passes_accurate_count": sum(
+                  1 for row in canonical if row["metric_name"] == "long_passes_accurate"
+              ),
+              "passes_into_final_third_count": sum(
+                  1 for row in canonical if row["metric_name"] == "passes_into_final_third"
+              ),
+              "observations": canonical,
+          }
+          output.write_text(
+              json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8"
+          )
+          print(
+              f"version={versions} observations={len(canonical)} "
+              f"long_passes_accurate={payload['long_passes_accurate_count']} "
+              f"passes_into_final_third={payload['passes_into_final_third_count']}"
+          )
+          PY
+
+      - name: Emit v0.3 and v0.4 over complete real ESP_LL 2017/18 source
+        run: |
+          CACHE="$GITHUB_WORKSPACE/data/cache/wyscout-open"
+          cd /tmp/fi-v03/analytics
+          uv run python /tmp/dump_wyscout_esp.py "$CACHE" /tmp/wyscout-v03.json
+          cd "$GITHUB_WORKSPACE/analytics"
+          uv run python /tmp/dump_wyscout_esp.py "$CACHE" /tmp/wyscout-v04.json
+
+      - name: Prove observational equivalence in certified comparability scope
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          base = json.loads(Path("/tmp/wyscout-v03.json").read_text(encoding="utf-8"))
+          head = json.loads(Path("/tmp/wyscout-v04.json").read_text(encoding="utf-8"))
+
+          assert base["semantic_versions"] == ["wyscout-open-v0.3"], base["semantic_versions"]
+          assert head["semantic_versions"] == ["wyscout-open-v0.4"], head["semantic_versions"]
+          assert base["observation_count"] == 416407, base["observation_count"]
+          assert head["observation_count"] == base["observation_count"], (
+              base["observation_count"], head["observation_count"]
+          )
+          assert head["long_passes_accurate_count"] == 0, (
+              "ENG_PL-only long_passes_accurate leaked into ESP_LL"
+          )
+          assert head["passes_into_final_third_count"] == 0, (
+              "ENG_PL-only passes_into_final_third leaked into ESP_LL"
+          )
+          if base["observations"] != head["observations"]:
+              for index, (before, after) in enumerate(
+                  zip(base["observations"], head["observations"], strict=True)
+              ):
+                  if before != after:
+                      raise AssertionError(
+                          f"first v0.3/v0.4 difference at canonical row {index}: "
+                          f"before={before!r} after={after!r}"
+                      )
+              raise AssertionError("v0.3/v0.4 observation payloads differ")
+
+          digest = hashlib.sha256(
+              json.dumps(base["observations"], sort_keys=True, separators=(",", ":")).encode()
+          ).hexdigest()
+          expected_digest = "29b23d96326fb82b94e6529ad951e4c1b3812d0617fff79a5d34d23bc2763eb5"
+          assert digest == expected_digest, (digest, expected_digest)
+          report = {
+              "status": "PASS",
+              "scope": "ESP_LL 2017/18",
+              "source": "Wyscout Open Data / Figshare 4415000",
+              "baseline_version": "wyscout-open-v0.3",
+              "candidate_version": "wyscout-open-v0.4",
+              "observation_count": base["observation_count"],
+              "candidate_long_passes_accurate_observations": head["long_passes_accurate_count"],
+              "candidate_passes_into_final_third_observations": head[
+                  "passes_into_final_third_count"
+              ],
+              "canonical_payload_sha256": digest,
+              "equivalence_rule": (
+                  "all NormalizedObservation fields identical except semantic_version"
+              ),
+          }
+          Path("/tmp/wyscout-v04-recertification.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          print(json.dumps(report, indent=2, sort_keys=True))
+          PY
+
+      - name: Apply evidence-backed v0.4 recertification contracts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement, found {count}")
+              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+          def replace_exact_count(path: str, old: str, new: str, expected: int) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(f"{path}: expected {expected} replacements, found {count}")
+              file.write_text(text.replace(old, new), encoding="utf-8")
+
+
+          policy = "analytics/src/football_intelligence/data_mesh/comparability_policy.py"
+          replace_once(
+              policy,
+              "`wyscout-open-v0.4` still agrees the same way",
+              "`wyscout-open-v0.5` still agrees the same way",
+          )
+          replace_once(
+              policy,
+              '''# v0.3 was explicitly re-certified on 2026-08-25 by running v0.2 and v0.3
+# over the complete real ESP_LL 2017/18 Wyscout source. All 416,407
+# NormalizedObservation rows were identical field-by-field except semantic_version
+# (canonical SHA-256: 29b23d96326fb82b94e6529ad951e4c1b3812d0617fff79a5d34d23bc2763eb5).
+# The new long_passes_accurate identity is scope-gated to ENG_PL and emitted zero
+# observations in ESP_LL, so the reviewed provider-pair policies remain
+# observationally valid for v0.3 rather than being assumed so.
+WYSCOUT_CERTIFIED_POLICY_VERSION = "wyscout-open-v0.3"''',
+              '''# v0.4 was explicitly re-certified on 2026-08-25 by running v0.3 and v0.4
+# over the complete real ESP_LL 2017/18 Wyscout source. All 416,407
+# NormalizedObservation rows were identical field-by-field except semantic_version
+# (canonical SHA-256: 29b23d96326fb82b94e6529ad951e4c1b3812d0617fff79a5d34d23bc2763eb5).
+# Both ENG_PL-only spatial identities (long_passes_accurate and
+# passes_into_final_third) emitted zero observations in ESP_LL, so the reviewed
+# provider-pair policies remain observationally valid for v0.4 rather than being
+# assumed so.
+WYSCOUT_CERTIFIED_POLICY_VERSION = "wyscout-open-v0.4"''',
+          )
+
+          adapter_test = "analytics/tests/test_data_mesh_adapters_wyscout_open.py"
+          replace_once(
+              adapter_test,
+              '''def test_semantic_version_tracks_current_certified_adapter_semantics() -> None:
+    # v0.2 introduced Block 20D.2's review fixes. v0.3 adds the independently
+    # audited ENG_PL-only long_passes_accurate emission and was explicitly
+    # re-certified as observationally equivalent to v0.2 in ESP_LL 2017/18,
+    # the Wyscout x StatsBomb comparability-policy scope.
+    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.1"
+    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.2"
+    assert wyscout_open.SEMANTIC_VERSION == "wyscout-open-v0.3"
+''',
+              '''def test_semantic_version_tracks_current_certified_adapter_semantics() -> None:
+    # v0.3 promoted ENG_PL-only long_passes_accurate. v0.4 additionally promotes
+    # ENG_PL-only passes_into_final_third under spatial v1.2 and was explicitly
+    # re-certified as observationally equivalent to v0.3 in ESP_LL 2017/18,
+    # the Wyscout x StatsBomb comparability-policy scope.
+    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.1"
+    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.2"
+    assert wyscout_open.SEMANTIC_VERSION != "wyscout-open-v0.3"
+    assert wyscout_open.SEMANTIC_VERSION == "wyscout-open-v0.4"
+''',
+          )
+
+          mapping_test = "analytics/tests/test_wyscout_open_mapping.py"
+          replace_once(
+              mapping_test,
+              '''def test_derivable_ready_and_pending_totals_match_final_accounting() -> None:
+    assert len(derivable_ready_mappings()) == 35
+    assert len(derivable_methodology_pending_mappings()) == 32
+''',
+              '''def test_derivable_ready_and_pending_totals_match_final_accounting() -> None:
+    assert len(derivable_ready_mappings()) == 36
+    assert len(derivable_methodology_pending_mappings()) == 31
+''',
+          )
+          replace_once(
+              mapping_test,
+              '''def test_adapter_safe_subset_totals_78() -> None:
+    safe = adapter_safe_mappings()
+    assert len(safe) == 78
+''',
+              '''def test_adapter_safe_subset_totals_79() -> None:
+    safe = adapter_safe_mappings()
+    assert len(safe) == 79
+''',
+          )
+
+          comp_test = "analytics/tests/test_comparability_policy.py"
+          replace_once(
+              comp_test,
+              '_CERTIFIED_WYSCOUT_VERSION = "wyscout-open-v0.3"',
+              '_CERTIFIED_WYSCOUT_VERSION = "wyscout-open-v0.4"',
+          )
+          replace_once(
+              comp_test,
+              "# wyscout-open-v0.3 + statsbomb-open-v0.4 -> current policies match.",
+              "# wyscout-open-v0.4 + statsbomb-open-v0.4 -> current policies match.",
+          )
+          replace_once(
+              comp_test,
+              '''    # wyscout-open-v0.4 + statsbomb-open-v0.4 (real, certified StatsBomb
+    # side, only Wyscout bumped) -> no old policy match, methodology_pending
+''',
+              '''    # wyscout-open-v0.5 + statsbomb-open-v0.4 (real, certified StatsBomb
+    # side, only Wyscout bumped) -> no old policy match, methodology_pending
+''',
+          )
+          replace_once(
+              comp_test,
+              '''    # wyscout-open-v0.3 (real, certified Wyscout side) + statsbomb-open-v0.5
+''',
+              '''    # wyscout-open-v0.4 (real, certified Wyscout side) + statsbomb-open-v0.5
+''',
+          )
+          replace_once(
+              comp_test,
+              '''    # wyscout-open-v0.4 + statsbomb-open-v0.5 -> no old policy match.
+''',
+              '''    # wyscout-open-v0.5 + statsbomb-open-v0.5 -> no old policy match.
+''',
+          )
+          replace_exact_count(
+              comp_test,
+              'semantic_version="wyscout-open-v0.4"',
+              'semantic_version="wyscout-open-v0.5"',
+              2,
+          )
+          PY
+
+      - name: Validate complete analytics suite after recertification
+        working-directory: analytics
+        run: |
+          uv run ruff format src tests
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy src
+          uv run pytest
+
+      - name: Remove temporary workflow and commit recertified product state
+        run: |
+          rm .github/workflows/tmp-recertify-wyscout-v04.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add analytics .github/workflows/tmp-recertify-wyscout-v04.yml
+          git diff --cached --check
+          git commit -m "fix: recertify Wyscout v0.4 evidence boundaries"
+          git push origin HEAD:feat/wyscout-final-third-v04
