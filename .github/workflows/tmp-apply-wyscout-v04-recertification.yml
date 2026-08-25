@@ -31,6 +31,7 @@ jobs:
       - name: Apply evidence-backed recertification and docs
         run: |
           sed -i 's/A metric under `fi-wyscout-spatial-v1.1` is promotable/A metric under `fi-wyscout-spatial-v1.2` is promotable/g' scripts/tmp_apply_wyscout_v04_recertification.py
+          sed -i 's/raise SystemExit(f"{path}: expected one replacement, found {count}")/raise SystemExit(f"{path}: expected one replacement, found {count}; old={old[:120]!r}")/' scripts/tmp_apply_wyscout_v04_recertification.py
           python scripts/tmp_apply_wyscout_v04_recertification.py
 
       - name: Format lint typecheck and test analytics
