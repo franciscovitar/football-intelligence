@@ -99,3 +99,36 @@ The ENG_PL production-promotion fingerprint must be updated only from observed r
 - `feature_snapshots`: **26,841 → 38,737**.
 
 All other already-certified promotion invariants used by the existing contract remain unchanged unless separately re-observed or affected by their own methodology. The pre-v0.3 published ENG_PL state must be treated as an explicit certified predecessor during upgrade rather than as an arbitrary partial state.
+
+## Certified v0.2 → v0.3 upgrade simulation
+
+The production-shaped upgrade path was reproduced end to end in a separate PostgreSQL 17 evidence run: GitHub Actions `32842930111`.
+
+The baseline checkout was exact commit `9af9c2e1532b37b17e4316be4061f0ee82e1863f`, which still carried `wyscout-open-v0.2`. Its historical promoter was run from a fresh database after applying that commit's own migrations and core seed. The resulting predecessor fingerprint was observed directly:
+
+- scoped source observations: **412,609**;
+- Player V2 score snapshots: **2,048**;
+- Player V2 feature snapshots: **26,841**.
+
+The candidate checkout was exact commit `c4b0260c5e452e5f24f69ccf6fbc6dfcbae8a28c`. Before running its promoter, only the two schema migrations introduced after the predecessor were applied:
+
+- `20260824213000_add_player_aerial_stats.sql`;
+- `20260824223000_add_player_long_pass_stats.sql`.
+
+The first candidate promotion recognized the exact v0.2 predecessor and completed successfully. The post-upgrade fingerprint was:
+
+- scoped source observations: **422,877**;
+- `long_passes_accurate` source observations: **10,268**;
+- Player V2 score snapshots: **2,048**;
+- Player V2 feature snapshots: **38,737**;
+- season players: **512**;
+- season players with at least 450 minutes: **385**;
+- `performance` ready: **385**;
+- ranking candidates: **0**;
+- overall scores: **0**.
+
+The candidate promoter was then run a second time on the already-upgraded v0.3 state. It recognized the current certified fingerprint, completed successfully, and reproduced byte-for-byte the four-count database fingerprint above. Promotion idempotency: **PASS**.
+
+This validates both accepted prewrite states used by the contract: the exact published v0.2 predecessor and the exact current v0.3 state. Arbitrary partial states remain outside the certified path and must fail closed.
+
+The entire upgrade simulation targeted only `postgresql://localhost:5432/football_intelligence_upgrade`; every promotion report stated `PRODUCTION WRITTEN: False`. No production database was accessed or modified.
