@@ -80,9 +80,10 @@ def test_long_pass_promotion_is_metric_specific_and_versioned() -> None:
     safe = {(item.catalog_key, item.catalog_granularity) for item in adapter_safe_mappings()}
     assert ("long_passes_accurate", "player_match") in safe
     assert ("progressive_passes", "player_match") not in safe
-    assert ("passes_into_final_third", "player_match") not in safe
+    assert ("passes_into_final_third", "player_match") in safe
     assert ("long_passes_accurate", "player_match") in _EMITTED_IDENTITIES
-    assert SEMANTIC_VERSION == "wyscout-open-v0.3"
+    assert ("passes_into_final_third", "player_match") in _EMITTED_IDENTITIES
+    assert SEMANTIC_VERSION == "wyscout-open-v0.4"
 
 
 def test_long_pass_emission_preserves_positive_zero_and_missing() -> None:
