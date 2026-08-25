@@ -228,22 +228,26 @@ def _pct(numerator: int, denominator: int) -> float:
 def _candidate_diagnostics(
     controls: list[tuple[dict[str, Any], Candidate | None, Point]],
 ) -> dict[str, Any]:
-    candidates = [(event, candidate, endpoint) for event, candidate, endpoint in controls if candidate]
+    candidates = [
+        (event, candidate, endpoint)
+        for event, candidate, endpoint in controls
+        if candidate
+    ]
     errors = [_distance_m(candidate.point, endpoint) for _, candidate, endpoint in candidates]
     event_names = Counter(candidate.event_name for _, candidate, _ in candidates)
     sub_events = Counter(candidate.sub_event_name for _, candidate, _ in candidates)
     offsets = Counter(candidate.offset for _, candidate, _ in candidates)
     accurate_controls = [item for item in candidates if _accuracy(item[0]) is True]
     inaccurate_controls = [item for item in candidates if _accuracy(item[0]) is False]
+    exact_match = sum(
+        candidate.point == endpoint for _, candidate, endpoint in candidates
+    )
     return {
         "controls": len(controls),
         "candidate_available": len(candidates),
         "candidate_available_pct": _pct(len(candidates), len(controls)),
-        "exact_coordinate_match": sum(candidate.point == endpoint for _, candidate, endpoint in candidates),
-        "exact_coordinate_match_pct": _pct(
-            sum(candidate.point == endpoint for _, candidate, endpoint in candidates),
-            len(candidates),
-        ),
+        "exact_coordinate_match": exact_match,
+        "exact_coordinate_match_pct": _pct(exact_match, len(candidates)),
         "within_1m": sum(error <= 1.0 for error in errors),
         "within_1m_pct": _pct(sum(error <= 1.0 for error in errors), len(errors)),
         "within_3m": sum(error <= 3.0 for error in errors),
