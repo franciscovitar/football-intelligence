@@ -1,0 +1,235 @@
+name: Temporary Wyscout v0.5 Five-League Upgrade Evidence
+
+on:
+  push:
+    branches:
+      - evidence/wyscout-v05-five-league-upgrade
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: football_intelligence_v05_upgrade
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: football_intelligence_v05_upgrade
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_v05_upgrade
+      WYSCOUT_CACHE: ${{ github.workspace }}/wyscout-cache
+
+    steps:
+      - name: Checkout v0.5 candidate
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: 41fee43ee07034e2b2ac1c0cfb7f6ff4451ec90c
+          path: candidate
+      - name: Checkout ENG v0.3 certified baseline
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: 32f010378a3dc42248dbad6816809d7a10183c87
+          path: baseline-eng
+      - name: Checkout non-ENG v0.4 certified baseline
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: 41630b0432ef8299b28c1a20fd877e758dc88f52
+          path: baseline-core
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Build current compatible database schema
+        working-directory: candidate
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$migration" >/dev/null
+          done
+          psql -v ON_ERROR_STOP=1 -f database/seeds/001_core_catalog.sql >/dev/null
+
+      - name: Sync all three analytics environments
+        run: |
+          set -euo pipefail
+          (cd baseline-eng/analytics && uv sync --dev --locked)
+          (cd baseline-core/analytics && uv sync --dev --locked)
+          (cd candidate/analytics && uv sync --dev --locked)
+
+      - name: Acquire and verify official Wyscout source once
+        working-directory: candidate/analytics
+        run: |
+          uv run football-intelligence-probe-wyscout-open \
+            --cache-dir "$WYSCOUT_CACHE" \
+            --report "$RUNNER_TEMP/wyscout-probe.json"
+          uv run football-intelligence-audit-wyscout-core-leagues \
+            --cache-dir "$WYSCOUT_CACHE" \
+            --report "$RUNNER_TEMP/wyscout-core-leagues.json"
+
+      - name: Build heterogeneous certified baseline
+        run: |
+          set -euo pipefail
+          (cd baseline-eng/analytics && uv run python -m football_intelligence.jobs.promote_historical_player_v2 \
+            --competition ENG_PL --cache-dir "$WYSCOUT_CACHE" --database-url "$DATABASE_URL" \
+            --report "$RUNNER_TEMP/baseline-ENG_PL.json")
+          for competition in ESP_LL FRA_L1 GER_BL1 ITA_SA; do
+            (cd baseline-core/analytics && uv run python -m football_intelligence.jobs.promote_historical_player_v2 \
+              --competition "$competition" --cache-dir "$WYSCOUT_CACHE" --database-url "$DATABASE_URL" \
+              --report "$RUNNER_TEMP/baseline-${competition}.json")
+          done
+
+      - name: Assert exact certified baseline fingerprints
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          expected = {
+              'ENG_PL': (422877, 2048, 38737),
+              'ESP_LL': (416407, 2224, 29008),
+              'FRA_L1': (415230, 2148, 28007),
+              'GER_BL1': (336265, 1888, 24786),
+              'ITA_SA': (420506, 2132, 27872),
+          }
+          for comp, values in expected.items():
+              report = json.loads((root / f'baseline-{comp}.json').read_text())
+              observed = (
+                  report['canonical']['source_observations'],
+                  report['player_v2']['score_snapshots'],
+                  report['player_v2']['feature_snapshots'],
+              )
+              assert observed == values, (comp, observed, values)
+          print('HETEROGENEOUS CERTIFIED BASELINE: PASS')
+          PY
+
+      - name: Promote all five scopes to v0.5
+        working-directory: candidate/analytics
+        run: |
+          set -euo pipefail
+          for competition in ENG_PL ESP_LL FRA_L1 GER_BL1 ITA_SA; do
+            uv run python -m football_intelligence.jobs.promote_historical_player_v2 \
+              --competition "$competition" --cache-dir "$WYSCOUT_CACHE" --database-url "$DATABASE_URL" \
+              --report "$RUNNER_TEMP/v05-first-${competition}.json"
+          done
+
+      - name: Assert predecessor recognition and exact v0.5 fingerprints
+        working-directory: candidate/analytics
+        run: |
+          uv run python - <<'PY'
+          import json, os
+          from pathlib import Path
+          import psycopg
+          from football_intelligence.jobs.historical_player_promotion_spec import historical_player_promotion_spec
+          from football_intelligence.jobs.wyscout_historical_scope import scope_config
+
+          root = Path(os.environ['RUNNER_TEMP'])
+          old = {
+              'ENG_PL': (422877, 38737),
+              'ESP_LL': (416407, 29008),
+              'FRA_L1': (415230, 28007),
+              'GER_BL1': (336265, 24786),
+              'ITA_SA': (420506, 27872),
+          }
+          expected = {
+              'ENG_PL': (433126, 2048, 40513),
+              'ESP_LL': (437170, 2224, 43881),
+              'FRA_L1': (435814, 2148, 42300),
+              'GER_BL1': (352942, 1888, 37413),
+              'ITA_SA': (441225, 2132, 41996),
+          }
+          summary = {}
+          for comp, current in expected.items():
+              report = json.loads((root / f'v05-first-{comp}.json').read_text())
+              assert (report['prewrite_state']['source_observations'], report['prewrite_state']['player_v2_feature_rows']) == old[comp], (comp, report['prewrite_state'])
+              observed = (report['canonical']['source_observations'], report['player_v2']['score_snapshots'], report['player_v2']['feature_snapshots'])
+              assert observed == current, (comp, observed, current)
+              spec = historical_player_promotion_spec(comp)
+              assert (spec.source_observations, spec.score_snapshots, spec.feature_snapshots) == current
+              summary[comp] = observed
+
+          with psycopg.connect(os.environ['DATABASE_URL']) as conn:
+              for comp in expected:
+                  config = scope_config(comp)
+                  provider_comp = str(config.scope.provider_competition_id)
+                  with conn.cursor() as cur:
+                      cur.execute("""
+                          SELECT metric_name, count(*)
+                          FROM ingestion.source_observations o
+                          JOIN ingestion.providers p ON p.id = o.provider_id
+                          WHERE p.code = 'wyscout-open'
+                            AND o.entity_identity_hints ->> 'season_label' = '2017/18'
+                            AND o.entity_identity_hints ->> 'competition_external_id' = %s
+                            AND metric_name IN ('long_passes_accurate','passes_into_final_third','progressive_passes')
+                          GROUP BY metric_name
+                      """, (provider_comp,))
+                      counts = dict(cur.fetchall())
+                  assert counts.get('long_passes_accurate', 0) > 0, (comp, counts)
+                  assert counts.get('passes_into_final_third', 0) > 0, (comp, counts)
+                  assert counts.get('progressive_passes', 0) == 0, (comp, counts)
+          (root / 'v05-first-summary.json').write_text(json.dumps(summary, sort_keys=True, indent=2) + '\n')
+          print('V0.5 FIRST PROMOTION + SPATIAL SCOPE CHECKS: PASS')
+          PY
+
+      - name: Promote current v0.5 state again
+        working-directory: candidate/analytics
+        run: |
+          set -euo pipefail
+          for competition in ENG_PL ESP_LL FRA_L1 GER_BL1 ITA_SA; do
+            uv run python -m football_intelligence.jobs.promote_historical_player_v2 \
+              --competition "$competition" --cache-dir "$WYSCOUT_CACHE" --database-url "$DATABASE_URL" \
+              --report "$RUNNER_TEMP/v05-second-${competition}.json"
+          done
+
+      - name: Prove current-state recognition and v0.5 idempotency
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          expected = {
+              'ENG_PL': (433126, 2048, 40513),
+              'ESP_LL': (437170, 2224, 43881),
+              'FRA_L1': (435814, 2148, 42300),
+              'GER_BL1': (352942, 1888, 37413),
+              'ITA_SA': (441225, 2132, 41996),
+          }
+          summary = {}
+          for comp, current in expected.items():
+              report = json.loads((root / f'v05-second-{comp}.json').read_text())
+              assert (report['prewrite_state']['source_observations'], report['prewrite_state']['player_v2_rows'], report['prewrite_state']['player_v2_feature_rows']) == current, (comp, report['prewrite_state'])
+              observed = (report['canonical']['source_observations'], report['player_v2']['score_snapshots'], report['player_v2']['feature_snapshots'])
+              assert observed == current, (comp, observed, current)
+              summary[comp] = observed
+          second = json.dumps(summary, sort_keys=True, indent=2) + '\n'
+          assert (root / 'v05-first-summary.json').read_text() == second
+          (root / 'v05-second-summary.json').write_text(second)
+          print('V0.5 FIVE-LEAGUE PROMOTION IDEMPOTENCY: PASS')
+          PY
+
+      - name: Upload reports only
+        uses: actions/upload-artifact@v7
+        with:
+          name: wyscout-v05-five-league-upgrade-evidence
+          path: |
+            ${{ runner.temp }}/wyscout-probe.json
+            ${{ runner.temp }}/wyscout-core-leagues.json
+            ${{ runner.temp }}/baseline-*.json
+            ${{ runner.temp }}/v05-first-*.json
+            ${{ runner.temp }}/v05-second-*.json
+          retention-days: 7
