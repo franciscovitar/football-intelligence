@@ -20,6 +20,21 @@ jobs:
         with:
           python-version: '3.12'
       - uses: astral-sh/setup-uv@v9.0.0
+      - name: Align temporary applicator with independent comparability pin test
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/tmp_apply_wyscout_v05_core_scopes.py')
+          text = path.read_text(encoding='utf-8')
+          start_marker = '    comp_test = "analytics/tests/test_comparability_policy.py"\n'
+          end_marker = '    promo_test = "analytics/tests/test_promote_historical_player_v2.py"\n'
+          if text.count(start_marker) != 1 or text.count(end_marker) != 1:
+              raise SystemExit('unexpected comparability applicator markers')
+          start = text.index(start_marker)
+          end = text.index(end_marker)
+          replacement = '''    comp_test = "analytics/tests/test_comparability_policy.py"\n    replace_once(\n        comp_test,\n        '_CERTIFIED_WYSCOUT_VERSION = "wyscout-open-v0.4"',\n        '_CERTIFIED_WYSCOUT_VERSION = "wyscout-open-v0.5"',\n    )\n    text = Path(comp_test).read_text(encoding="utf-8")\n    text = text.replace(\n        'semantic_version="wyscout-open-v0.5"',\n        'semantic_version="wyscout-open-v0.6"',\n    )\n    text = text.replace(\n        'wyscout-open-v0.4 + statsbomb-open-v0.4 -> current policies match.',\n        'wyscout-open-v0.5 + statsbomb-open-v0.4 -> current policies match.',\n    )\n    text = text.replace(\n        '# wyscout-open-v0.5 + statsbomb-open-v0.4 (real, certified StatsBomb',\n        '# wyscout-open-v0.6 + statsbomb-open-v0.4 (real, certified StatsBomb',\n    )\n    text = text.replace(\n        '# wyscout-open-v0.4 (real, certified Wyscout side) + statsbomb-open-v0.5',\n        '# wyscout-open-v0.5 (real, certified Wyscout side) + statsbomb-open-v0.5',\n    )\n    text = text.replace(\n        '# wyscout-open-v0.5 + statsbomb-open-v0.5 -> no old policy match.',\n        '# wyscout-open-v0.6 + statsbomb-open-v0.5 -> no old policy match.',\n    )\n    Path(comp_test).write_text(text, encoding="utf-8")\n\n'''
+          path.write_text(text[:start] + replacement + text[end:], encoding='utf-8')
+          PY
       - name: Apply deterministic product patch
         run: python scripts/tmp_apply_wyscout_v05_core_scopes.py
       - name: Validate analytics
