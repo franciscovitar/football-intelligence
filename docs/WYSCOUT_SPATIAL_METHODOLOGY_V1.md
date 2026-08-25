@@ -1,18 +1,25 @@
 # Wyscout Spatial Methodology v1
 
-Status: **specified, not yet promoted to production evidence**
+Status: **specified, under empirical audit, not yet promoted to production evidence**
 
 This document defines the first Football Intelligence spatial methodology for
-Wyscout Open Data. It is intentionally narrow and versioned. Raw Wyscout event
-positions are objective source evidence; every metric produced by the rules
-below is **derived Football Intelligence evidence**, never a provider-native
-observed value.
+Wyscout Open Data. Raw Wyscout event positions are objective source evidence;
+every metric produced by the rules below is **derived Football Intelligence
+evidence**, never a provider-native observed value.
 
-Methodology id: `fi-wyscout-spatial-v1.0`
+Current methodology id: `fi-wyscout-spatial-v1.1`
 
-Initial validation scope: `ENG_PL` 2017/18 only. The exact same rules may be
-reused for `ESP_LL`, `ITA_SA`, `GER_BL1`, and `FRA_L1` only after the England
-audit passes.
+Initial validation scope: `ENG_PL` 2017/18 only. Spain, Italy, Germany and France
+must not inherit the rules until the England gate is closed.
+
+## Version note
+
+`v1.1` refines the unpromoted `v1.0` specification after the first real England
+audit. The audit showed that treating every non-Cross historical pass subtype as
+a potential long-ground pass was too broad. `Hand pass` and `Head pass` are now
+explicitly non-long for this methodology, while `Simple pass` and `Smart pass`
+are the only historical subtypes allowed to become Long Ground from geometry.
+No production observation was emitted under `v1.0`.
 
 ## 1. Evidence and provenance
 
@@ -22,22 +29,25 @@ Primary semantic references:
 - Wyscout Progressive pass: <https://dataglossary.wyscout.com/progressive_pass/>
 - Wyscout Pass into final third: <https://dataglossary.wyscout.com/pass_to_final_third/>
 - Wyscout Long pass: <https://dataglossary.wyscout.com/long_pass/>
+- Wyscout Smart pass: <https://dataglossary.wyscout.com/smart_pass/>
+- Wyscout Cross: <https://dataglossary.wyscout.com/cross/>
+- Wyscout Hand pass: <https://dataglossary.wyscout.com/hand_pass/>
+- Wyscout Head pass: <https://dataglossary.wyscout.com/head_pass/>
+- Historical event/sub-event ids: <https://support.wyscout.com/matches-wyid-events>
 
 Repository-local empirical evidence is recorded in `docs/WYSCOUT_METRIC_MAPPING.md`.
 For ENG_PL 2017/18 it verifies that Wyscout `Pass` events normally contain two
-0-100 `positions` coordinates, with `positions[0]` as the start and
-`positions[1]` as the event endpoint. It also records the small set of invalid
-`(0, 0)` pass endpoints that must not be silently treated as real locations.
+0-100 `positions` coordinates, with `positions[0]` as start and `positions[1]`
+as endpoint. The empirically observed `(0, 0)` endpoint sentinel is not treated
+as a real location.
 
-The current Wyscout glossary states that pitch coordinates are subject-relative:
-the subject's defended goal is always `x=0%` and the attack direction is always
-`x=100%`. Therefore Football Intelligence does **not** flip coordinates by home/
-away team or by period.
+Wyscout pitch coordinates are subject-relative: the defended goal is `x=0%`
+and attack direction is `x=100%`. Football Intelligence therefore does **not**
+flip Wyscout coordinates by home/away side or period.
 
 ## 2. Coordinate system
 
-Wyscout positions are percentages. Spatial v1 maps them to a standard
-`105 m x 68 m` reference pitch:
+Spatial v1 maps percentage coordinates to a `105 m x 68 m` reference pitch:
 
 ```text
 x_m = 105 * x_pct / 100
@@ -45,36 +55,32 @@ y_m =  68 * y_pct / 100
 opponent_goal_center = (105, 34)
 ```
 
-This standardization is a methodology convention. It does not claim that every
-2017/18 venue had exactly 105 x 68 metre playing dimensions. Metric provenance
-must therefore retain `fi-wyscout-spatial-v1.0` rather than presenting the
-result as a provider-native physical measurement.
+This is a Football Intelligence methodology convention, not a claim that every
+2017/18 venue measured exactly 105 x 68 m. Derived outputs retain the
+`fi-wyscout-spatial-v1.1` methodology id.
 
 A coordinate is usable only when:
 
 1. `positions` contains at least two mapping objects;
 2. both points contain numeric `x` and `y` values within `[0, 100]`;
-3. the endpoint is not the empirically verified Wyscout `(0, 0)` no-location
-   sentinel for the event types where that sentinel can occur.
+3. the endpoint is not the empirically verified `(0, 0)` no-location sentinel.
 
-If a required position is unusable, the spatial metric for that event is
-**missing**, not zero. No coordinate imputation is allowed.
+No coordinate imputation is allowed.
 
 ## 3. Pass success
 
-For pass-derived metrics, success is read from Wyscout tag `1801` (`accurate`).
-Tag `1802` means unsuccessful. The repository's empirical mapping has already
-verified that those tags are mutually exclusive and exhaustive for ENG_PL
-2017/18 `Pass` events.
+Pass success comes only from Wyscout tag `1801` (`accurate`). Tag `1802` means
+unsuccessful. The real ENG_PL mapping audit verifies that these tags are
+mutually exclusive and exhaustive for the historical Pass population.
 
-Counts such as `progressive_passes` include attempts regardless of success unless
-the metric name explicitly says `accurate`.
+Counts such as `progressive_passes` include attempts regardless of success
+unless the metric name explicitly says `accurate`.
 
 ## 4. Progressive passes
 
 Canonical FI metric: `progressive_passes` (`player_match`).
 
-For each valid `Pass` event, compute distance to the opponent goal centre:
+For each valid Pass event:
 
 ```text
 start_goal_distance = hypot(105 - start_x_m, 34 - start_y_m)
@@ -83,75 +89,65 @@ goal_distance_gain  = start_goal_distance - end_goal_distance
 ```
 
 A pass is progressive only when it moves closer to the opponent goal and meets
-the Wyscout threshold for the start/end halves:
+the Wyscout threshold:
 
-| Start | End | minimum `goal_distance_gain` |
+| Start | End | minimum gain |
 | --- | --- | ---: |
-| own half (`x < 52.5 m`) | own half (`x < 52.5 m`) | 30 m |
+| own half (`x < 52.5 m`) | own half | 30 m |
 | own half | opponent half (`x >= 52.5 m`) | 15 m |
 | opponent half | opponent half | 10 m |
 | opponent half | own half | never progressive |
 
-This operationalizes Wyscout's documented wording "closer to the opponent's
-goal" as the reduction in Euclidean distance to the goal centre. That geometric
-interpretation is also the established implementation used in the Soccermatics
-teaching reference for the Wyscout definition; it is recorded here explicitly
-so Football Intelligence never relies on an implicit convention.
+`x == 52.5 m` belongs to the opponent half. Threshold comparisons are inclusive.
+If required geometry is unavailable, the player-match value is missing rather
+than silently treating the pass as non-progressive.
 
-Boundary policy is deterministic: `x == 52.5 m` belongs to the opponent half.
-Threshold comparison is inclusive (`>=`).
-
-### Progressive pass distance
-
-`progressive_pass_distance`, if activated after audit, is the sum of
-`goal_distance_gain` across passes that satisfy the progressive-pass rule. It
-is a derived distance workload, not raw path length and not a provider-native
-metric.
+`progressive_pass_distance`, if later activated, is the sum of positive
+`goal_distance_gain` for passes satisfying this rule.
 
 ## 5. Passes into the final third
 
 Canonical FI metric: `passes_into_final_third` (`player_match`).
 
-On a 105 m reference pitch, the attacking final third begins at `x=70 m`
-(`2/3 * 105`, equivalent to `66.666...%` of Wyscout x).
-
-A valid `Pass` counts when:
+The attacking final third starts at `x=70 m` on the reference pitch. A valid
+Pass counts when:
 
 ```text
 start_x_m < 70
 end_x_m   >= 70
 ```
 
-The start must be outside and the endpoint inside the final third. A pass that
-starts inside the final third does not count. Because only `eventName == Pass`
-is considered, Wyscout `Free Kick`/`Throw in` events are excluded, matching the
-current Wyscout glossary's explicit exclusion of throw-ins.
+A pass starting inside the final third does not count. Only `eventName == Pass`
+is considered, so set-play Throw in / Free Kick events are excluded.
 
-This metric counts attempts. A future accurate-final-third metric must
-additionally require tag `1801`; it must not redefine the base count.
+If required geometry is unavailable, the player-match value is missing. The
+methodology does not infer an endpoint from the semantic label `Cross`.
 
 ## 6. Accurate long passes
 
 Priority FI metric: `long_passes_accurate` (`player_match`).
 
-Wyscout's current glossary defines a long pass as:
+Current Wyscout semantics define Long Pass as one of:
 
-- a ground pass longer than 45 m; or
-- a high pass longer than 25 m; and
-- also includes the provider's `Launch` long-pass type.
+- `Launch`;
+- High Pass longer than 25 m;
+- Long Ground Pass longer than 45 m.
 
-Wyscout Open 2017/18 has `Pass` sub-events including `High pass` and `Launch`
-but no dedicated `Long ground pass` sub-event in the empirically observed
-schema. Spatial v1 therefore uses this conservative hybrid rule:
+Historical Open Data exposes Pass subevents `Cross`, `Hand pass`, `Head pass`,
+`High pass`, `Launch`, `Simple pass`, and `Smart pass`, but no independent
+`Long Ground Pass` subtype. Spatial v1.1 therefore uses this conservative rule:
 
-1. `subEventName == "Launch"` -> long pass;
-2. `subEventName == "High pass"` -> long pass only when valid Euclidean path
-   length is greater than 25 m;
-3. any other non-cross `Pass` -> long ground pass only when valid Euclidean
-   path length is greater than 45 m;
-4. `subEventName == "Cross"` is not reclassified as a long pass from geometry
-   alone because Wyscout represents crosses as their own source subtype and
-   the Open Data does not expose a second independent long-pass flag.
+1. `Launch` -> long without requiring geometry;
+2. `High pass` -> long only when valid path length is strictly greater than 25 m;
+3. `Simple pass` -> long ground only when valid path length is strictly greater
+   than 45 m;
+4. `Smart pass` -> long ground only when valid path length is strictly greater
+   than 45 m; Wyscout explicitly states that a Smart pass can be Long Ground;
+5. `Cross`, `Hand pass`, and `Head pass` -> not long under this methodology,
+   regardless of geometric length, because Wyscout models them as distinct pass
+   concepts rather than Long Pass types;
+6. any unknown/unverified historical Pass subtype -> missing for long-pass
+   classification, even if geometry is present.
 
 Path length is:
 
@@ -159,58 +155,53 @@ Path length is:
 pass_length_m = hypot(end_x_m - start_x_m, end_y_m - start_y_m)
 ```
 
-`long_passes_accurate` counts only long passes that also carry tag `1801`.
-The strict `>` comparisons follow the glossary wording "longer than".
-
-Before production promotion the England audit must report the distribution of
-path lengths by `subEventName`, especially `High pass`, `Launch`, and `Cross`,
-to detect any semantic mismatch between the historical Open Data taxonomy and
-the current glossary.
+`long_passes_accurate` counts only classified long passes carrying tag `1801`.
+No percentage is persisted redundantly when raw numerator/denominator evidence
+can be preserved.
 
 ## 7. Missing versus zero
 
-Spatial v1 preserves the project's core semantics:
+Spatial v1 preserves the project guarantees:
 
-- a confirmed participant with valid source coverage and no qualifying event ->
-  real `0` count;
-- an event whose required coordinates are invalid -> that event contributes
-  neither a positive count nor a fabricated zero-valued spatial observation;
-- if source coverage for a player-match cannot establish the metric safely ->
-  `missing`;
-- ratios are emitted only when their denominator is strictly greater than zero.
+- confirmed participant + safely classifiable source + no qualifying event ->
+  real `0`;
+- required geometry unavailable -> missing for geometry-dependent rules;
+- provider subtype semantics insufficient -> missing, not guessed;
+- source events outside the certified canonical participation universe are
+  reported as source-quality exclusions and never attributed;
+- `playerId=0` is a source sentinel, never a real player;
+- ratios are emitted only when the denominator is strictly greater than zero.
 
-No statistical imputation is permitted.
+No statistical or geometric imputation is permitted.
 
-## 8. Metrics deliberately not activated by v1 yet
+## 8. Metrics deliberately not activated yet
 
-The following remain methodology/audit pending even though the coordinates may
-support them:
+The following remain methodology/audit pending:
 
 - `passes_into_box`;
-- `passes_short` / `passes_medium` and their accurate variants;
+- `passes_short` / `passes_medium` and accurate variants;
 - `switches`;
 - `touches_final_third`;
 - `touches_box` / `touches_in_box`;
 - `shot_distance`.
 
-Reason: v1 should validate the highest-impact, best-supported rules first rather
-than turn every spatially plausible field into production evidence at once.
+The goal is to validate high-impact, well-supported rules before expanding the
+surface area.
 
 ## 9. Promotion gate
 
-`fi-wyscout-spatial-v1.0` is ready for production use only after an ENG_PL
-2017/18 audit demonstrates all of the following:
+A metric under `fi-wyscout-spatial-v1.1` is promotable only after the ENG_PL
+2017/18 audit demonstrates, for that metric:
 
-1. valid/invalid coordinate coverage by event and metric;
-2. player and player-match coverage;
-3. distribution, percentiles, and extreme values;
-4. zero-versus-missing behavior;
-5. cross-checks against known event/sub-event/tag invariants;
-6. no impossible negative counts or ratios;
-7. impact on Player V2 evidence states and dimensions;
-8. historical promotion invariants updated only from observed outputs, never
-   guessed in advance.
+1. valid/invalid source coverage with correct denominators;
+2. player-match and player-season readiness;
+3. plausible distributions and extremes;
+4. preserved zero-versus-missing behavior;
+5. passing source/tag invariants;
+6. no impossible count relationships;
+7. explicit taxonomy coverage with unknown subtypes remaining missing;
+8. quantified Player V2 input-readiness impact.
 
-Only after England passes may the exact same methodology id and rules be applied
-to Spain, Italy, Germany, and France. Any rule change requires a new methodology
-version.
+Promotion is **per metric**, not all-or-nothing. A metric with sufficient exact
+evidence may advance while another spatial metric remains blocked. England must
+close first; any rule change after promotion requires a new methodology version.
