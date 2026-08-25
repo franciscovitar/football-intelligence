@@ -1,6 +1,6 @@
 """Versioned spatial primitives for historical Wyscout Open Data.
 
-The rules here implement ``fi-wyscout-spatial-v1.1``. A helper existing in
+The rules here implement ``fi-wyscout-spatial-v1.2``. A helper existing in
 this module does not by itself make a metric production evidence: promotion is
 controlled independently by the Wyscout metric mapping and adapter emission.
 """
@@ -11,7 +11,7 @@ import math
 from dataclasses import dataclass
 from typing import Any, Literal
 
-METHODOLOGY_ID = "fi-wyscout-spatial-v1.1"
+METHODOLOGY_ID = "fi-wyscout-spatial-v1.2"
 PITCH_LENGTH_M = 105.0
 PITCH_WIDTH_M = 68.0
 HALFWAY_X_M = PITCH_LENGTH_M / 2.0
@@ -44,6 +44,7 @@ class CoordinateParseResult:
 
 
 LongPassClassification = Literal["long", "not_long", "ambiguous"]
+FinalThirdClassification = Literal["into_final_third", "not_into_final_third", "ambiguous"]
 
 
 def parse_pass_coordinates(event: dict[str, Any]) -> CoordinateParseResult:
@@ -97,6 +98,32 @@ def progressive_goal_distance_gain(start: PitchPoint, end: PitchPoint) -> float:
 
 def is_pass_into_final_third(start: PitchPoint, end: PitchPoint) -> bool:
     return start.x_m < FINAL_THIRD_X_M and end.x_m >= FINAL_THIRD_X_M
+
+
+def classify_pass_into_final_third(
+    coordinates: CoordinateParseResult,
+) -> FinalThirdClassification:
+    """Classify only when source evidence makes final-third entry exact.
+
+    Wyscout defines the metric as a pass that originates outside the final
+    third and whose next touch occurs inside it. Therefore a pass already
+    starting inside the final third is an exact negative even when its
+    endpoint is unavailable. Missing endpoints for starts outside the final
+    third remain ambiguous; no endpoint is reconstructed or imputed.
+    """
+
+    start = coordinates.start
+    if start is None:
+        return "ambiguous"
+    if start.x_m >= FINAL_THIRD_X_M:
+        return "not_into_final_third"
+    if not coordinates.valid or coordinates.end is None:
+        return "ambiguous"
+    return (
+        "into_final_third"
+        if is_pass_into_final_third(start, coordinates.end)
+        else "not_into_final_third"
+    )
 
 
 def pass_length_m(start: PitchPoint, end: PitchPoint) -> float:

@@ -587,7 +587,8 @@ class ProviderRepository:
                 passes_total, passes_accurate, key_passes, tackles, blocks,
                 interceptions, clearances, dribbles_attempted, dribbles_successful,
                 duels_total, duels_won, aerial_duels, aerial_duels_won,
-                long_passes_accurate, fouls_drawn, fouls_committed, yellow_cards, red_cards, saves
+                long_passes_accurate, passes_into_final_third, fouls_drawn,
+                fouls_committed, yellow_cards, red_cards, saves
             )
             values (
                 %(match_id)s, %(player_id)s, %(goals)s, %(assists)s,
@@ -596,7 +597,8 @@ class ProviderRepository:
                 %(interceptions)s, %(clearances)s, %(dribbles_attempted)s,
                 %(dribbles_successful)s, %(duels_total)s, %(duels_won)s,
                 %(aerial_duels)s, %(aerial_duels_won)s, %(long_passes_accurate)s,
-                %(fouls_drawn)s, %(fouls_committed)s, %(yellow_cards)s, %(red_cards)s, %(saves)s
+                %(passes_into_final_third)s, %(fouls_drawn)s, %(fouls_committed)s,
+                %(yellow_cards)s, %(red_cards)s, %(saves)s
             )
             on conflict (match_id, player_id) do update
             set
@@ -618,6 +620,7 @@ class ProviderRepository:
                 aerial_duels = excluded.aerial_duels,
                 aerial_duels_won = excluded.aerial_duels_won,
                 long_passes_accurate = excluded.long_passes_accurate,
+                passes_into_final_third = excluded.passes_into_final_third,
                 fouls_drawn = excluded.fouls_drawn,
                 fouls_committed = excluded.fouls_committed,
                 yellow_cards = excluded.yellow_cards,

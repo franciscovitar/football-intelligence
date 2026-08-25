@@ -285,16 +285,16 @@ def test_classification_totals_match_final_accounting(
 
 
 def test_derivable_ready_and_pending_totals_match_final_accounting() -> None:
-    assert len(derivable_ready_mappings()) == 35
-    assert len(derivable_methodology_pending_mappings()) == 32
+    assert len(derivable_ready_mappings()) == 36
+    assert len(derivable_methodology_pending_mappings()) == 31
     assert len(derivable_ready_mappings()) + len(derivable_methodology_pending_mappings()) == len(
         mappings_by_classification("DERIVABLE")
     )
 
 
-def test_adapter_safe_subset_totals_78() -> None:
+def test_adapter_safe_subset_totals_79() -> None:
     safe = adapter_safe_mappings()
-    assert len(safe) == 78
+    assert len(safe) == 79
     assert all(m.classification == "DIRECT" or not m.methodology_pending for m in safe)
     assert all(m.classification in {"DIRECT", "DERIVABLE"} for m in safe)
 

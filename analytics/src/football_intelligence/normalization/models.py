@@ -107,6 +107,7 @@ class PlayerMatchStatsRecord:
     aerial_duels: int | None = None
     aerial_duels_won: int | None = None
     long_passes_accurate: int | None = None
+    passes_into_final_third: int | None = None
 
 
 @dataclass(frozen=True)

@@ -49,7 +49,7 @@ An adapter's `SEMANTIC_VERSION` bump (e.g. Wyscout `v0.1 -> v0.2`, Block
 20D.2's micro-audit pass) means observable emission semantics changed. A
 comparability policy reviewed against `wyscout-open-v0.2`/
 `statsbomb-open-v0.4`'s real output says nothing about whether a future
-`wyscout-open-v0.4` still agrees the same way -- so every entry is keyed on
+`wyscout-open-v0.5` still agrees the same way -- so every entry is keyed on
 the exact semantic versions its evidence was gathered against.
 
 **Those versions are pinned LITERAL string constants
@@ -103,14 +103,15 @@ ComparisonMode = Literal["exact", "not_comparable", "methodology_pending"]
 # docstring ("Why this is ALSO scoped by each source's semantic_version")
 # for why a live import here would be exactly backwards. Only an explicit,
 # reviewed future re-certification may change these two lines.
-# v0.3 was explicitly re-certified on 2026-08-25 by running v0.2 and v0.3
+# v0.4 was explicitly re-certified on 2026-08-25 by running v0.3 and v0.4
 # over the complete real ESP_LL 2017/18 Wyscout source. All 416,407
 # NormalizedObservation rows were identical field-by-field except semantic_version
 # (canonical SHA-256: 29b23d96326fb82b94e6529ad951e4c1b3812d0617fff79a5d34d23bc2763eb5).
-# The new long_passes_accurate identity is scope-gated to ENG_PL and emitted zero
-# observations in ESP_LL, so the reviewed provider-pair policies remain
-# observationally valid for v0.3 rather than being assumed so.
-WYSCOUT_CERTIFIED_POLICY_VERSION = "wyscout-open-v0.3"
+# Both ENG_PL-only spatial identities (long_passes_accurate and
+# passes_into_final_third) emitted zero observations in ESP_LL, so the reviewed
+# provider-pair policies remain observationally valid for v0.4 rather than being
+# assumed so.
+WYSCOUT_CERTIFIED_POLICY_VERSION = "wyscout-open-v0.4"
 STATSBOMB_CERTIFIED_POLICY_VERSION = "statsbomb-open-v0.4"
 
 

@@ -18,9 +18,10 @@ This is **not current-season evidence** and must never be presented as such.
 
 Verified on 2026-08-22 in an ephemeral GitHub Actions runner with PostgreSQL 17. The runtime used only the public Wyscout source and a temporary local database; no production/Neon database was accessed or written.
 
-The counts below are the observed `wyscout-open-v0.2` baseline from that
-runtime. The later v0.3 long-pass promotion deliberately requires a fresh
-post-promotion runtime before replacing these historical counts.
+The first block below preserves the observed `wyscout-open-v0.2` baseline for
+historical traceability. A later 2026-08-25 post-promotion runtime separately
+verified the current v0.4 adapter and Player V2 path; those current counts are
+recorded immediately after the baseline rather than rewriting history.
 
 Observed first-load invariants:
 
@@ -34,6 +35,24 @@ Observed first-load invariants:
 - zero Player V2 score/feature snapshots were published.
 
 Full-load idempotency was then verified by executing the same loader a second time against the same temporary database. All scoped counts remained identical, `football.teams` remained at 20 rows, Wyscout team-provider mappings remained at 20, and all 20 teams were recognized as already linked. Runtime evidence: GitHub Actions run `32596409687`.
+
+Current v0.4 post-promotion verification (2026-08-25, ephemeral PostgreSQL 17):
+
+- historical load: 380 matches, 20 teams, 515 participating players — PASS;
+- 10,443 `player_appearances` and 10,443 `player_match_stats` rows;
+- 433,126 Data Mesh `source_observations`;
+- `long_passes_accurate`: 10,268 known player-match rows, 175 missing;
+- `passes_into_final_third`: 10,249 known player-match rows, 194 missing;
+- exact Player V2 season features: 384 `long_passes_accurate`, 377 `passes_into_final_third`;
+- Passing dimension: 231 partial, 281 insufficient-data, 0 ready/scored;
+- `progressive_passes` remained absent;
+- repeated Player V2 calculation produced byte-identical reports — PASS.
+
+A separate ESP_LL 2017/18 recertification compared `wyscout-open-v0.3` and
+`wyscout-open-v0.4` over all 416,407 observations and found every field identical
+except `semantic_version`; both ENG-only spatial metrics emitted zero observations
+in Spain. Canonical payload SHA-256 remained
+`29b23d96326fb82b94e6529ad951e4c1b3812d0617fff79a5d34d23bc2763eb5`.
 
 ## Command
 
@@ -59,7 +78,7 @@ Before opening PostgreSQL the loader:
 
 1. runs the existing official Wyscout source probe and requires the published counts to reproduce;
 2. loads the same cached payloads used by the certified adapter audit;
-3. runs the current certified Wyscout adapter (`wyscout-open-v0.3` after the spatial v1.1 promotion);
+3. runs the current certified Wyscout adapter (`wyscout-open-v0.4` after the spatial v1.2 final-third promotion);
 4. requires every adapter audit check to pass;
 5. normalizes only the explicit subset supported by the existing canonical `football.*` schema.
 

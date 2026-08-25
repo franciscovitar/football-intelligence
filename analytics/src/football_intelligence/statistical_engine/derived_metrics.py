@@ -15,7 +15,9 @@ FORMULA_VERSION = "derived-v2.0"
 # Exact spatial counts must never be published for a multi-match window when
 # even one contributing match is missing. Keep this list metric-specific so
 # the promotion does not silently change existing provider semantics.
-_COMPLETE_OBSERVATION_REQUIRED_RAW_METRICS = frozenset({"long_passes_accurate"})
+_COMPLETE_OBSERVATION_REQUIRED_RAW_METRICS = frozenset(
+    {"long_passes_accurate", "passes_into_final_third"}
+)
 
 
 @dataclass(frozen=True, slots=True)

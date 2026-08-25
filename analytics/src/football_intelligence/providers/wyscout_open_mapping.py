@@ -603,9 +603,16 @@ _CREATION_MAPPINGS: tuple[WyscoutMetricMapping, ...] = (
         "passes_into_final_third",
         "player_match",
         "DERIVABLE",
-        "eventName=Pass, spatial rule over positions[0]/positions[1]",
-        "Methodology pending -- see 'Spatial metrics'.",
-        methodology_pending=True,
+        "fi-wyscout-spatial-v1.2 final-third exact classification",
+        "Promoted after the real ENG_PL 2017/18 audit. Valid geometry uses "
+        "the observed start/end boundary rule; an unavailable endpoint is an "
+        "exact non-qualifier only when the observed start is already inside "
+        "the final third. Starts outside with unavailable endpoint stay missing.",
+        caveats=(
+            "Promotion is deliberately metric- and scope-specific: only ENG_PL "
+            "2017/18 is audited for emission. No endpoint reconstruction, "
+            "missing-to-zero coercion, or progressive-pass activation is implied."
+        ),
     ),
     _mapping(
         "through_balls",
@@ -747,8 +754,8 @@ _PASSING_MAPPINGS: tuple[WyscoutMetricMapping, ...] = (
         caveats=(
             "Promotion is deliberately metric- and scope-specific: only ENG_PL 2017/18 "
             "is currently audited for emission. Other Wyscout core-league scopes remain "
-            "suppressed until their own audit passes. progressive_passes and "
-            "passes_into_final_third remain methodology/audit blocked and are not emitted."
+            "suppressed until their own audit passes. progressive_passes remains "
+            "methodology/audit blocked and is not emitted."
         ),
     ),
     _mapping(

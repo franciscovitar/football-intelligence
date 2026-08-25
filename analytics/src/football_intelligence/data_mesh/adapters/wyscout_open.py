@@ -2,8 +2,8 @@
 
 Historical/deep role only (see `docs/BLOCK20_MULTI_SOURCE.md`) -- this
 adapter is never a current-season feed. It emits observations **only** for
-the 78-identity adapter-safe subset (`adapter_safe_mappings()` in
-`providers.wyscout_open_mapping`: the 43 DIRECT + 35 DERIVABLE_READY Metric
+the 79-identity adapter-safe subset (`adapter_safe_mappings()` in
+`providers.wyscout_open_mapping`: the 43 DIRECT + 36 DERIVABLE_READY Metric
 Catalog V2 identities Block 20B.2a verified against the real cached ENG_PL
 2017/18 source). Every derivation below matches the exact primitive that
 module documents; nothing here is guessed from memory or invented beyond
@@ -64,6 +64,7 @@ from football_intelligence.providers.wyscout_open_mapping import adapter_safe_ma
 from football_intelligence.providers.wyscout_open_text import repair_wyscout_double_escaped_unicode
 from football_intelligence.providers.wyscout_spatial_v1 import (
     classify_long_pass,
+    classify_pass_into_final_third,
     is_accurate,
     parse_pass_coordinates,
 )
@@ -80,7 +81,7 @@ SOURCE_TYPE: SourceType = "objective_structured"
 # `player_external_id`/`player_name`, `home_team_*`/`away_team_*`,
 # `kickoff_date`). Old and new observations must not share a provenance
 # version.
-SEMANTIC_VERSION = "wyscout-open-v0.3"
+SEMANTIC_VERSION = "wyscout-open-v0.4"
 COMPETITION_CODE = "ENG_PL"
 SEASON_LABEL = "2017/18"
 
@@ -146,10 +147,10 @@ _SCOPE_FILE_LABELS: dict[str, str] = {
     "ITA_SA": "Italy",
 }
 
-# Spatial v1.1 has completed its real-source promotion audit only for
+# Spatial v1.2 has completed its real-source promotion audit only for
 # England 2017/18. Other otherwise-certified Wyscout league scopes must
-# keep this metric absent until their own audit closes the same gate.
-_SPATIAL_V1_1_VALIDATED_SCOPES = frozenset({("ENG_PL", "2017/18")})
+# keep spatial-v1.2 metrics absent until their own audit closes the same gate.
+_SPATIAL_V1_2_VALIDATED_SCOPES = frozenset({("ENG_PL", "2017/18")})
 
 
 def _source_file_label(scope: AdapterScope) -> str:
@@ -291,6 +292,7 @@ _EMITTED_IDENTITIES: frozenset[tuple[str, str]] = frozenset(
         ("passes_accurate", "player_match"),
         ("pass_completion_pct", "player_match"),
         ("long_passes_accurate", "player_match"),
+        ("passes_into_final_third", "player_match"),
         ("assists", "player_match"),
         ("key_passes", "player_match"),
         ("chances_created", "player_match"),
@@ -710,6 +712,38 @@ def _accumulate_long_pass_accurate(
         elif classification == "long" and is_accurate(event):
             accurate_long[pair] += 1
     return accurate_long, frozenset(ambiguous)
+
+
+def _accumulate_passes_into_final_third(
+    events_payload: list[Any],
+) -> tuple[dict[tuple[int, int], int], frozenset[tuple[int, int]]]:
+    """Return exact final-third counts plus unknown player-matches.
+
+    An observed start already inside the final third is an exact negative
+    even when the endpoint is unavailable. Missing endpoints for starts
+    outside the final third remain ambiguous for only this metric.
+    """
+
+    counts: dict[tuple[int, int], int] = defaultdict(int)
+    ambiguous: set[tuple[int, int]] = set()
+    for event in events_payload:
+        if not isinstance(event, dict) or event.get("eventName") != "Pass":
+            continue
+        match_id = event.get("matchId")
+        player_id = event.get("playerId")
+        if (
+            not isinstance(match_id, int)
+            or not isinstance(player_id, int)
+            or player_id == _SENTINEL_PLAYER_ID
+        ):
+            continue
+        pair = (match_id, player_id)
+        classification = classify_pass_into_final_third(parse_pass_coordinates(event))
+        if classification == "ambiguous":
+            ambiguous.add(pair)
+        elif classification == "into_final_third":
+            counts[pair] += 1
+    return counts, frozenset(ambiguous)
 
 
 def _observation(
@@ -1246,6 +1280,7 @@ def _emit_player_match_metrics(
     player_id: int,
     counts: _ZeroDict,
     long_passes_accurate: int | None,
+    passes_into_final_third: int | None,
     observed_at: datetime,
     reference: str,
     hints: dict[str, str],
@@ -1272,6 +1307,8 @@ def _emit_player_match_metrics(
         emit(metric_name, counts[metric_name])
     if long_passes_accurate is not None:
         emit("long_passes_accurate", long_passes_accurate)
+    if passes_into_final_third is not None:
+        emit("passes_into_final_third", passes_into_final_third)
 
     goals = counts["goals"]
     assists = counts["assists"]
@@ -1313,9 +1350,9 @@ def parse_player_match_observations(
     scope: AdapterScope = DEFAULT_SCOPE,
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
-    """Up to 39 player_match identities in the adapter-safe subset.
-    `long_passes_accurate` is emitted only for spatial-v1.1-audited scopes;
-    currently that is ENG_PL 2017/18. `players_payload` (the official
+    """Up to 40 player_match identities in the adapter-safe subset.
+    Spatial-v1.2 metrics are emitted only for audited scopes; currently that
+    is ENG_PL 2017/18. `players_payload` (the official
     `players.json` reference file) is optional -- when supplied, hints carry
     real `player_name` identity. `scope` (Block 20D.3): see
     `parse_match_observations`."""
@@ -1325,14 +1362,16 @@ def parse_player_match_observations(
     player_names = _player_names_by_id(players_payload or [])
 
     counts_by_match_player, _launches = _accumulate_player_match_events(events_payload)
-    spatial_v1_1_enabled = (
+    spatial_v1_2_enabled = (
         scope.canonical_competition_code,
         scope.season_label,
-    ) in _SPATIAL_V1_1_VALIDATED_SCOPES
-    if spatial_v1_1_enabled:
+    ) in _SPATIAL_V1_2_VALIDATED_SCOPES
+    if spatial_v1_2_enabled:
         accurate_long, ambiguous_long = _accumulate_long_pass_accurate(events_payload)
+        final_third, ambiguous_final_third = _accumulate_passes_into_final_third(events_payload)
     else:
         accurate_long, ambiguous_long = {}, frozenset()
+        final_third, ambiguous_final_third = {}, frozenset()
 
     for match in matches_payload:
         if not isinstance(match, dict):
@@ -1350,8 +1389,13 @@ def parse_player_match_observations(
             counts = counts_by_match_player.get(pair, _new_counts())
             long_passes_accurate = (
                 None
-                if not spatial_v1_1_enabled or pair in ambiguous_long
+                if not spatial_v1_2_enabled or pair in ambiguous_long
                 else accurate_long.get(pair, 0)
+            )
+            passes_into_final_third = (
+                None
+                if not spatial_v1_2_enabled or pair in ambiguous_final_third
+                else final_third.get(pair, 0)
             )
             hints = _player_scoped_hints(info, roster, player_id, player_names, scope)
             _emit_player_match_metrics(
@@ -1361,6 +1405,7 @@ def parse_player_match_observations(
                 player_id=player_id,
                 counts=counts,
                 long_passes_accurate=long_passes_accurate,
+                passes_into_final_third=passes_into_final_third,
                 observed_at=observed_at,
                 reference=reference,
                 hints=hints,
