@@ -46,10 +46,10 @@ jobs:
         with:
           ref: 32f010378a3dc42248dbad6816809d7a10183c87
           path: baseline-eng
-      - name: Checkout non-ENG v0.4 certified baseline
+      - name: Checkout non-ENG pre-spatial certified baseline
         uses: actions/checkout@v6.0.2
         with:
-          ref: 41630b0432ef8299b28c1a20fd877e758dc88f52
+          ref: 9af9c2e1532b37b17e4316be4061f0ee82e1863f
           path: baseline-core
       - uses: actions/setup-python@v6.2.0
         with:
