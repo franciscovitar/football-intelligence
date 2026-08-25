@@ -86,13 +86,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          source_obs=$(psql -Atqc "select count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout_open' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364';")
+          source_obs=$(psql -Atqc "select count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout-open' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364';")
           scores=$(psql -Atqc "select count(*) from analytics.player_score_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0';")
           features=$(psql -Atqc "select count(*) from analytics.player_feature_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0';")
+          echo "Observed baseline: source_observations=$source_obs scores=$scores features=$features"
           test "$source_obs" = "412609"
           test "$scores" = "2048"
           test "$features" = "26841"
-          echo "CERTIFIED V0.2 FINGERPRINT: PASS source_observations=$source_obs scores=$scores features=$features"
+          echo "CERTIFIED V0.2 FINGERPRINT: PASS"
 
       - name: Apply only v0.3 schema migrations
         working-directory: candidate
@@ -155,7 +156,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          psql -At -F '|' -c "select 'source_observations', count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout_open' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364' union all select 'long_passes_accurate', count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout_open' and o.metric_name='long_passes_accurate' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364' union all select 'scores', count(*) from analytics.player_score_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0' union all select 'features', count(*) from analytics.player_feature_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0';" | sort > "$RUNNER_TEMP/fingerprint-v03-first.txt"
+          psql -At -F '|' -c "select 'source_observations', count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout-open' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364' union all select 'long_passes_accurate', count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout-open' and o.metric_name='long_passes_accurate' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364' union all select 'scores', count(*) from analytics.player_score_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0' union all select 'features', count(*) from analytics.player_feature_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0';" | sort > "$RUNNER_TEMP/fingerprint-v03-first.txt"
           cat "$RUNNER_TEMP/fingerprint-v03-first.txt"
 
       - name: Promote current v0.3 state again
@@ -196,7 +197,7 @@ jobs:
           assert report["player_v2"]["feature_snapshots"] == 38737, report["player_v2"]
           print("CURRENT V0.3 PREWRITE RECOGNITION: PASS")
           PY
-          psql -At -F '|' -c "select 'source_observations', count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout_open' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364' union all select 'long_passes_accurate', count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout_open' and o.metric_name='long_passes_accurate' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364' union all select 'scores', count(*) from analytics.player_score_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0' union all select 'features', count(*) from analytics.player_feature_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0';" | sort > "$RUNNER_TEMP/fingerprint-v03-second.txt"
+          psql -At -F '|' -c "select 'source_observations', count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout-open' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364' union all select 'long_passes_accurate', count(*) from ingestion.source_observations o join ingestion.providers p on p.id=o.provider_id where p.code='wyscout-open' and o.metric_name='long_passes_accurate' and o.entity_identity_hints ->> 'season_label'='2017/18' and o.entity_identity_hints ->> 'competition_external_id'='364' union all select 'scores', count(*) from analytics.player_score_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0' union all select 'features', count(*) from analytics.player_feature_snapshots where scope_key='competition:ENG_PL:2017/18' and model_version='player-v2.0';" | sort > "$RUNNER_TEMP/fingerprint-v03-second.txt"
           cmp "$RUNNER_TEMP/fingerprint-v03-first.txt" "$RUNNER_TEMP/fingerprint-v03-second.txt"
           cat "$RUNNER_TEMP/fingerprint-v03-second.txt"
           echo "V0.3 PROMOTION IDEMPOTENCY: PASS"
