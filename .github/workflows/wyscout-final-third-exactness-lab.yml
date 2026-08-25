@@ -1,0 +1,53 @@
+name: Wyscout Final Third Exactness Lab
+
+on:
+  push:
+    branches:
+      - lab/wyscout-final-third-exactness
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.13'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+
+      - name: Fetch and verify official Wyscout Open source
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-probe-wyscout-open \
+            --cache-dir "$RUNNER_TEMP/wyscout-cache" \
+            --report "$RUNNER_TEMP/wyscout-probe.json"
+
+      - name: Audit final-third exactness
+        working-directory: analytics
+        run: |
+          uv run python -m football_intelligence.jobs.audit_wyscout_final_third_exactness \
+            --cache-dir "$RUNNER_TEMP/wyscout-cache" \
+            --report "$RUNNER_TEMP/wyscout-final-third-exactness.json"
+
+      - name: Upload reports only
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: wyscout-final-third-exactness
+          path: |
+            ${{ runner.temp }}/wyscout-probe.json
+            ${{ runner.temp }}/wyscout-final-third-exactness.json
+          retention-days: 7
