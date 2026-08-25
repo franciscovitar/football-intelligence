@@ -146,6 +146,11 @@ _SCOPE_FILE_LABELS: dict[str, str] = {
     "ITA_SA": "Italy",
 }
 
+# Spatial v1.1 has completed its real-source promotion audit only for
+# England 2017/18. Other otherwise-certified Wyscout league scopes must
+# keep this metric absent until their own audit closes the same gate.
+_SPATIAL_V1_1_VALIDATED_SCOPES = frozenset({("ENG_PL", "2017/18")})
+
 
 def _source_file_label(scope: AdapterScope) -> str:
     label = _SCOPE_FILE_LABELS.get(scope.canonical_competition_code)
@@ -1308,17 +1313,26 @@ def parse_player_match_observations(
     scope: AdapterScope = DEFAULT_SCOPE,
     ingestion_run_id: int | None = None,
 ) -> list[NormalizedObservation]:
-    """The 39 player_match identities in the adapter-safe subset.
-    `players_payload` (the official `players.json` reference file) is
-    optional -- when supplied, hints carry real `player_name` identity.
-    `scope` (Block 20D.3): see `parse_match_observations`."""
+    """Up to 39 player_match identities in the adapter-safe subset.
+    `long_passes_accurate` is emitted only for spatial-v1.1-audited scopes;
+    currently that is ENG_PL 2017/18. `players_payload` (the official
+    `players.json` reference file) is optional -- when supplied, hints carry
+    real `player_name` identity. `scope` (Block 20D.3): see
+    `parse_match_observations`."""
 
     observations: list[NormalizedObservation] = []
     seen: dict[tuple[str, EntityType, str, str, MetricGranularity], Any] = {}
     player_names = _player_names_by_id(players_payload or [])
 
     counts_by_match_player, _launches = _accumulate_player_match_events(events_payload)
-    accurate_long, ambiguous_long = _accumulate_long_pass_accurate(events_payload)
+    spatial_v1_1_enabled = (
+        scope.canonical_competition_code,
+        scope.season_label,
+    ) in _SPATIAL_V1_1_VALIDATED_SCOPES
+    if spatial_v1_1_enabled:
+        accurate_long, ambiguous_long = _accumulate_long_pass_accurate(events_payload)
+    else:
+        accurate_long, ambiguous_long = {}, frozenset()
 
     for match in matches_payload:
         if not isinstance(match, dict):
@@ -1334,7 +1348,11 @@ def parse_player_match_observations(
         for player_id in roster.participating_players():
             pair = (info.match_id, player_id)
             counts = counts_by_match_player.get(pair, _new_counts())
-            long_passes_accurate = None if pair in ambiguous_long else accurate_long.get(pair, 0)
+            long_passes_accurate = (
+                None
+                if not spatial_v1_1_enabled or pair in ambiguous_long
+                else accurate_long.get(pair, 0)
+            )
             hints = _player_scoped_hints(info, roster, player_id, player_names, scope)
             _emit_player_match_metrics(
                 observations,

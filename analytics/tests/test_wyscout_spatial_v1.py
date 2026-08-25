@@ -60,9 +60,7 @@ def test_long_pass_missing_semantics_do_not_impute_geometry() -> None:
 
 
 def test_zero_zero_endpoint_is_missing_not_a_real_location() -> None:
-    parsed = parse_pass_coordinates(
-        {"positions": [{"x": 25, "y": 50}, {"x": 0, "y": 0}]}
-    )
+    parsed = parse_pass_coordinates({"positions": [{"x": 25, "y": 50}, {"x": 0, "y": 0}]})
     assert not parsed.valid
     assert parsed.start is not None
     assert parsed.end is None

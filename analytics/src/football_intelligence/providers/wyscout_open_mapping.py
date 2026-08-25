@@ -745,7 +745,9 @@ _PASSING_MAPPINGS: tuple[WyscoutMetricMapping, ...] = (
         "Simple/Smart pass >45 m; Cross/Hand/Head explicitly non-long; unknown or "
         "geometry-dependent unclassifiable events remain missing.",
         caveats=(
-            "Promotion is deliberately metric-specific. progressive_passes and "
+            "Promotion is deliberately metric- and scope-specific: only ENG_PL 2017/18 "
+            "is currently audited for emission. Other Wyscout core-league scopes remain "
+            "suppressed until their own audit passes. progressive_passes and "
             "passes_into_final_third remain methodology/audit blocked and are not emitted."
         ),
     ),

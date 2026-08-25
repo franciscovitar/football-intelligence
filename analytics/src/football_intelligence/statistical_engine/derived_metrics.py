@@ -12,6 +12,11 @@ from dataclasses import dataclass
 
 FORMULA_VERSION = "derived-v2.0"
 
+# Exact spatial counts must never be published for a multi-match window when
+# even one contributing match is missing. Keep this list metric-specific so
+# the promotion does not silently change existing provider semantics.
+_COMPLETE_OBSERVATION_REQUIRED_RAW_METRICS = frozenset({"long_passes_accurate"})
+
 
 @dataclass(frozen=True, slots=True)
 class DerivedFormula:
@@ -215,6 +220,10 @@ def derive_available_metrics(
     available = dict(values)
     versions: dict[str, str] = {}
     counts = dict(observed_counts or {})
+    if observed_counts is not None and required_observations is not None:
+        for metric_name in _COMPLETE_OBSERVATION_REQUIRED_RAW_METRICS:
+            if metric_name in available and counts.get(metric_name) != required_observations:
+                available.pop(metric_name)
     for formula in DERIVED_FORMULAS:
         is_team_formula = formula.metric_name.startswith("team.")
         if is_team_formula != team:

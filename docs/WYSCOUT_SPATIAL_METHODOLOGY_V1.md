@@ -171,10 +171,12 @@ A confirmed participant with fully classifiable Pass evidence and no qualifying
 accurate long pass receives a real zero. If any geometry-dependent or unknown
 Pass cannot be classified safely, this metric is missing for that player-match.
 
-**Production state:** promoted. The ENG_PL 2017/18 real-source audit produced
-97%+ exact player-match coverage and 74.5631% exact player-season coverage after
-v1.1's taxonomy refinement, with no unknown historical Pass subtype. Promotion
-is therefore metric-specific; it does not activate the other spatial rules.
+**Production state:** promoted for ENG_PL 2017/18 only. The real-source audit
+produced 97%+ exact player-match coverage and 74.5631% exact player-season
+coverage after v1.1's taxonomy refinement, with no unknown historical Pass
+subtype. The adapter suppresses this metric for Spain, Italy, Germany and France
+until each scope passes its own audit. Promotion is therefore metric- and
+scope-specific; it does not activate the other spatial rules.
 
 ## 7. Missing versus zero
 
