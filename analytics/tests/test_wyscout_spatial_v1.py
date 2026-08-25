@@ -56,7 +56,8 @@ def test_long_pass_thresholds_are_strict() -> None:
 def test_explicit_non_long_subtypes_never_inherit_ground_distance_rule() -> None:
     very_long = _valid_coordinates(0.0, 100.0)
     for sub_event_name in ("Cross", "Hand pass", "Head pass"):
-        assert classify_long_pass(sub_event_name=sub_event_name, coordinates=very_long) == "not_long"
+        result = classify_long_pass(sub_event_name=sub_event_name, coordinates=very_long)
+        assert result == "not_long"
 
 
 def test_launch_and_explicit_non_long_subtypes_are_classifiable_without_geometry() -> None:
@@ -73,10 +74,13 @@ def test_geometry_dependent_and_unknown_long_subtypes_preserve_missing() -> None
     assert classify_long_pass(sub_event_name="Simple pass", coordinates=invalid) == "ambiguous"
     assert classify_long_pass(sub_event_name="Smart pass", coordinates=invalid) == "ambiguous"
     assert classify_long_pass(sub_event_name="Unknown pass", coordinates=invalid) == "ambiguous"
-    assert classify_long_pass(
-        sub_event_name="Unknown pass",
-        coordinates=_valid_coordinates(0.0, 100.0),
-    ) == "ambiguous"
+    assert (
+        classify_long_pass(
+            sub_event_name="Unknown pass",
+            coordinates=_valid_coordinates(0.0, 100.0),
+        )
+        == "ambiguous"
+    )
 
 
 def test_zero_zero_endpoint_is_missing_not_a_real_location() -> None:
