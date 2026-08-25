@@ -1,0 +1,56 @@
+name: Temporary Wikidata Mypy Fix
+
+on:
+  push:
+    branches:
+      - fix/wikidata-bounded-collection-resilience
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Sync analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+      - name: Apply exact mypy fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('analytics/src/football_intelligence/jobs/collect_wikidata_profiles.py')
+          text = path.read_text(encoding='utf-8')
+          old = '    exponential = DEFAULT_RETRY_DELAY_SECONDS * (2 ** (attempt - 1))\n'
+          new = '''    exponential = DEFAULT_RETRY_DELAY_SECONDS\n    for _ in range(attempt - 1):\n        exponential *= 2.0\n'''
+          if new not in text:
+              assert old in text
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Format and verify
+        working-directory: analytics
+        run: |
+          uv run ruff format src/football_intelligence/jobs/collect_wikidata_profiles.py
+          uv run ruff check src/football_intelligence/jobs/collect_wikidata_profiles.py
+          uv run mypy src
+          uv run pytest -q tests/test_wikidata_profiles.py tests/test_wyscout_wikidata_overlap.py
+      - name: Commit when needed
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add analytics/src/football_intelligence/jobs/collect_wikidata_profiles.py
+          git commit -m "fix: keep Wikidata retry delay strictly typed"
+          git push origin HEAD:fix/wikidata-bounded-collection-resilience
