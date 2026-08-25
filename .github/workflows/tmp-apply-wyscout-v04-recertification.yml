@@ -29,7 +29,9 @@ jobs:
         run: uv sync --dev --locked
 
       - name: Apply evidence-backed recertification and docs
-        run: python scripts/tmp_apply_wyscout_v04_recertification.py
+        run: |
+          sed -i 's/A metric under `fi-wyscout-spatial-v1.1` is promotable/A metric under `fi-wyscout-spatial-v1.2` is promotable/g' scripts/tmp_apply_wyscout_v04_recertification.py
+          python scripts/tmp_apply_wyscout_v04_recertification.py
 
       - name: Format lint typecheck and test analytics
         working-directory: analytics
