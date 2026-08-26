@@ -118,9 +118,7 @@ def transform_snapshot(
     verification = verify_static_snapshot_files(manifest, base_dir=base_dir)
     if not verification.passed:
         failed = [file.path for file in verification.files if not file.passed]
-        raise WikipediaMembershipTransformError(
-            f"snapshot integrity failed for files {failed!r}"
-        )
+        raise WikipediaMembershipTransformError(f"snapshot integrity failed for files {failed!r}")
 
     manifest_paths = {snapshot_file.path for snapshot_file in manifest.files}
     if "index.json" not in manifest_paths:
@@ -448,9 +446,7 @@ def _validate_index_header(*, index: dict[str, Any], expected_snapshot_id: str) 
             f"index snapshot_id mismatch manifest={expected_snapshot_id!r} index={snapshot_id!r}"
         )
     if index.get("source_code") != SOURCE_CODE:
-        raise WikipediaMembershipTransformError(
-            f"index source_code must be {SOURCE_CODE!r}"
-        )
+        raise WikipediaMembershipTransformError(f"index source_code must be {SOURCE_CODE!r}")
     acquired_at = index.get("acquired_at")
     if not isinstance(acquired_at, str):
         raise WikipediaMembershipTransformError("index acquired_at must be an ISO-8601 string")
@@ -499,9 +495,7 @@ def _required_positive_int(payload: dict[str, Any], key: str, *, request_index: 
     return value
 
 
-def _optional_positive_int(
-    payload: dict[str, Any], key: str, *, request_index: int
-) -> int | None:
+def _optional_positive_int(payload: dict[str, Any], key: str, *, request_index: int) -> int | None:
     value = payload.get(key)
     if value is None:
         return None
@@ -512,9 +506,7 @@ def _optional_positive_int(
     return value
 
 
-def _required_non_negative_int(
-    payload: dict[str, Any], key: str, *, request_index: int
-) -> int:
+def _required_non_negative_int(payload: dict[str, Any], key: str, *, request_index: int) -> int:
     value = payload.get(key)
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise WikipediaMembershipTransformError(
