@@ -1,9 +1,6 @@
 name: API-Football free coverage probe
 
 on:
-  push:
-    branches:
-      - lab/low-cost-player-history-provider-audit
   workflow_dispatch:
 
 permissions:
