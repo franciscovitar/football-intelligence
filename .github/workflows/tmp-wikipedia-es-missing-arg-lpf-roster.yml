@@ -1,0 +1,111 @@
+name: Spanish Wikipedia missing ARG_LPF rosters
+
+on:
+  push:
+    branches:
+      - lab/wikipedia-es-missing-arg-lpf-roster
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.12'
+      - name: Inspect immutable 2024 Spanish Wikipedia squad sections
+        env:
+          USER_AGENT: FootballIntelligenceRosterLab/0.4 (https://github.com/franciscovitar/football-intelligence)
+        run: |
+          python - <<'PY'
+          import json, os, re, time, urllib.parse, urllib.request
+
+          API='https://es.wikipedia.org/w/api.php'
+          UA=os.environ['USER_AGENT']
+          CLUBS=[
+            ('Independiente Rivadavia','Club Sportivo Independiente Rivadavia',38),
+            ('Vélez Sarsfield','Club Atlético Vélez Sarsfield',33),
+          ]
+          DATES=['2024-05-10T23:59:59Z','2024-09-06T23:59:59Z','2024-12-16T23:59:59Z']
+          HEAD_RE=re.compile(r'(?m)^(={2,5})\s*(.*?)\s*\1\s*$')
+          TARGET_RE=re.compile(r'\b(plantel|plantilla|primer equipo)\b',re.I)
+          BAD_RE=re.compile(r'altas|bajas|hist[oó]rico|destacad|cedid|pr[eé]stamo|reserva|juven',re.I)
+
+          def api(params):
+            params=dict(params,format='json',formatversion='2',maxlag='5')
+            url=API+'?'+urllib.parse.urlencode(params)
+            last=None
+            for attempt in range(3):
+              try:
+                req=urllib.request.Request(url,headers={'User-Agent':UA})
+                with urllib.request.urlopen(req,timeout=15) as r:return json.load(r)
+              except Exception as exc:
+                last=exc; time.sleep(2**attempt)
+            raise RuntimeError(last)
+
+          def revision(title,target):
+            d=api({'action':'query','prop':'revisions','titles':title,'rvprop':'ids|timestamp|content','rvslots':'main','rvlimit':'1','rvstart':target,'rvdir':'older','redirects':'1'})
+            p=d['query']['pages'][0]; rs=p.get('revisions') or []
+            if p.get('missing') or not rs:return None,p.get('title',title)
+            r=rs[0]; s=(r.get('slots') or {}).get('main') or {}; text=s.get('content') or r.get('content') or r.get('*') or ''
+            return {'revid':r.get('revid'),'timestamp':r.get('timestamp'),'text':text},p.get('title',title)
+
+          def sections(text):
+            hs=list(HEAD_RE.finditer(text)); out=[]
+            for i,h in enumerate(hs):
+              title=re.sub(r"'{2,5}",'',h.group(2)).strip()
+              if not TARGET_RE.search(title) or BAD_RE.search(title):continue
+              level=len(h.group(1)); end=len(text)
+              for nxt in hs[i+1:]:
+                if len(nxt.group(1))<=level:
+                  end=nxt.start(); break
+              body=text[h.end():end]
+              rows=[]
+              for row in re.split(r'(?m)^\|-.*$',body):
+                links=re.findall(r'\[\[([^\]]+)\]\]',row)
+                if not links:continue
+                # Active squad tables generally put the player as the final wiki link in the row.
+                target=links[-1].split('|',1)[0].strip()
+                display=links[-1].split('|',1)[-1].strip()
+                if target and not re.search(r'Argentina|categor|archivo|file:|imagen',target,re.I):
+                  rows.append({'target':target,'display':display})
+              dedup=[]; seen=set()
+              for row in rows:
+                key=row['target'].casefold()
+                if key not in seen:
+                  seen.add(key); dedup.append(row)
+              out.append({'heading':title,'wiki_links_as_player_candidates':dedup,'candidate_count':len(dedup),'body_prefix':body[:700]})
+            return out
+
+          report={'source':'Spanish Wikipedia exact historical revision wikitext','clubs':[]}
+          for club,title,official in CLUBS:
+            c={'club':club,'official_lpf_players_used':official,'snapshots':[]}; union={}
+            for target in DATES:
+              try:
+                r,resolved=revision(title,target)
+                if not r:
+                  c['snapshots'].append({'target':target,'error':'missing_revision'});continue
+                ss=sections(r['text'])
+                # Prefer a heading explicitly naming 2024, otherwise the largest bounded squad-like section.
+                viable=[s for s in ss if s['candidate_count']]
+                viable.sort(key=lambda s:(0 if '2024' in s['heading'] else 1,-s['candidate_count']))
+                chosen=viable[0] if viable else None
+                if chosen:
+                  for row in chosen['wiki_links_as_player_candidates']:union[row['target'].casefold()]=row
+                c['snapshots'].append({'target':target,'revision':{'revid':r['revid'],'timestamp':r['timestamp']},'resolved_title':resolved,'sections':ss,'chosen_heading':chosen['heading'] if chosen else None,'chosen_count':chosen['candidate_count'] if chosen else 0})
+              except Exception as exc:c['snapshots'].append({'target':target,'error':f'{type(exc).__name__}:{exc}'})
+              time.sleep(.2)
+            c['union_candidate_count']=len(union);c['union_candidates']=sorted(union.values(),key=lambda x:x['display']);c['difference_vs_lpf_used']=len(union)-official
+            report['clubs'].append(c);print(f"{club}: candidates={len(union)} official_used={official} diff={len(union)-official:+}")
+          with open('wikipedia-es-missing-arg-lpf-roster.json','w',encoding='utf-8') as f:json.dump(report,f,ensure_ascii=False,indent=2)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wikipedia-es-missing-arg-lpf-roster-${{ github.run_id }}
+          path: wikipedia-es-missing-arg-lpf-roster.json
+          retention-days: 30
