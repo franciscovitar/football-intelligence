@@ -1,0 +1,137 @@
+name: Wikipedia ARG_LPF 2024 active squad lab
+
+on:
+  push:
+    branches:
+      - lab/wikipedia-arg-lpf-2024-roster
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  active-squad-lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.12'
+      - name: Measure specific historical active-squad sections
+        env:
+          USER_AGENT: FootballIntelligenceRosterLab/0.3 (https://github.com/franciscovitar/football-intelligence)
+        run: |
+          python - <<'PY'
+          import json, os, re, time, unicodedata, urllib.parse, urllib.request
+
+          API = "https://en.wikipedia.org/w/api.php"
+          UA = os.environ["USER_AGENT"]
+          DATES = ["2024-05-10T23:59:59Z", "2024-07-15T23:59:59Z", "2024-09-06T23:59:59Z", "2024-12-16T23:59:59Z"]
+          CLUBS = [
+            ("Argentinos Juniors","Argentinos Juniors",32),("Atlético Tucumán","Atlético Tucumán",29),
+            ("Banfield","Club Atlético Banfield",43),("Barracas Central","Barracas Central",34),
+            ("Belgrano","Club Atlético Belgrano",35),("Boca Juniors","Boca Juniors",39),
+            ("Central Córdoba (SE)","Central Córdoba de Santiago del Estero",44),("Defensa y Justicia","Defensa y Justicia",37),
+            ("Deportivo Riestra","Deportivo Riestra",36),("Estudiantes de La Plata","Estudiantes de La Plata",37),
+            ("Gimnasia La Plata","Gimnasia y Esgrima de La Plata",39),("Godoy Cruz","Godoy Cruz Antonio Tomba",40),
+            ("Huracán","Club Atlético Huracán",29),("Independiente","Club Atlético Independiente",33),
+            ("Independiente Rivadavia","Independiente Rivadavia",38),("Instituto","Instituto Atlético Central Córdoba",26),
+            ("Lanús","Club Atlético Lanús",34),("Newell's Old Boys","Newell's Old Boys",43),
+            ("Platense","Club Atlético Platense",35),("Racing Club","Racing Club de Avellaneda",32),
+            ("River Plate","Club Atlético River Plate",37),("Rosario Central","Rosario Central",36),
+            ("San Lorenzo","San Lorenzo de Almagro",38),("Sarmiento","Sarmiento de Junín",37),
+            ("Talleres de Córdoba","Talleres de Córdoba",34),("Tigre","Club Atlético Tigre",35),
+            ("Unión Santa Fe","Unión de Santa Fe",28),("Vélez Sarsfield","Vélez Sarsfield",33),
+          ]
+          ACCEPTED = {
+            "current squad": 0, "first-team squad": 1, "first team squad": 1,
+            "senior squad": 1, "first team": 1, "squad": 2,
+          }
+          EXCLUDED_CHILD = re.compile(r"out on loan|loaned|reserve|reserves|youth|academy|other players|former players|notable players", re.I)
+          PLAYER_RE = re.compile(r"\{\{\s*(?:fs player|football squad player\d*|football squad player)\b(.*?)\}\}", re.I|re.S)
+          HEAD_RE = re.compile(r"(?m)^(={2,5})\s*(.*?)\s*\1\s*$")
+
+          def api(params):
+            params = dict(params, format="json", formatversion="2", maxlag="5")
+            url = API + "?" + urllib.parse.urlencode(params)
+            err = None
+            for attempt in range(3):
+              try:
+                req = urllib.request.Request(url, headers={"User-Agent": UA})
+                with urllib.request.urlopen(req, timeout=15) as r: return json.load(r)
+              except Exception as exc:
+                err = exc; time.sleep(2 ** attempt)
+            raise RuntimeError(err)
+
+          def clean(v):
+            v = re.sub(r"<ref\b[^>]*>.*?</ref>|<ref\b[^>]*/>", "", v, flags=re.I|re.S)
+            v = re.sub(r"\[\[([^\]|]+)\|([^\]]+)\]\]", r"\2", v)
+            v = re.sub(r"\[\[([^\]]+)\]\]", r"\1", v)
+            v = re.sub(r"'{2,5}", "", v)
+            v = re.sub(r"\{\{[^{}]*\}\}", "", v)
+            v = unicodedata.normalize("NFKC", v)
+            return re.sub(r"\s+", " ", v).strip(" *†‡\n\t")
+
+          def rev(title, target):
+            d = api({"action":"query","prop":"revisions","titles":title,"rvprop":"ids|timestamp|content","rvslots":"main","rvlimit":"1","rvstart":target,"rvdir":"older","redirects":"1"})
+            p = d["query"]["pages"][0]
+            rs = p.get("revisions") or []
+            if p.get("missing") or not rs: return None, p.get("title", title)
+            r = rs[0]; slot = (r.get("slots") or {}).get("main") or {}
+            text = slot.get("content") or r.get("content") or r.get("*")
+            return {"revid":r.get("revid"),"timestamp":r.get("timestamp"),"text":text or ""}, p.get("title",title)
+
+          def extract(text):
+            hs = list(HEAD_RE.finditer(text)); candidates=[]
+            for i,h in enumerate(hs):
+              raw = clean(h.group(2)); key = raw.casefold().replace("–","-").replace("—","-")
+              if key not in ACCEPTED: continue
+              level=len(h.group(1)); end=len(text)
+              for nxt in hs[i+1:]:
+                nl=len(nxt.group(1)); nt=clean(nxt.group(2))
+                if nl <= level or (nl > level and EXCLUDED_CHILD.search(nt)):
+                  end=nxt.start(); break
+              body=text[h.end():end]; names=[]
+              for block in PLAYER_RE.findall(body):
+                m=re.search(r"(?:^|\|)\s*name\s*=\s*(.*?)(?=(?:\n?\s*\|\s*[A-Za-z0-9_ -]+\s*=)|$)",block,re.I|re.S)
+                candidate=clean(m.group(1)) if m else ""
+                if candidate and len(candidate)<=100: names.append(candidate)
+              names=sorted(set(names))
+              candidates.append({"heading":raw,"priority":ACCEPTED[key],"players":names})
+            valid=[c for c in candidates if c["players"]]
+            valid.sort(key=lambda c:(c["priority"], -len(c["players"])))
+            return (valid[0] if valid else None), [{"heading":c["heading"],"priority":c["priority"],"players_count":len(c["players"])} for c in candidates]
+
+          report={"source":"English Wikipedia exact historical revision wikitext","policy":"Only explicit active-squad headings; generic Players/notable/reserve/youth/loan sections excluded.","snapshots":DATES,"clubs":[]}
+          for club,title,official in CLUBS:
+            out={"club":club,"official_lpf_players_used":official,"snapshots":[]}; union=set(); resolved=title
+            for target in DATES:
+              try:
+                r,resolved=rev(title,target)
+                if not r:
+                  out["snapshots"].append({"target":target,"error":"missing_revision"}); continue
+                chosen,candidates=extract(r["text"])
+                if not chosen:
+                  out["snapshots"].append({"target":target,"revision":{"revid":r["revid"],"timestamp":r["timestamp"]},"error":"no_specific_active_squad","candidates":candidates}); continue
+                union.update(chosen["players"])
+                out["snapshots"].append({"target":target,"revision":{"revid":r["revid"],"timestamp":r["timestamp"]},"heading":chosen["heading"],"players_count":len(chosen["players"]),"players":chosen["players"],"candidates":candidates})
+              except Exception as exc:
+                out["snapshots"].append({"target":target,"error":f"failed:{type(exc).__name__}:{exc}"})
+              time.sleep(.15)
+            out["resolved_title"]=resolved; out["union_players_count"]=len(union); out["union_players"]=sorted(union); out["difference_vs_lpf_used"]=len(union)-official
+            report["clubs"].append(out); print(f"{club:28} active_union={len(union):3} lpf_used={official:2} diff={len(union)-official:+3}")
+          usable=[c for c in report["clubs"] if c["union_players_count"]]
+          report["aggregate"]={
+            "clubs_total":28,"clubs_with_specific_active_squad_evidence":len(usable),"clubs_without_specific_active_squad_evidence":28-len(usable),
+            "clubs_within_20pct_of_lpf_used_count":sum(abs(c["difference_vs_lpf_used"])/c["official_lpf_players_used"]<=.2 for c in usable),
+            "active_union_rows_sum":sum(c["union_players_count"] for c in usable),"official_lpf_player_usages_sum_usable_clubs":sum(c["official_lpf_players_used"] for c in usable),
+          }
+          with open("wikipedia-arg-lpf-2024-active-squad-lab.json","w",encoding="utf-8") as f: json.dump(report,f,ensure_ascii=False,indent=2)
+          print(json.dumps(report["aggregate"],indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wikipedia-arg-lpf-2024-active-squad-${{ github.run_id }}
+          path: wikipedia-arg-lpf-2024-active-squad-lab.json
+          retention-days: 30
