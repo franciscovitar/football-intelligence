@@ -1,0 +1,69 @@
+{
+  "status": "PASS",
+  "scope": {
+    "competition_code": "ARG_LPF",
+    "season_label": "2016",
+    "snapshot_cutoff": "2016-02-09T00:00:00Z",
+    "source_role": "roster_snapshot"
+  },
+  "source": {
+    "provider": "Spanish Wikipedia historical revisions",
+    "acquisition": "MediaWiki revisions immediately at or before the snapshot cutoff",
+    "license": "CC BY-SA; preserve page revision attribution"
+  },
+  "methodology": {
+    "club_scope": "30 Primera Division 2016 clubs",
+    "roster_section_rule": "Use historical Plantel/Plantilla/Equipo actual section and stop before nested reserve, youth, transfer, or altas/bajas sections",
+    "player_parsers": ["Jugador de futbol/Futbolista template", "legacy wikitable"],
+    "identity_rule": "No automatic cross-club identity merge; normalized duplicate names remain review evidence",
+    "performance_rule": "Roster membership snapshot does not imply an appearance, minute, or season statistic"
+  },
+  "coverage": {
+    "clubs_total": 30,
+    "clubs_page_resolved": 30,
+    "clubs_with_parsed_roster": 30,
+    "clubs_with_at_least_20_players": 30,
+    "player_club_slots": 903,
+    "literal_unique_names": 891,
+    "normalized_unique_names": 890,
+    "normalized_names_seen_in_multiple_clubs": 13,
+    "players_per_club_min": 20,
+    "players_per_club_median": 30.5,
+    "players_per_club_max": 38,
+    "template_parser_clubs": 28,
+    "wikitable_parser_clubs": 2,
+    "with_shirt_number": 838,
+    "with_position": 877,
+    "with_nationality": 903,
+    "with_date_of_birth": 852
+  },
+  "normalized_duplicate_name_examples": [
+    "gaston diaz",
+    "lucas rodriguez",
+    "matias garcia",
+    "luciano vella",
+    "jorge rodriguez",
+    "giovanni simeone",
+    "leandro desabato",
+    "augusto solari",
+    "leandro fernandez",
+    "matias sanchez",
+    "federico andrada",
+    "emiliano aguero",
+    "ezequiel cirigliano"
+  ],
+  "verification": {
+    "refined_workflow_run": 33001681455,
+    "artifact_id": 9618819367,
+    "artifact_digest": "sha256:3786f407f93101e687f3a6a646bc0312a2e4372c27f3e6f17a2ffb7e9046843b",
+    "quality_workflow_run": 33001681477,
+    "quality_result": "PASS"
+  },
+  "decision": "A_roster_snapshot_viable",
+  "non_claims": [
+    "This is not the official AFA/COMET eligibility register.",
+    "This does not prove that every listed player appeared in Primera Division 2016.",
+    "This does not supply complete player-season minutes or performance statistics.",
+    "No PlayerCrosswalk, PostgreSQL row, or production entity was created by this laboratory."
+  ]
+}
