@@ -1,6 +1,6 @@
 # Wikipedia historical ARG_LPF 2024 full snapshot
 
-Status: collection staged on the isolated lab branch.
+Status: collection staged on the isolated lab branch; registered workflow trigger emitted.
 
 The retained historical Wikipedia collector is now being exercised over the 26
 clubs whose historical active-squad revisions passed the earlier source audit,
