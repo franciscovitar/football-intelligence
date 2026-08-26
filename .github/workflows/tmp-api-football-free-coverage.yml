@@ -1,0 +1,91 @@
+name: API-Football free coverage probe
+
+on:
+  push:
+    branches:
+      - lab/low-cost-player-history-provider-audit
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    env:
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+    steps:
+      - name: Check secret availability
+        id: secret
+        shell: bash
+        run: |
+          if [ -z "$API_FOOTBALL_KEY" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "API_FOOTBALL_KEY is not configured; skipping probe without making any API request."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "API_FOOTBALL_KEY is configured; bounded one-request probe may run."
+          fi
+
+      - name: Checkout branch
+        if: steps.secret.outputs.available == 'true'
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        if: steps.secret.outputs.available == 'true'
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        if: steps.secret.outputs.available == 'true'
+        uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Install locked analytics environment
+        if: steps.secret.outputs.available == 'true'
+        working-directory: analytics
+        run: uv sync --dev --locked
+
+      - name: Run exactly one API-Football catalogue request
+        if: steps.secret.outputs.available == 'true'
+        working-directory: analytics
+        run: |
+          rm -rf /tmp/api-football-free-coverage
+          uv run football-intelligence-probe-api-football-free-coverage \
+            --snapshot-id "api-football-free-coverage-${GITHUB_RUN_ID}" \
+            --output-dir /tmp/api-football-free-coverage
+
+      - name: Print bounded six-league coverage matrix
+        if: steps.secret.outputs.available == 'true'
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path('/tmp/api-football-free-coverage/coverage.json').read_text())
+          print('API-FOOTBALL SIX-LEAGUE COVERAGE')
+          for competition in payload['competitions']:
+              print(
+                  competition['competition_code'],
+                  'league_id=', competition['provider_league_id'],
+                  'name=', competition['provider_league_name'],
+              )
+              for season in competition['seasons']:
+                  print(
+                      f"  {season['year']}: players={season['players']} "
+                      f"fixture_player_statistics={season['fixture_player_statistics']} "
+                      f"fixture_statistics={season['fixture_statistics']} "
+                      f"lineups={season['lineups']} events={season['events']}"
+                  )
+          PY
+
+      - name: Verify no key was persisted
+        if: steps.secret.outputs.available == 'true'
+        shell: bash
+        run: |
+          if grep -R --fixed-strings -- "$API_FOOTBALL_KEY" /tmp/api-football-free-coverage; then
+            echo "Secret leakage detected in probe output" >&2
+            exit 1
+          fi
+          echo "No API key persisted in probe output."
