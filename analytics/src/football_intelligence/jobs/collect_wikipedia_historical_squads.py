@@ -175,7 +175,7 @@ def collect_snapshot(
         source_reference=MEDIAWIKI_API_ENDPOINT,
         competition_codes=tuple(sorted(set(competition_codes))),
         season_labels=tuple(sorted(set(season_labels))),
-        data_grains=("player_season",),
+        data_grains=("player_membership",),
         files=tuple(sorted(snapshot_files, key=lambda item: item.path)),
         notes=(
             f"Exact historical MediaWiki revision snapshot; {LICENCE}; attribution required; "
