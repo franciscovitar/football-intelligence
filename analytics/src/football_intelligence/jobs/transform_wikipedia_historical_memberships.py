@@ -35,6 +35,7 @@ from football_intelligence.jobs.collect_wikipedia_historical_squads import (
 from football_intelligence.providers.wikipedia_historical_squads import (
     SOURCE_CODE,
     WikipediaHistoricalSquadError,
+    WikipediaSquadObservation,
     parse_historical_active_squad_revision,
 )
 
@@ -238,13 +239,9 @@ def _transform_request(
         )
 
     request_id = _required_string(request, "request_id", request_index=request_index)
-    requested_title = _required_string(
-        request, "requested_title", request_index=request_index
-    )
+    requested_title = _required_string(request, "requested_title", request_index=request_index)
     resolved_title = _required_string(request, "resolved_title", request_index=request_index)
-    snapshot_target = _required_string(
-        request, "snapshot_target", request_index=request_index
-    )
+    snapshot_target = _required_string(request, "snapshot_target", request_index=request_index)
     revision_timestamp = _required_string(
         request, "revision_timestamp", request_index=request_index
     )
@@ -390,31 +387,29 @@ def _membership_observation(
     snapshot_id: str,
     requested_article_title: str,
     raw_file: str,
-    observation: Any,
+    observation: WikipediaSquadObservation,
 ) -> WikipediaMembershipObservation:
-    article_title = cast(str | None, observation.player_article_title)
-    display_name = cast(str, observation.display_name)
     provider_player_key = _provider_player_key(
-        player_article_title=article_title,
-        display_name=display_name,
+        player_article_title=observation.player_article_title,
+        display_name=observation.display_name,
     )
     membership_raw = (
         f"{SOURCE_CODE}\n{observation.source_article_title}\n{observation.revision_id}\n"
         f"{provider_player_key}"
-    ).encode("utf-8")
+    ).encode()
     membership_observation_key = hashlib.sha256(membership_raw).hexdigest()[:24]
     return WikipediaMembershipObservation(
         source_code=SOURCE_CODE,
         snapshot_id=snapshot_id,
         requested_article_title=requested_article_title,
-        source_article_title=cast(str, observation.source_article_title),
-        revision_id=cast(int, observation.revision_id),
-        revision_timestamp=cast(str, observation.revision_timestamp),
-        snapshot_target=cast(str, observation.snapshot_target),
-        heading=cast(str, observation.heading),
-        raw_name=cast(str, observation.raw_name),
-        display_name=display_name,
-        player_article_title=article_title,
+        source_article_title=observation.source_article_title,
+        revision_id=observation.revision_id,
+        revision_timestamp=observation.revision_timestamp,
+        snapshot_target=observation.snapshot_target,
+        heading=observation.heading,
+        raw_name=observation.raw_name,
+        display_name=observation.display_name,
+        player_article_title=observation.player_article_title,
         provider_player_key=provider_player_key,
         membership_observation_key=membership_observation_key,
         raw_file=raw_file,
