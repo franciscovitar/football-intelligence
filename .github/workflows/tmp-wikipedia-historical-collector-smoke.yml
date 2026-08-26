@@ -1,0 +1,103 @@
+name: Wikipedia historical collector runtime smoke
+
+on:
+  push:
+    branches:
+      - lab/wikipedia-arg-lpf-2024-roster
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  collector-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: analytics
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Install locked analytics environment
+        run: uv sync --dev --locked
+      - name: Build bounded request file
+        run: |
+          cat > /tmp/wikipedia-historical-smoke-requests.json <<'JSON'
+          [
+            {
+              "article_title": "Boca Juniors",
+              "snapshot_target": "2024-09-06T23:59:59Z"
+            },
+            {
+              "article_title": "Club Atlético Banfield",
+              "snapshot_target": "2024-09-06T23:59:59Z"
+            },
+            {
+              "article_title": "Club Atlético River Plate",
+              "snapshot_target": "2024-09-06T23:59:59Z"
+            }
+          ]
+          JSON
+      - name: Collect real historical revisions through installed CLI
+        run: |
+          uv run football-intelligence-collect-wikipedia-historical-squads \
+            --request-file /tmp/wikipedia-historical-smoke-requests.json \
+            --snapshot-id wikipedia-arg-lpf-2024-runtime-smoke-${{ github.run_id }} \
+            --competition ARG_LPF \
+            --season 2024 \
+            --output-dir /tmp/wikipedia-historical-smoke
+      - name: Verify snapshot checksums through generic validator
+        run: |
+          uv run football-intelligence-validate-static-snapshot \
+            --manifest /tmp/wikipedia-historical-smoke/manifest.json \
+            --base-dir /tmp/wikipedia-historical-smoke \
+            --report /tmp/wikipedia-historical-smoke/verification.json
+      - name: Verify historical boundaries and source semantics
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime
+          from pathlib import Path
+
+          root = Path('/tmp/wikipedia-historical-smoke')
+          index = json.loads((root / 'index.json').read_text(encoding='utf-8'))
+          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))
+
+          assert manifest['source_code'] == 'wikipedia'
+          assert manifest['data_grains'] == ['player_membership']
+          assert verification['status'] == 'PASS'
+          assert len(index['requests']) == 3
+          assert len(manifest['files']) == 4
+
+          evidence_rows = 0
+          for item in index['requests']:
+              target = datetime.fromisoformat(item['snapshot_target'].replace('Z', '+00:00'))
+              revision = datetime.fromisoformat(item['revision_timestamp'].replace('Z', '+00:00'))
+              assert revision <= target
+              assert item['revision_id'] > 0
+              assert item['raw_file'].startswith('revisions/')
+              if item['active_squad_evidence']:
+                  evidence_rows += 1
+                  assert item['active_squad_observations'] > 0
+              else:
+                  assert item['active_squad_observations'] == 0
+
+          assert evidence_rows >= 2
+          print(json.dumps({
+              'requests': len(index['requests']),
+              'active_squad_evidence_requests': evidence_rows,
+              'data_grain': manifest['data_grains'][0],
+              'verification': verification['status'],
+          }, indent=2))
+          PY
+      - name: Upload bounded smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: wikipedia-historical-collector-smoke-${{ github.run_id }}
+          path: /tmp/wikipedia-historical-smoke
+          retention-days: 30
