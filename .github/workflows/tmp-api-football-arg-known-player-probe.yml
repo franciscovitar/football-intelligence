@@ -1,0 +1,106 @@
+name: API-Football ARG known-player probe
+
+on:
+  push:
+    branches:
+      - lab/low-cost-player-history-provider-audit
+    paths:
+      - .github/workflows/tmp-api-football-arg-known-player-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    env:
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+    steps:
+      - name: Query one known ARG_LPF 2024 player
+        shell: bash
+        run: |
+          if [ -z "$API_FOOTBALL_KEY" ]; then
+            echo "API_FOOTBALL_KEY is not configured" >&2
+            exit 1
+          fi
+          rm -rf /tmp/api-football-arg-known-player
+          mkdir -p /tmp/api-football-arg-known-player
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+
+          query = urlencode({"league": 128, "season": 2024, "search": "Borja"})
+          url = f"https://v3.football.api-sports.io/players?{query}"
+          request = Request(
+              url,
+              headers={
+                  "Accept": "application/json",
+                  "User-Agent": "FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)",
+                  "x-apisports-key": os.environ["API_FOOTBALL_KEY"],
+              },
+          )
+          with urlopen(request, timeout=30) as response:
+              raw = response.read()
+          out = Path("/tmp/api-football-arg-known-player")
+          (out / "response.json").write_bytes(raw)
+          payload = json.loads(raw)
+          rows = []
+          for item in payload.get("response", []):
+              player = item.get("player") or {}
+              for stat in item.get("statistics") or []:
+                  games = stat.get("games") or {}
+                  team = stat.get("team") or {}
+                  rows.append({
+                      "player_id": player.get("id"),
+                      "player_name": player.get("name"),
+                      "team_id": team.get("id"),
+                      "team_name": team.get("name"),
+                      "position": games.get("position"),
+                      "appearences": games.get("appearences"),
+                      "minutes": games.get("minutes"),
+                      "rating": games.get("rating"),
+                      "goals": (stat.get("goals") or {}).get("total"),
+                      "assists": (stat.get("goals") or {}).get("assists"),
+                      "shots_total": (stat.get("shots") or {}).get("total"),
+                      "passes_total": (stat.get("passes") or {}).get("total"),
+                      "tackles_total": (stat.get("tackles") or {}).get("total"),
+                      "duels_total": (stat.get("duels") or {}).get("total"),
+                  })
+          summary = {
+              "requests_made": 1,
+              "parameters": payload.get("parameters"),
+              "errors": payload.get("errors"),
+              "results": payload.get("results"),
+              "paging": payload.get("paging"),
+              "rows": rows,
+              "raw_sha256": hashlib.sha256(raw).hexdigest(),
+              "raw_byte_size": len(raw),
+          }
+          (out / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          if payload.get("errors") not in (None, [], {}):
+              raise SystemExit("Provider returned errors")
+          PY
+
+      - name: Verify no API key was persisted
+        if: always()
+        shell: bash
+        run: |
+          if grep -R --fixed-strings -- "$API_FOOTBALL_KEY" /tmp/api-football-arg-known-player; then
+            echo "Secret leakage detected" >&2
+            exit 1
+          fi
+          echo "No API key persisted."
+
+      - name: Upload probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-football-arg-known-player-${{ github.run_id }}
+          path: /tmp/api-football-arg-known-player
+          if-no-files-found: error
+          retention-days: 7
