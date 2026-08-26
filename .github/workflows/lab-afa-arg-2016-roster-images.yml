@@ -1,0 +1,95 @@
+# Disposable technical-spike workflow; remove after evidence is captured.
+name: Lab AFA ARG_LPF 2016 roster images
+
+on:
+  push:
+    branches:
+      - lab/afa-arg-2016-roster-images
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+
+      - name: Fetch official AFA article and three bounded roster-image candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p probe_out/images
+          article='https://www.afa.com.ar/Sitio/posts/figuritas-de-primera'
+          curl --fail --location --silent --show-error --max-time 30 \
+            -A 'Mozilla/5.0 FootballIntelligenceSourceAudit/1.0' \
+            "$article" -o probe_out/article.html
+
+          python - <<'PY'
+          from __future__ import annotations
+          import html
+          import json
+          import re
+          from pathlib import Path
+          from urllib.parse import urljoin
+
+          root = Path('probe_out')
+          text = (root / 'article.html').read_text(encoding='utf-8', errors='replace')
+          imgs = []
+          for m in re.finditer(r'<img\b([^>]+)>', text, re.I):
+              attrs = m.group(1)
+              sm = re.search(r'\bsrc=["\']([^"\']+)', attrs, re.I)
+              if not sm:
+                  continue
+              src = html.unescape(sm.group(1))
+              if 'figu' not in src.lower():
+                  continue
+              am = re.search(r'\balt=["\']([^"\']*)', attrs, re.I)
+              tm = re.search(r'\btitle=["\']([^"\']*)', attrs, re.I)
+              imgs.append({
+                  'src': urljoin('https://www.afa.com.ar/', src),
+                  'alt': html.unescape(am.group(1)) if am else None,
+                  'title': html.unescape(tm.group(1)) if tm else None,
+              })
+          # Preserve source order, exact URLs, and only download three samples.
+          unique = []
+          seen = set()
+          for row in imgs:
+              if row['src'] in seen:
+                  continue
+              seen.add(row['src'])
+              unique.append(row)
+          (root / 'image_manifest.json').write_text(
+              json.dumps({'count': len(unique), 'images': unique}, indent=2, ensure_ascii=False),
+              encoding='utf-8',
+          )
+          Path('/tmp/sample_urls.txt').write_text('\n'.join(row['src'] for row in unique[:3]), encoding='utf-8')
+          print(json.dumps({'count': len(unique), 'sample': unique[:3]}, indent=2, ensure_ascii=False))
+          PY
+
+          i=0
+          while IFS= read -r url; do
+            i=$((i+1))
+            curl --fail --location --silent --show-error --max-time 30 \
+              -A 'Mozilla/5.0 FootballIntelligenceSourceAudit/1.0' \
+              "$url" -o "probe_out/images/sample-${i}.jpg"
+          done < /tmp/sample_urls.txt
+
+          file probe_out/images/*
+          sha256sum probe_out/images/* > probe_out/image-checksums.txt
+
+      - name: Upload bounded AFA image probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: afa-arg-2016-roster-image-probe
+          path: |
+            probe_out/image_manifest.json
+            probe_out/image-checksums.txt
+            probe_out/images/
+          if-no-files-found: error
+          retention-days: 7
