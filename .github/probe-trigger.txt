@@ -1,0 +1,1 @@
+Trigger API-Football free coverage probe after API_FOOTBALL_KEY was configured as a repository secret.
