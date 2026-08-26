@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.13"
-      - name: Trace legacy DataFactory RequireJS runtime
+      - name: Follow corrected legacy DataFactory mc.init path
         shell: bash
         run: |
           set -euo pipefail
@@ -33,9 +33,13 @@ jobs:
           from pathlib import Path
 
           UA='FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
-          BASE='https://info.afa.org.ar/deposito/html/v3/htmlCenter/'
-          ROOT=urllib.parse.urljoin(BASE,'mc.htmlCenterRequire.min.js')
-          MAX_ASSETS=45
+          V3='https://info.afa.org.ar/deposito/html/v3/'
+          SEEDS=[
+              urllib.parse.urljoin(V3,'htmlCenter/mc.htmlCenterRequire.min.js'),
+              urllib.parse.urljoin(V3,'htmlCenter/assets/js/require.js'),
+              urllib.parse.urljoin(V3,'htmlCenter/mc.init.js'),
+          ]
+          MAX_ASSETS=60
 
           def get(url: str):
               req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept':'text/html,application/javascript,application/json,*/*'})
@@ -43,68 +47,58 @@ jobs:
                   return resp.status,resp.headers.get('Content-Type'),resp.geturl(),resp.read()
 
           def safe_name(url: str) -> str:
-              path=urllib.parse.urlsplit(url).path.rsplit('/',1)[-1] or 'index'
-              path=re.sub(r'[^A-Za-z0-9_.-]+','_',path)[:80]
-              return hashlib.sha1(url.encode()).hexdigest()[:10]+'_'+path
+              leaf=urllib.parse.urlsplit(url).path.rsplit('/',1)[-1] or 'index'
+              leaf=re.sub(r'[^A-Za-z0-9_.-]+','_',leaf)[:80]
+              return hashlib.sha1(url.encode()).hexdigest()[:10]+'_'+leaf
 
-          def strings(text: str):
-              out=[]
-              for pat in (
-                  r'https?://[^\"\'\s<>]+',
-                  r'(?:(?:\.\.?/)|/)[A-Za-z0-9_./?=&%-]+',
-                  r'[A-Za-z0-9_./-]+\.js(?:\?[^\"\'\s<>]*)?',
-                  r'[A-Za-z0-9_./-]+\.json(?:\?[^\"\'\s<>]*)?',
-              ):
-                  for value in re.findall(pat,text,re.I):
-                      if value not in out: out.append(value)
-              return out
-
-          queue=[ROOT]
-          seen=set()
-          rows=[]
-          discovered=[]
+          queue=list(SEEDS); seen=set(); rows=[]; all_refs=set()
           while queue and len(rows)<MAX_ASSETS:
               url=queue.pop(0)
               if url in seen: continue
-              seen.add(url)
-              row={'url':url}
+              seen.add(url); row={'url':url}
               try:
-                  status,ctype,final,body=get(url)
-                  text=body.decode('utf-8','replace')
+                  status,ctype,final,body=get(url); text=body.decode('utf-8','replace')
                   Path('probe_out/raw',safe_name(url)+'.txt').write_text(text,encoding='utf-8')
                   refs=[]
-                  for raw in strings(text):
-                      candidate=urllib.parse.urljoin(final,raw)
+                  # Literal paths/URLs.
+                  literals=[]
+                  for pat in (r'https?://[^\"\'\s<>]+',r'[A-Za-z0-9_./-]+\.js(?:\?[^\"\'\s<>]*)?',r'[A-Za-z0-9_./-]+\.json(?:\?[^\"\'\s<>]*)?'):
+                      literals.extend(re.findall(pat,text,re.I))
+                  # AMD module names in define/require arrays. Resolve them conservatively relative to htmlCenter/.
+                  for arr in re.findall(r'(?:define|require)\s*\(\s*\[([^\]]+)',text,re.I):
+                      for mod in re.findall(r'[\"\']([^\"\']+)[\"\']',arr):
+                          if mod.startswith(('http:','https:','text!','css!')): literals.append(mod)
+                          elif mod not in {'require','exports','module','jquery'}:
+                              literals.append('htmlCenter/'+mod+'.js')
+                  for raw in literals:
+                      raw=raw.split('!',1)[-1]
+                      if raw.startswith(('http://','https://')): candidate=raw
+                      elif raw.startswith('htmlCenter/'): candidate=urllib.parse.urljoin(V3,raw)
+                      else: candidate=urllib.parse.urljoin(final,raw)
                       host=urllib.parse.urlsplit(candidate).hostname or ''
                       low=candidate.casefold()
-                      if host in {'info.afa.org.ar','ssa.datafactory.la'} and any(x in low for x in ('.js','.json','api','service','stats','htmlcenter')):
+                      if host in {'info.afa.org.ar','ssa.datafactory.la'} and any(tok in low for tok in ('.js','.json','api','service','stats','htmlcenter')):
                           if candidate not in refs: refs.append(candidate)
-                          if candidate not in seen and candidate not in queue and len(queue)<100: queue.append(candidate)
+                          all_refs.add(candidate)
+                          if host=='info.afa.org.ar' and candidate not in seen and candidate not in queue and len(queue)<120:
+                              queue.append(candidate)
                   interesting=[]
-                  for m in re.finditer(r'.{0,150}(?:ssa\.datafactory\.la|datafactory|statscenter|ajax|fetch\(|xmlhttprequest|\.getjson|service|endpoint|apikey|apiKey|channel|tabletype|tournamentplayer).{0,260}',text,re.I|re.S):
-                      snippet=re.sub(r'\s+',' ',m.group(0)).strip()
-                      # Never preserve apparent credential values in the artifact. Public structure is enough for the spike.
-                      snippet=re.sub(r'(?i)(api[_-]?key\s*[:=]\s*[\"\']?)[^\"\'\s,;}]+',r'\1<redacted>',snippet)
-                      if snippet not in interesting: interesting.append(snippet[:500])
-                  row.update({'status':status,'content_type':ctype,'final_url':final,'bytes':len(body),'references':refs[:100],'interesting_snippets':interesting[:120]})
-                  discovered.extend(refs)
+                  for m in re.finditer(r'.{0,180}(?:ssa\.datafactory\.la|datafactory|statscenter|statsCenterPerPlayer|ajax|fetch\(|xmlhttprequest|\.getjson|service|endpoint|apikey|apiKey|channel|tabletype|tournamentplayer|baseurl|paths\s*:).{0,320}',text,re.I|re.S):
+                      s=re.sub(r'\s+',' ',m.group(0)).strip()
+                      s=re.sub(r'(?i)(api[_-]?key\s*[:=]\s*[\"\']?)[^\"\'\s,;}]+',r'\1<redacted>',s)
+                      if s not in interesting: interesting.append(s[:600])
+                  row.update({'status':status,'content_type':ctype,'final_url':final,'bytes':len(body),'references':refs[:120],'interesting_snippets':interesting[:140]})
               except Exception as exc:
-                  row['error']=type(exc).__name__+': '+str(exc)[:400]
+                  row['error']=type(exc).__name__+': '+str(exc)[:450]
               rows.append(row)
 
-          payload={
-              'root':ROOT,
-              'assets_fetched':len(rows),
-              'unique_references_discovered':len(set(discovered)),
-              'assets':rows,
-              'note':'Apparent credential values are intentionally redacted; this spike only identifies public read-path structure.'
-          }
+          payload={'seeds':SEEDS,'assets_fetched':len(rows),'unique_references_discovered':len(all_refs),'assets':rows,'note':'Credential-like values are redacted. The spike only traces public client-side read paths.'}
           Path('probe_out/summary.json').write_text(json.dumps(payload,indent=2,ensure_ascii=False),encoding='utf-8')
           print(json.dumps(payload,indent=2,ensure_ascii=False))
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: afa-arg-2016-datafactory-runtime-trace
+          name: afa-arg-2016-datafactory-mc-init-trace
           path: probe_out
           if-no-files-found: error
           retention-days: 7
