@@ -1,0 +1,121 @@
+name: Wikipedia ARG_LPF 2024 undercount cadence lab
+
+on:
+  push:
+    branches:
+      - lab/wikipedia-arg-lpf-2024-roster
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cadence-lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: analytics
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Install locked analytics environment
+        run: uv sync --dev --locked
+      - name: Build targeted 24-request cadence file
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          titles = [
+              'Club Atlético Banfield',
+              "Newell's Old Boys",
+              'Godoy Cruz Antonio Tomba',
+              'Barracas Central',
+          ]
+          targets = [
+              '2024-05-31T23:59:59Z',
+              '2024-06-30T23:59:59Z',
+              '2024-08-15T23:59:59Z',
+              '2024-09-30T23:59:59Z',
+              '2024-10-31T23:59:59Z',
+              '2024-11-30T23:59:59Z',
+          ]
+          payload = [
+              {'article_title': title, 'snapshot_target': target}
+              for title in titles
+              for target in targets
+          ]
+          assert len(payload) == 24
+          path = Path('/tmp/arg-lpf-2024-wikipedia-undercount-cadence.json')
+          path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print(f'Prepared {len(payload)} requests across {len(titles)} clubs and {len(targets)} cuts')
+          PY
+      - name: Collect immutable targeted revisions
+        run: |
+          uv run football-intelligence-collect-wikipedia-historical-squads \
+            --request-file /tmp/arg-lpf-2024-wikipedia-undercount-cadence.json \
+            --snapshot-id wikipedia-arg-lpf-2024-undercount-cadence-${{ github.run_id }} \
+            --competition ARG_LPF \
+            --season 2024 \
+            --output-dir /tmp/wikipedia-arg-lpf-2024-undercount-cadence
+      - name: Verify snapshot checksums
+        run: |
+          uv run football-intelligence-validate-static-snapshot \
+            --manifest /tmp/wikipedia-arg-lpf-2024-undercount-cadence/manifest.json \
+            --base-dir /tmp/wikipedia-arg-lpf-2024-undercount-cadence \
+            --report /tmp/wikipedia-arg-lpf-2024-undercount-cadence/verification.json
+      - name: Audit targeted cadence evidence
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime
+          from pathlib import Path
+
+          root = Path('/tmp/wikipedia-arg-lpf-2024-undercount-cadence')
+          index = json.loads((root / 'index.json').read_text(encoding='utf-8'))
+          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))
+
+          assert manifest['source_code'] == 'wikipedia'
+          assert manifest['data_grains'] == ['player_membership']
+          assert verification['status'] == 'PASS'
+          assert len(index['requests']) == 24
+          assert len(manifest['files']) == 25
+
+          no_evidence = []
+          lags = []
+          for item in index['requests']:
+              target = datetime.fromisoformat(item['snapshot_target'].replace('Z', '+00:00'))
+              revision = datetime.fromisoformat(item['revision_timestamp'].replace('Z', '+00:00'))
+              assert revision <= target
+              assert item['revision_id'] > 0
+              lags.append((target - revision).total_seconds())
+              if not item['active_squad_evidence']:
+                  no_evidence.append({
+                      'club': item['requested_title'],
+                      'target': item['snapshot_target'],
+                  })
+
+          summary = {
+              'requests': len(index['requests']),
+              'active_squad_evidence_requests': len(index['requests']) - len(no_evidence),
+              'no_active_squad_evidence': no_evidence,
+              'max_revision_lag_seconds': max(lags),
+              'verification': verification['status'],
+          }
+          (root / 'cadence-summary.json').write_text(
+              json.dumps(summary, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps(summary, ensure_ascii=False, indent=2))
+          PY
+      - name: Upload targeted cadence evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: wikipedia-arg-lpf-2024-undercount-cadence-${{ github.run_id }}
+          path: /tmp/wikipedia-arg-lpf-2024-undercount-cadence
+          retention-days: 30
