@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.13"
-      - name: Inspect DataFactory SSA and data-loading modules
+      - name: Probe published Primera stats JSONs
         shell: bash
         run: |
           set -euo pipefail
@@ -32,50 +32,70 @@ jobs:
           from pathlib import Path
 
           UA='FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
-          BASE='https://info.afa.org.ar/deposito/html/v3/htmlCenter/'
-          RELATIVE=[
-              'core/mc.core.min.js',
-              'core/mc.ssa.min.js',
-              'core/mc.dataGetter.min.js',
-              'core/mc.dataHandler.min.js',
-              'core/mc.ajaxJSONLoad.min.js',
-              'core/mc.defaultParams.min.js',
-              'core/mc.modulesHandler.min.js',
-              'core/mc.functionsByChannel.min.js',
-              'core/mc.dataTemplates.min.js',
-              'customization/mc.config.js',
-          ]
+          BASE='https://info.afa.org.ar/deposito/html/v3/htmlCenter/data/deportes/futbol/primeraa/statsCenter/'
+          FILES=['playersStats.json','playersStatsFull.json','teamsStats.json','teamsList.json']
+          ANCHORS=['Poblete','Ledesma','Ortigoza','Pellerano','Maidana','Marcone','Ascacibar','Bottinelli','Mercier','Zuqui','Cerutti','Acosta','Erviti','Braña','Dening','Izaguirre','Malcorra','Rigoni','Marquez','Menendez','Bordagaray','Solari','Lo Celso','Romero','Abila','Sand','Monetti','Roman Martinez','Gustavo Gomez']
 
           def get(url: str):
-              req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept':'application/javascript,application/json,text/plain,*/*'})
-              with urllib.request.urlopen(req,timeout=20) as resp:
+              req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept':'application/json,text/plain,*/*'})
+              with urllib.request.urlopen(req,timeout=25) as resp:
                   return resp.status,resp.headers.get('Content-Type'),resp.geturl(),resp.read()
 
+          def walk(obj,path='$'):
+              if isinstance(obj,dict):
+                  for k,v in obj.items(): yield from walk(v,path+'.'+str(k))
+              elif isinstance(obj,list):
+                  for i,v in enumerate(obj): yield from walk(v,path+f'[{i}]')
+              else:
+                  yield path,obj
+
           rows=[]
-          for rel in RELATIVE:
-              url=BASE+rel; row={'relative_path':rel,'url':url}
+          for name in FILES:
+              url=BASE+name; row={'file':name,'url':url}
               try:
-                  status,ctype,final,body=get(url); text=body.decode('utf-8','replace')
-                  leaf=hashlib.sha1(rel.encode()).hexdigest()[:8]+'_'+rel.replace('/','_')
-                  Path('probe_out/raw',leaf+'.txt').write_text(text,encoding='utf-8')
-                  snippets=[]
-                  for m in re.finditer(r'.{0,220}(?:ssa\.datafactory\.la|datafactory|url\s*:|baseurl|api|service|endpoint|ajax|\.getjson|xmlhttprequest|channel|event|tabletype|statscenter|loadjson|datagetter|authorization|token|apikey|apiKey).{0,420}',text,re.I|re.S):
-                      s=re.sub(r'\s+',' ',m.group(0)).strip()
-                      s=re.sub(r'(?i)((?:api[_-]?key|authorization|token)\s*[:=]\s*[\"\']?)[^\"\'\s,;}]+',r'\1<redacted>',s)
-                      if s not in snippets: snippets.append(s[:750])
-                  literals=sorted(set(re.findall(r'https?://[^\"\'\s<>]+',text)))
-                  row.update({'status':status,'content_type':ctype,'final_url':final,'bytes':len(body),'urls':literals[:100],'interesting_snippets':snippets[:180]})
+                  status,ctype,final,body=get(url); sha=hashlib.sha256(body).hexdigest(); text=body.decode('utf-8','replace')
+                  Path('probe_out/raw',name).write_bytes(body)
+                  parsed=json.loads(text)
+                  flattened=list(walk(parsed))
+                  key_counts={}
+                  def count_keys(x):
+                      if isinstance(x,dict):
+                          for k,v in x.items(): key_counts[k]=key_counts.get(k,0)+1; count_keys(v)
+                      elif isinstance(x,list):
+                          for v in x: count_keys(v)
+                  count_keys(parsed)
+                  anchor_hits={}
+                  folded=text.casefold()
+                  for anchor in ANCHORS:
+                      if anchor.casefold() in folded:
+                          snippets=[]
+                          for m in re.finditer(re.escape(anchor),text,re.I):
+                              s=max(0,m.start()-250); e=min(len(text),m.end()+700)
+                              snippets.append(re.sub(r'\s+',' ',text[s:e])[:950])
+                              if len(snippets)>=4: break
+                          anchor_hits[anchor]=snippets
+                  likely_stats={k:v for k,v in key_counts.items() if any(token in k.casefold() for token in ('pass','goal','assist','shot','foul','steal','match','minute','player','team','coverage','date','season','tournament'))}
+                  row.update({
+                      'status':status,'content_type':ctype,'final_url':final,'bytes':len(body),'sha256':sha,
+                      'root_type':type(parsed).__name__,
+                      'root_keys':list(parsed.keys())[:100] if isinstance(parsed,dict) else None,
+                      'list_length':len(parsed) if isinstance(parsed,list) else None,
+                      'likely_key_counts':dict(sorted(likely_stats.items())),
+                      'anchor_hits':anchor_hits,
+                      'scalar_count':len(flattened),
+                      'sample_scalars':flattened[:80],
+                  })
               except Exception as exc:
-                  row['error']=type(exc).__name__+': '+str(exc)[:450]
+                  row['error']=type(exc).__name__+': '+str(exc)[:500]
               rows.append(row)
 
-          payload={'base':BASE,'modules':rows,'note':'Credential-like values are redacted; only public client-side request structure is being audited.'}
+          payload={'base':BASE,'files':rows,'validation_goal':'Determine whether the published Primera stats snapshot matches official AFA 2016 anchors such as Poblete 642 passes and Sand 14 goals.'}
           Path('probe_out/summary.json').write_text(json.dumps(payload,indent=2,ensure_ascii=False),encoding='utf-8')
           print(json.dumps(payload,indent=2,ensure_ascii=False))
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: afa-arg-2016-datafactory-ssa-path
+          name: afa-arg-primeraa-published-stats-json
           path: probe_out
           if-no-files-found: error
           retention-days: 7
