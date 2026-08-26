@@ -1,0 +1,498 @@
+name: Wikipedia to Wikidata ARG_LPF 2024 profile coverage lab
+
+on:
+  push:
+    branches:
+      - lab/wikipedia-arg-lpf-2024-roster
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  profile-coverage-lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.12'
+      - name: Measure deterministic Wikipedia to Wikidata profile coverage
+        env:
+          USER_AGENT: FootballIntelligenceRosterLab/0.6 (https://github.com/franciscovitar/football-intelligence)
+          PYTHONPATH: analytics/src
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import time
+          import unicodedata
+          import urllib.parse
+          import urllib.request
+          from collections import defaultdict
+
+          from football_intelligence.providers.wikidata_profiles import (
+              WikidataProfileError,
+              parse_wikidata_entity_document,
+          )
+
+          WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
+          WIKIDATA_API = "https://www.wikidata.org/w/api.php"
+          UA = os.environ["USER_AGENT"]
+          SNAPSHOTS = [
+              "2024-05-10T23:59:59Z",
+              "2024-07-15T23:59:59Z",
+              "2024-09-06T23:59:59Z",
+              "2024-12-16T23:59:59Z",
+          ]
+          CLUBS = [
+              ("Argentinos Juniors", "Argentinos Juniors"),
+              ("Atlético Tucumán", "Atlético Tucumán"),
+              ("Banfield", "Club Atlético Banfield"),
+              ("Barracas Central", "Barracas Central"),
+              ("Belgrano", "Club Atlético Belgrano"),
+              ("Boca Juniors", "Boca Juniors"),
+              ("Central Córdoba (SE)", "Central Córdoba de Santiago del Estero"),
+              ("Defensa y Justicia", "Defensa y Justicia"),
+              ("Deportivo Riestra", "Deportivo Riestra"),
+              ("Estudiantes de La Plata", "Estudiantes de La Plata"),
+              ("Gimnasia La Plata", "Gimnasia y Esgrima de La Plata"),
+              ("Godoy Cruz", "Godoy Cruz Antonio Tomba"),
+              ("Huracán", "Club Atlético Huracán"),
+              ("Independiente", "Club Atlético Independiente"),
+              ("Independiente Rivadavia", "Independiente Rivadavia"),
+              ("Instituto", "Instituto Atlético Central Córdoba"),
+              ("Lanús", "Club Atlético Lanús"),
+              ("Newell's Old Boys", "Newell's Old Boys"),
+              ("Platense", "Club Atlético Platense"),
+              ("Racing Club", "Racing Club de Avellaneda"),
+              ("River Plate", "Club Atlético River Plate"),
+              ("Rosario Central", "Rosario Central"),
+              ("San Lorenzo", "San Lorenzo de Almagro"),
+              ("Sarmiento", "Sarmiento de Junín"),
+              ("Talleres de Córdoba", "Talleres de Córdoba"),
+              ("Tigre", "Club Atlético Tigre"),
+              ("Unión Santa Fe", "Unión de Santa Fe"),
+              ("Vélez Sarsfield", "Vélez Sarsfield"),
+          ]
+          ACCEPTED = {
+              "current squad": 0,
+              "first-team squad": 1,
+              "first team squad": 1,
+              "senior squad": 1,
+              "first team": 1,
+              "squad": 2,
+          }
+          EXCLUDED_CHILD = re.compile(
+              r"out on loan|loaned|reserve|reserves|youth|academy|other players|former players|notable players",
+              re.I,
+          )
+          PLAYER_RE = re.compile(
+              r"\{\{\s*(?:fs player|football squad player\d*|football squad player)\b(.*?)\}\}",
+              re.I | re.S,
+          )
+          HEAD_RE = re.compile(r"(?m)^(={2,5})\s*(.*?)\s*\1\s*$")
+          QID_RE = re.compile(r"^Q[1-9][0-9]*$")
+          HUMAN_QID = "Q5"
+          ASSOCIATION_FOOTBALL_PLAYER_QID = "Q937857"
+
+          def request_json(api_url, params, *, post=False):
+              params = dict(params)
+              params.update({"format": "json", "formatversion": "2", "maxlag": "5"})
+              encoded = urllib.parse.urlencode(params).encode("utf-8")
+              if post:
+                  req = urllib.request.Request(
+                      api_url,
+                      data=encoded,
+                      headers={
+                          "User-Agent": UA,
+                          "Content-Type": "application/x-www-form-urlencoded",
+                      },
+                      method="POST",
+                  )
+              else:
+                  req = urllib.request.Request(
+                      api_url + "?" + encoded.decode("utf-8"),
+                      headers={"User-Agent": UA},
+                  )
+              last = None
+              for attempt in range(4):
+                  try:
+                      with urllib.request.urlopen(req, timeout=25) as response:
+                          return json.load(response)
+                  except Exception as exc:
+                      last = exc
+                      time.sleep(2 ** attempt)
+              raise RuntimeError(f"request failed after bounded retries: {last}")
+
+          def clean(value):
+              value = re.sub(
+                  r"<ref\b[^>]*>.*?</ref>|<ref\b[^>]*/>",
+                  "",
+                  value,
+                  flags=re.I | re.S,
+              )
+              value = re.sub(r"\[\[([^\]|]+)\|([^\]]+)\]\]", r"\2", value)
+              value = re.sub(r"\[\[([^\]]+)\]\]", r"\1", value)
+              value = re.sub(r"'{2,5}", "", value)
+              value = re.sub(r"\{\{[^{}]*\}\}", "", value)
+              value = unicodedata.normalize("NFKC", value)
+              return re.sub(r"\s+", " ", value).strip(" *†‡\n\t")
+
+          def norm_key(value):
+              return re.sub(
+                  r"\s+", " ", unicodedata.normalize("NFKC", value)
+              ).strip().casefold()
+
+          def historical_revision(title, timestamp):
+              data = request_json(
+                  WIKIPEDIA_API,
+                  {
+                      "action": "query",
+                      "prop": "revisions",
+                      "titles": title,
+                      "rvprop": "ids|timestamp|content",
+                      "rvslots": "main",
+                      "rvlimit": "1",
+                      "rvstart": timestamp,
+                      "rvdir": "older",
+                      "redirects": "1",
+                  },
+              )
+              page = data["query"]["pages"][0]
+              if page.get("missing"):
+                  return None
+              revisions = page.get("revisions") or []
+              if not revisions:
+                  return None
+              rev = revisions[0]
+              slot = (rev.get("slots") or {}).get("main") or {}
+              return slot.get("content") or rev.get("content") or rev.get("*") or ""
+
+          def active_entries(text):
+              headings = list(HEAD_RE.finditer(text))
+              candidates = []
+              for index, heading in enumerate(headings):
+                  raw_heading = clean(heading.group(2))
+                  key = raw_heading.casefold().replace("–", "-").replace("—", "-")
+                  if key not in ACCEPTED:
+                      continue
+                  level = len(heading.group(1))
+                  end = len(text)
+                  for later in headings[index + 1 :]:
+                      later_level = len(later.group(1))
+                      later_title = clean(later.group(2))
+                      if later_level <= level or (
+                          later_level > level and EXCLUDED_CHILD.search(later_title)
+                      ):
+                          end = later.start()
+                          break
+                  body = text[heading.end() : end]
+                  entries = []
+                  for block in PLAYER_RE.findall(body):
+                      match = re.search(
+                          r"(?:^|\|)\s*name\s*=\s*(.*?)(?=(?:\n?\s*\|\s*[A-Za-z0-9_ -]+\s*=)|$)",
+                          block,
+                          re.I | re.S,
+                      )
+                      if not match:
+                          continue
+                      raw_value = match.group(1).strip()
+                      display_name = clean(raw_value)
+                      if not display_name or len(display_name) > 100:
+                          continue
+                      link = re.search(
+                          r"\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]",
+                          raw_value,
+                      )
+                      article_title = link.group(1).strip() if link else None
+                      entries.append(
+                          {
+                              "display_name": display_name,
+                              "article_title": article_title,
+                          }
+                      )
+                  dedup = {}
+                  for entry in entries:
+                      dedup[norm_key(entry["article_title"] or entry["display_name"])] = entry
+                  candidates.append(
+                      {
+                          "priority": ACCEPTED[key],
+                          "entries": list(dedup.values()),
+                      }
+                  )
+              valid = [candidate for candidate in candidates if candidate["entries"]]
+              valid.sort(key=lambda candidate: (candidate["priority"], -len(candidate["entries"])))
+              return valid[0]["entries"] if valid else []
+
+          membership_entries = []
+          article_titles = set()
+          for club, title in CLUBS:
+              union = {}
+              for target in SNAPSHOTS:
+                  text = historical_revision(title, target)
+                  if not text:
+                      continue
+                  for entry in active_entries(text):
+                      key = norm_key(entry["article_title"] or entry["display_name"])
+                      union[key] = entry
+                  time.sleep(0.10)
+              for entry in union.values():
+                  membership_entries.append({"club": club, **entry})
+                  if entry["article_title"]:
+                      article_titles.add(entry["article_title"])
+
+          def resolve_article_batch(titles):
+              data = request_json(
+                  WIKIPEDIA_API,
+                  {
+                      "action": "query",
+                      "prop": "pageprops",
+                      "ppprop": "wikibase_item",
+                      "redirects": "1",
+                      "titles": "|".join(titles),
+                  },
+                  post=True,
+              )
+              query = data.get("query") or {}
+              aliases = {}
+              for item in query.get("normalized") or []:
+                  if item.get("from") and item.get("to"):
+                      aliases[item["from"]] = item["to"]
+              for item in query.get("redirects") or []:
+                  if item.get("from") and item.get("to"):
+                      aliases[item["from"]] = item["to"]
+              pages = {
+                  page.get("title"): page
+                  for page in query.get("pages") or []
+                  if page.get("title")
+              }
+              out = {}
+              for requested in titles:
+                  final = requested
+                  seen = set()
+                  while final in aliases and final not in seen:
+                      seen.add(final)
+                      final = aliases[final]
+                  page = pages.get(final)
+                  if page is None:
+                      page = next(
+                          (
+                              candidate
+                              for page_title, candidate in pages.items()
+                              if page_title.casefold() == final.casefold()
+                          ),
+                          None,
+                      )
+                  qid = None
+                  if page and not page.get("missing"):
+                      value = (page.get("pageprops") or {}).get("wikibase_item")
+                      if isinstance(value, str) and QID_RE.fullmatch(value):
+                          qid = value
+                  out[requested] = qid
+              return out
+
+          article_to_qid = {}
+          ordered_titles = sorted(article_titles, key=str.casefold)
+          for offset in range(0, len(ordered_titles), 40):
+              batch = ordered_titles[offset : offset + 40]
+              article_to_qid.update(resolve_article_batch(batch))
+              time.sleep(0.20)
+
+          for entry in membership_entries:
+              entry["qid"] = article_to_qid.get(entry["article_title"]) if entry["article_title"] else None
+
+          unique_qids = sorted({entry["qid"] for entry in membership_entries if entry["qid"]})
+
+          def nondeprecated_item_qids(entity, property_id):
+              out = set()
+              for statement in (entity.get("claims") or {}).get(property_id) or []:
+                  if statement.get("rank") == "deprecated":
+                      continue
+                  mainsnak = statement.get("mainsnak") or {}
+                  if mainsnak.get("snaktype") != "value":
+                      continue
+                  value = (mainsnak.get("datavalue") or {}).get("value")
+                  if isinstance(value, dict):
+                      qid = value.get("id")
+                      if isinstance(qid, str) and QID_RE.fullmatch(qid):
+                          out.add(qid)
+              return out
+
+          def has_height_quantity(entity):
+              for statement in (entity.get("claims") or {}).get("P2048") or []:
+                  if statement.get("rank") == "deprecated":
+                      continue
+                  mainsnak = statement.get("mainsnak") or {}
+                  if mainsnak.get("snaktype") != "value":
+                      continue
+                  value = (mainsnak.get("datavalue") or {}).get("value")
+                  if not isinstance(value, dict):
+                      continue
+                  amount = value.get("amount")
+                  if not isinstance(amount, str):
+                      continue
+                  try:
+                      if float(amount) > 0:
+                          return True
+                  except ValueError:
+                      pass
+              return False
+
+          profile_rows = []
+          entity_by_qid = {}
+          for offset in range(0, len(unique_qids), 50):
+              batch = unique_qids[offset : offset + 50]
+              payload = request_json(
+                  WIKIDATA_API,
+                  {
+                      "action": "wbgetentities",
+                      "ids": "|".join(batch),
+                      "props": "labels|claims|info",
+                      "languages": "es|en",
+                      "languagefallback": "1",
+                  },
+                  post=True,
+              )
+              for qid in batch:
+                  entity = (payload.get("entities") or {}).get(qid)
+                  if isinstance(entity, dict):
+                      entity_by_qid[qid] = entity
+                  try:
+                      profile = parse_wikidata_entity_document(payload, expected_qid=qid)
+                      error = None
+                  except WikidataProfileError as exc:
+                      profile = None
+                      error = str(exc)
+                  p31 = nondeprecated_item_qids(entity or {}, "P31")
+                  p106 = nondeprecated_item_qids(entity or {}, "P106")
+                  profile_rows.append(
+                      {
+                          "qid": qid,
+                          "parse_error": error,
+                          "is_human": HUMAN_QID in p31,
+                          "has_association_football_player_occupation": ASSOCIATION_FOOTBALL_PLAYER_QID in p106,
+                          "has_display_name": bool(profile and profile.display_name),
+                          "has_any_dob": bool(profile and profile.dates_of_birth),
+                          "has_exact_dob": bool(profile and profile.exact_date_of_birth),
+                          "has_citizenship": bool(profile and profile.citizenship_qids),
+                          "has_position": bool(profile and profile.position_qids),
+                          "has_height_quantity_claim": has_height_quantity(entity or {}),
+                          "last_revision_id": profile.last_revision_id if profile else None,
+                          "modified_at": profile.modified_at if profile else None,
+                      }
+                  )
+              time.sleep(0.25)
+
+          by_qid = {row["qid"]: row for row in profile_rows}
+          membership_rows_with_qid = [entry for entry in membership_entries if entry["qid"]]
+          qid_to_clubs = defaultdict(set)
+          for entry in membership_rows_with_qid:
+              qid_to_clubs[entry["qid"]].add(entry["club"])
+
+          def count(field):
+              return sum(bool(row[field]) for row in profile_rows)
+
+          total = len(profile_rows)
+          field_counts = {
+              "human": count("is_human"),
+              "association_football_player_occupation": count("has_association_football_player_occupation"),
+              "display_name": count("has_display_name"),
+              "any_dob": count("has_any_dob"),
+              "exact_dob": count("has_exact_dob"),
+              "citizenship": count("has_citizenship"),
+              "position": count("has_position"),
+              "height_quantity_claim": count("has_height_quantity_claim"),
+          }
+          field_ratios = {
+              key: round(value / total, 4) if total else 0
+              for key, value in field_counts.items()
+          }
+          parse_errors = [row for row in profile_rows if row["parse_error"]]
+          non_human = [row["qid"] for row in profile_rows if not row["is_human"]]
+          no_football_occupation = [
+              row["qid"]
+              for row in profile_rows
+              if not row["has_association_football_player_occupation"]
+          ]
+
+          minimum_core_ratio = min(
+              field_ratios["any_dob"],
+              field_ratios["citizenship"],
+              field_ratios["position"],
+          ) if total else 0
+          if field_ratios["human"] >= 0.98 and minimum_core_ratio >= 0.90:
+              decision = "A_strong_profile_enrichment"
+          elif field_ratios["human"] >= 0.95 and minimum_core_ratio >= 0.70:
+              decision = "B_useful_profile_enrichment"
+          else:
+              decision = "C_insufficient_profile_enrichment"
+
+          club_summary = []
+          for club, _ in CLUBS:
+              rows = [entry for entry in membership_entries if entry["club"] == club]
+              qid_rows = [entry for entry in rows if entry["qid"]]
+              qids = {entry["qid"] for entry in qid_rows}
+              club_summary.append(
+                  {
+                      "club": club,
+                      "membership_entries": len(rows),
+                      "membership_entries_with_qid": len(qid_rows),
+                      "unique_qids": len(qids),
+                      "unique_qids_with_exact_dob": sum(
+                          bool(by_qid[qid]["has_exact_dob"]) for qid in qids
+                      ),
+                      "unique_qids_with_citizenship": sum(
+                          bool(by_qid[qid]["has_citizenship"]) for qid in qids
+                      ),
+                      "unique_qids_with_position": sum(
+                          bool(by_qid[qid]["has_position"]) for qid in qids
+                      ),
+                  }
+              )
+
+          report = {
+              "source_chain": "English Wikipedia exact historical revision -> MediaWiki wikibase_item -> current Wikidata entity snapshot",
+              "scope": "ARG_LPF 2024 observed active-squad identity/profile enrichment",
+              "semantic_boundary": "Current Wikidata profile facts enrich provider-local identities only. They do not prove 2024 registration, Torneo appearances, canonical FI identity, or performance metrics.",
+              "decision_heuristic_fixed_before_run": {
+                  "A": "human >=98% and minimum(any DOB, citizenship, position) >=90%",
+                  "B": "human >=95% and minimum(any DOB, citizenship, position) >=70%",
+                  "C": "otherwise",
+              },
+              "aggregate": {
+                  "clubs_total": len(CLUBS),
+                  "clubs_with_observed_membership_entries": sum(
+                      bool(item["membership_entries"]) for item in club_summary
+                  ),
+                  "club_membership_entries": len(membership_entries),
+                  "club_membership_entries_with_qid": len(membership_rows_with_qid),
+                  "unique_qids": total,
+                  "qids_observed_in_multiple_target_clubs": sum(
+                      len(clubs) > 1 for clubs in qid_to_clubs.values()
+                  ),
+                  "parse_errors": len(parse_errors),
+                  "field_counts": field_counts,
+                  "field_ratios": field_ratios,
+                  "decision": decision,
+              },
+              "non_human_qids": non_human,
+              "qids_without_association_football_player_occupation": no_football_occupation,
+              "parse_errors": parse_errors,
+              "clubs": club_summary,
+          }
+          print(json.dumps(report["aggregate"], indent=2, ensure_ascii=False))
+          with open(
+              "wikipedia-wikidata-arg-lpf-2024-profile-coverage.json",
+              "w",
+              encoding="utf-8",
+          ) as handle:
+              json.dump(report, handle, ensure_ascii=False, indent=2)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wikipedia-wikidata-arg-lpf-2024-profile-coverage-${{ github.run_id }}
+          path: wikipedia-wikidata-arg-lpf-2024-profile-coverage.json
+          retention-days: 30
