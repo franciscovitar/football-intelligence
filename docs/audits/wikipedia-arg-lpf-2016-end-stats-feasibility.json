@@ -1,0 +1,57 @@
+{
+  "status": "PASS",
+  "scope": {
+    "competition_code": "ARG_LPF",
+    "season_label": "2016",
+    "cutoff": "2016-06-02T00:00:00Z",
+    "decision_question": "Can end-of-tournament Spanish-Wikipedia revisions provide broad player appearances/minutes/statistics for Primera Division 2016?"
+  },
+  "source": {
+    "provider": "Spanish Wikipedia historical revisions",
+    "license": "CC BY-SA; page-revision attribution required"
+  },
+  "results": {
+    "clubs_total": 30,
+    "clubs_with_revision": 30,
+    "raw_candidate_stat_table_clubs": 6,
+    "roster_tables_with_player_appearance_columns": 2,
+    "broadly_usable_clubs": 0,
+    "minutes_tables_for_current_2016_roster": 0,
+    "independiente": {
+      "revision_timestamp": "2016-05-31T23:32:13Z",
+      "table_heading": "Plantel Profesional 2016",
+      "fields": ["PJ", "Goles"],
+      "rows": 30,
+      "note": "Values appear populated, but scope cannot be certified as Primera short-tournament-only from the table itself."
+    },
+    "newells_old_boys": {
+      "revision_timestamp": "2016-05-30T00:30:47Z",
+      "table_heading": "Plantilla 2016",
+      "fields": ["PJ", "Goles"],
+      "rows": 24,
+      "note": "PJ and goals remained zero across the roster near tournament end, so the table was not maintained as a reliable performance source."
+    },
+    "false_positive_table_contexts": {
+      "Banfield": "all-time leading scorers",
+      "Godoy Cruz": "2016 transfers/altas table",
+      "Racing Club": "historical club records",
+      "San Lorenzo": "all-time goals/appearances rankings"
+    }
+  },
+  "verification": {
+    "workflow_run": 33004190818,
+    "artifact_id": 9619825309,
+    "artifact_digest": "sha256:e3bbb9d940b9f0ce89a86788409666d2ea95c8c1ee6a78c8512f25df35ef13ef"
+  },
+  "decision": "C_insufficient_for_player_season_appearances",
+  "consequences": [
+    "Retain Wikipedia historical revisions as a viable roster_snapshot source for Argentina 2016.",
+    "Do not promote end-of-tournament Wikipedia counters as league-season appearances/minutes.",
+    "Continue searching for an independent appearance/minute source with explicit tournament scope."
+  ],
+  "non_claims": [
+    "No PostgreSQL or production data was written.",
+    "No player-season statistics were promoted.",
+    "The populated Independiente PJ counters were not assumed to be Primera-only."
+  ]
+}
