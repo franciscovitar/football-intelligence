@@ -224,9 +224,7 @@ def _fetch_leagues(*, api_key: str) -> bytes:
         raise ApiFootballCoverageProbeError(f"/leagues network error: {reason}") from exc
 
 
-def _competition_coverage(
-    competition_code: str, item: dict[str, Any]
-) -> CompetitionCoverage:
+def _competition_coverage(competition_code: str, item: dict[str, Any]) -> CompetitionCoverage:
     league = _required_dict(item, "league", context=competition_code)
     country = _required_dict(item, "country", context=competition_code)
     league_id = _required_positive_int(league, "id", context=competition_code)
