@@ -1,0 +1,168 @@
+name: Wikipedia ARG_LPF 2024 full historical snapshot lab
+
+on:
+  push:
+    branches:
+      - lab/wikipedia-arg-lpf-2024-roster
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  collect-by-cut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cut: opening
+            target: '2024-05-10T23:59:59Z'
+          - cut: midyear
+            target: '2024-07-15T23:59:59Z'
+          - cut: window-close
+            target: '2024-09-06T23:59:59Z'
+          - cut: final
+            target: '2024-12-16T23:59:59Z'
+    defaults:
+      run:
+        working-directory: analytics
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Install locked analytics environment
+        run: uv sync --dev --locked
+      - name: Build explicit 26-club request file
+        env:
+          SNAPSHOT_TARGET: ${{ matrix.target }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          titles = [
+              'Argentinos Juniors',
+              'Atlético Tucumán',
+              'Club Atlético Banfield',
+              'Barracas Central',
+              'Club Atlético Belgrano',
+              'Boca Juniors',
+              'Central Córdoba de Santiago del Estero',
+              'Defensa y Justicia',
+              'Deportivo Riestra',
+              'Estudiantes de La Plata',
+              'Gimnasia y Esgrima de La Plata',
+              'Godoy Cruz Antonio Tomba',
+              'Club Atlético Huracán',
+              'Club Atlético Independiente',
+              'Instituto Atlético Central Córdoba',
+              'Club Atlético Lanús',
+              "Newell's Old Boys",
+              'Club Atlético Platense',
+              'Racing Club de Avellaneda',
+              'Club Atlético River Plate',
+              'Rosario Central',
+              'San Lorenzo de Almagro',
+              'Sarmiento de Junín',
+              'Talleres de Córdoba',
+              'Club Atlético Tigre',
+              'Unión de Santa Fe',
+          ]
+          target = os.environ['SNAPSHOT_TARGET']
+          payload = [
+              {'article_title': title, 'snapshot_target': target}
+              for title in titles
+          ]
+          path = Path('/tmp/arg-lpf-2024-wikipedia-requests.json')
+          path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          assert len(payload) == 26
+          print(f'Prepared {len(payload)} explicit historical revision requests for {target}')
+          PY
+      - name: Collect immutable historical revisions
+        run: |
+          uv run football-intelligence-collect-wikipedia-historical-squads \
+            --request-file /tmp/arg-lpf-2024-wikipedia-requests.json \
+            --snapshot-id wikipedia-arg-lpf-2024-${{ matrix.cut }}-${{ github.run_id }} \
+            --competition ARG_LPF \
+            --season 2024 \
+            --output-dir /tmp/wikipedia-arg-lpf-2024-${{ matrix.cut }}
+      - name: Verify snapshot checksums
+        run: |
+          uv run football-intelligence-validate-static-snapshot \
+            --manifest /tmp/wikipedia-arg-lpf-2024-${{ matrix.cut }}/manifest.json \
+            --base-dir /tmp/wikipedia-arg-lpf-2024-${{ matrix.cut }} \
+            --report /tmp/wikipedia-arg-lpf-2024-${{ matrix.cut }}/verification.json
+      - name: Audit historical boundaries and coverage
+        env:
+          EXPECTED_TARGET: ${{ matrix.target }}
+          CUT_LABEL: ${{ matrix.cut }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime
+          from pathlib import Path
+
+          cut = os.environ['CUT_LABEL']
+          expected_target = os.environ['EXPECTED_TARGET']
+          root = Path(f'/tmp/wikipedia-arg-lpf-2024-{cut}')
+          index = json.loads((root / 'index.json').read_text(encoding='utf-8'))
+          manifest = json.loads((root / 'manifest.json').read_text(encoding='utf-8'))
+          verification = json.loads((root / 'verification.json').read_text(encoding='utf-8'))
+
+          assert manifest['source_code'] == 'wikipedia'
+          assert manifest['data_grains'] == ['player_membership']
+          assert verification['status'] == 'PASS'
+          assert len(index['requests']) == 26
+          assert len(manifest['files']) == 27
+
+          evidence_requests = 0
+          no_evidence = []
+          observations = []
+          lags_seconds = []
+          for item in index['requests']:
+              assert item['snapshot_target'] == expected_target
+              target = datetime.fromisoformat(item['snapshot_target'].replace('Z', '+00:00'))
+              revision = datetime.fromisoformat(item['revision_timestamp'].replace('Z', '+00:00'))
+              assert revision <= target
+              assert item['revision_id'] > 0
+              assert item['raw_file'].startswith('revisions/')
+              lags_seconds.append((target - revision).total_seconds())
+              observations.append(item['active_squad_observations'])
+              if item['active_squad_evidence']:
+                  evidence_requests += 1
+                  assert item['active_squad_observations'] > 0
+              else:
+                  assert item['active_squad_observations'] == 0
+                  no_evidence.append(item['requested_title'])
+
+          summary = {
+              'cut': cut,
+              'snapshot_target': expected_target,
+              'requests': len(index['requests']),
+              'active_squad_evidence_requests': evidence_requests,
+              'no_active_squad_evidence_titles': no_evidence,
+              'total_active_squad_observations': sum(observations),
+              'min_active_squad_observations': min(observations),
+              'max_active_squad_observations': max(observations),
+              'max_revision_lag_seconds': max(lags_seconds),
+              'data_grain': manifest['data_grains'][0],
+              'verification': verification['status'],
+          }
+          (root / 'coverage-summary.json').write_text(
+              json.dumps(summary, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps(summary, ensure_ascii=False, indent=2))
+          PY
+      - name: Upload immutable cut snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: wikipedia-arg-lpf-2024-${{ matrix.cut }}-${{ github.run_id }}
+          path: /tmp/wikipedia-arg-lpf-2024-${{ matrix.cut }}
+          retention-days: 30
