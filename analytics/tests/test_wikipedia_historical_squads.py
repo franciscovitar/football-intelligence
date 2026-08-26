@@ -96,8 +96,7 @@ def test_annotation_only_link_is_never_promoted_to_player_article() -> None:
 
 def test_loan_annotation_is_preserved_raw_but_removed_from_display_identity() -> None:
     snapshot = _snapshot(
-        "== Current squad ==\n"
-        + _player("Lucas Lopez (on loan from [[CA Nueva Chicago]])", 7)
+        "== Current squad ==\n" + _player("Lucas Lopez (on loan from [[CA Nueva Chicago]])", 7)
     )
 
     assert snapshot is not None
