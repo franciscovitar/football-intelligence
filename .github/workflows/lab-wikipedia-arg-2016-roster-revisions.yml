@@ -11,125 +11,411 @@ permissions:
   contents: read
 
 jobs:
-  probe:
+  audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6.0.2
       - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.13"
 
-      - name: Fetch five Spanish-Wikipedia revisions near tournament start
+      - name: Audit all 30 Primera 2016 historical roster revisions
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p probe_out/raw
+          mkdir -p probe_out
           python - <<'PY'
           from __future__ import annotations
+
           import json
           import re
           import time
+          import unicodedata
           import urllib.parse
           import urllib.request
+          from collections import Counter
+          from datetime import datetime, timezone
           from pathlib import Path
 
           API = 'https://es.wikipedia.org/w/api.php'
           UA = 'FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
-          TITLES = [
-              'Club Atlético Lanús',
-              'Club Atlético Boca Juniors',
-              'Club Atlético River Plate',
-              'Club Atlético Patronato de la Juventud Católica',
-              'Club Atlético Tucumán',
-          ]
           CUTOFF = '2016-02-09T00:00:00Z'
-          out = []
-          root = Path('probe_out/raw')
+          CUTOFF_DT = datetime.fromisoformat(CUTOFF.replace('Z', '+00:00'))
+
+          # Explicit title candidates only. MediaWiki redirects are allowed; no fuzzy search
+          # or automatic name similarity is used to resolve a club page.
+          CLUB_TITLES = {
+              'Aldosivi': ['Club Atlético Aldosivi'],
+              'Argentinos Juniors': ['Asociación Atlética Argentinos Juniors'],
+              'Arsenal de Sarandí': ['Arsenal Fútbol Club', 'Arsenal de Sarandí'],
+              'Atlético de Rafaela': ['Asociación Mutual Social y Deportiva Atlético de Rafaela', 'Atlético de Rafaela'],
+              'Atlético Tucumán': ['Club Atlético Tucumán'],
+              'Banfield': ['Club Atlético Banfield'],
+              'Belgrano de Córdoba': ['Club Atlético Belgrano'],
+              'Boca Juniors': ['Club Atlético Boca Juniors'],
+              'Colón': ['Club Atlético Colón'],
+              'Defensa y Justicia': ['Club Social y Deportivo Defensa y Justicia'],
+              'Estudiantes': ['Club Estudiantes de La Plata', 'Estudiantes de La Plata'],
+              'Gimnasia de La Plata': ['Club de Gimnasia y Esgrima La Plata'],
+              'Godoy Cruz': ['Club Deportivo Godoy Cruz Antonio Tomba', 'Godoy Cruz Antonio Tomba'],
+              'Huracán': ['Club Atlético Huracán'],
+              'Independiente': ['Club Atlético Independiente'],
+              'Lanús': ['Club Atlético Lanús'],
+              "Newell's Old Boys": ["Club Atlético Newell's Old Boys"],
+              'Olimpo': ['Club Olimpo'],
+              'Patronato': ['Club Atlético Patronato de la Juventud Católica'],
+              'Quilmes': ['Quilmes Atlético Club'],
+              'Racing Club': ['Racing Club'],
+              'River Plate': ['Club Atlético River Plate'],
+              'Rosario Central': ['Club Atlético Rosario Central'],
+              'San Lorenzo': ['Club Atlético San Lorenzo de Almagro'],
+              'San Martín de San Juan': ['Club Atlético San Martín (San Juan)', 'Club Atlético San Martín de San Juan'],
+              'Sarmiento de Junín': ['Club Atlético Sarmiento (Junín)', 'Club Atlético Sarmiento de Junín'],
+              'Temperley': ['Club Atlético Temperley'],
+              'Tigre': ['Club Atlético Tigre'],
+              'Unión de Santa Fe': ['Club Atlético Unión (Santa Fe)', 'Club Atlético Unión'],
+              'Vélez Sarsfield': ['Club Atlético Vélez Sarsfield'],
+          }
+
+          POSITION_MAP = {
+              'ARQ': 'goalkeeper', 'POR': 'goalkeeper', 'GK': 'goalkeeper',
+              'DEF': 'defender', 'DF': 'defender',
+              'MED': 'midfielder', 'MID': 'midfielder', 'MF': 'midfielder',
+              'DEL': 'forward', 'FW': 'forward',
+          }
 
           def fetch(params: dict[str, str]) -> dict:
               url = f"{API}?{urllib.parse.urlencode(params)}"
               req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept': 'application/json'})
-              with urllib.request.urlopen(req, timeout=30) as resp:
-                  payload = json.loads(resp.read())
-              if not isinstance(payload, dict):
-                  raise RuntimeError('Wikipedia response root is not object')
-              return payload
+              for attempt in range(1, 5):
+                  try:
+                      with urllib.request.urlopen(req, timeout=30) as resp:
+                          payload = json.loads(resp.read())
+                      if not isinstance(payload, dict):
+                          raise RuntimeError('Wikipedia response root is not object')
+                      return payload
+                  except Exception:
+                      if attempt == 4:
+                          raise
+                      time.sleep(1.5 * attempt)
+              raise AssertionError('unreachable')
 
-          for title in TITLES:
-              payload = fetch({
-                  'action': 'query',
-                  'prop': 'revisions',
-                  'titles': title,
-                  'rvstart': CUTOFF,
-                  'rvdir': 'older',
-                  'rvlimit': '1',
-                  'rvprop': 'ids|timestamp|content',
-                  'rvslots': 'main',
-                  'format': 'json',
-                  'formatversion': '2',
-              })
-              pages = payload.get('query', {}).get('pages', [])
-              if not isinstance(pages, list) or len(pages) != 1:
-                  raise RuntimeError(f'unexpected page payload for {title!r}')
-              page = pages[0]
-              revisions = page.get('revisions') or []
-              if not revisions:
-                  out.append({'requested_title': title, 'resolved_title': page.get('title'), 'state': 'no_revision'})
-                  continue
-              rev = revisions[0]
-              slots = rev.get('slots') if isinstance(rev, dict) else None
-              main = slots.get('main') if isinstance(slots, dict) else None
-              text = main.get('content') if isinstance(main, dict) else None
-              if not isinstance(text, str):
-                  raise RuntimeError(f'no main content for {title!r}')
+          def fold(value: str) -> str:
+              decomp = unicodedata.normalize('NFKD', value)
+              return ''.join(c for c in decomp if not unicodedata.combining(c)).casefold()
 
-              safe = re.sub(r'[^a-z0-9]+', '-', title.casefold()).strip('-')
-              (root / f'{safe}.wikitext').write_text(text, encoding='utf-8')
+          def revision_for_explicit_titles(titles: list[str]) -> tuple[dict | None, list[dict]]:
+              attempts = []
+              for title in titles:
+                  payload = fetch({
+                      'action': 'query',
+                      'prop': 'revisions',
+                      'titles': title,
+                      'redirects': '1',
+                      'rvstart': CUTOFF,
+                      'rvdir': 'older',
+                      'rvlimit': '1',
+                      'rvprop': 'ids|timestamp|content',
+                      'rvslots': 'main',
+                      'format': 'json',
+                      'formatversion': '2',
+                  })
+                  pages = payload.get('query', {}).get('pages', [])
+                  if not isinstance(pages, list) or len(pages) != 1:
+                      attempts.append({'title': title, 'state': 'unexpected_page_payload'})
+                      continue
+                  page = pages[0]
+                  if page.get('missing') is True or page.get('pageid') is None:
+                      attempts.append({'title': title, 'state': 'missing'})
+                      continue
+                  revisions = page.get('revisions') or []
+                  if not revisions:
+                      attempts.append({'title': title, 'state': 'no_revision_before_cutoff', 'resolved_title': page.get('title')})
+                      continue
+                  rev = revisions[0]
+                  slots = rev.get('slots') if isinstance(rev, dict) else None
+                  main = slots.get('main') if isinstance(slots, dict) else None
+                  text = main.get('content') if isinstance(main, dict) else None
+                  if not isinstance(text, str):
+                      attempts.append({'title': title, 'state': 'revision_without_wikitext', 'resolved_title': page.get('title')})
+                      continue
+                  attempts.append({'title': title, 'state': 'resolved', 'resolved_title': page.get('title')})
+                  return ({
+                      'requested_title': title,
+                      'resolved_title': page.get('title'),
+                      'pageid': page.get('pageid'),
+                      'revid': rev.get('revid'),
+                      'timestamp': rev.get('timestamp'),
+                      'text': text,
+                  }, attempts)
+              return None, attempts
 
-              headings = []
+          def headings(text: str) -> list[dict]:
+              found = []
               for m in re.finditer(r'^(={2,6})\s*(.*?)\s*\1\s*$', text, re.M):
-                  label = re.sub(r'\[\[|\]\]', '', m.group(2)).strip()
-                  if any(k in label.casefold() for k in ('plantel', 'plantilla', 'jugadores', 'equipo actual')):
-                      headings.append({'label': label, 'offset': m.start()})
+                  found.append({
+                      'level': len(m.group(1)),
+                      'label': re.sub(r'\[\[|\]\]', '', m.group(2)).strip(),
+                      'start': m.start(),
+                      'content_start': m.end(),
+                  })
+              for i, h in enumerate(found):
+                  end = len(text)
+                  for nxt in found[i + 1:]:
+                      if nxt['level'] <= h['level']:
+                          end = nxt['start']
+                          break
+                  h['end'] = end
+              return found
 
-              snippets = []
-              for h in headings[:5]:
-                  start = max(0, h['offset'] - 200)
-                  snippets.append(text[start:h['offset'] + 6000])
+          def roster_sections(text: str) -> list[dict]:
+              candidates = []
+              for h in headings(text):
+                  label = fold(h['label'])
+                  if not any(k in label for k in ('plantel', 'plantilla', 'equipo actual')):
+                      continue
+                  section = text[h['content_start']:h['end']]
+                  count = sum(1 for _ in iter_player_templates(section))
+                  score = count * 10
+                  if '2016' in label:
+                      score += 5
+                  if 'profesional' in label:
+                      score += 2
+                  candidates.append({**h, 'template_count': count, 'score': score, 'section': section})
+              return sorted(candidates, key=lambda x: (-x['score'], x['start']))
 
-              # Diagnostic only. Do not treat these patterns as a certified roster parser.
-              diagnostics = {
-                  'footballer_template_count': len(re.findall(r'\{\{[^\n{}]*(?:jugador|futbolista)[^\n{}]*\}\}', text, re.I)),
-                  'numbered_table_row_count': len(re.findall(r'^\|[-+]?\s*\d+\s*\|', text, re.M)),
-                  'flagicon_count': text.casefold().count('{{bandera'),
-                  'position_tokens': sum(text.casefold().count(tok) for tok in ('portero', 'arquero', 'defensa', 'mediocampista', 'delantero')),
+          def matching_template_end(text: str, start: int) -> int | None:
+              depth = 0
+              i = start
+              while i < len(text) - 1:
+                  pair = text[i:i+2]
+                  if pair == '{{':
+                      depth += 1
+                      i += 2
+                      continue
+                  if pair == '}}':
+                      depth -= 1
+                      i += 2
+                      if depth == 0:
+                          return i
+                      continue
+                  i += 1
+              return None
+
+          def iter_player_templates(text: str):
+              i = 0
+              while True:
+                  start = text.find('{{', i)
+                  if start < 0:
+                      return
+                  name_end_candidates = [p for p in (text.find('|', start + 2), text.find('}}', start + 2)) if p >= 0]
+                  if not name_end_candidates:
+                      return
+                  name_end = min(name_end_candidates)
+                  template_name = fold(text[start + 2:name_end].strip())
+                  if template_name.replace(' ', '') not in {'jugadordefutbol', 'futbolista'}:
+                      i = start + 2
+                      continue
+                  end = matching_template_end(text, start)
+                  if end is None:
+                      i = start + 2
+                      continue
+                  yield text[start:end]
+                  i = end
+
+          def split_top_level(inner: str) -> list[str]:
+              parts = []
+              buf = []
+              brace = 0
+              bracket = 0
+              i = 0
+              while i < len(inner):
+                  pair = inner[i:i+2]
+                  if pair == '{{':
+                      brace += 1; buf.append(pair); i += 2; continue
+                  if pair == '}}' and brace:
+                      brace -= 1; buf.append(pair); i += 2; continue
+                  if pair == '[[':
+                      bracket += 1; buf.append(pair); i += 2; continue
+                  if pair == ']]' and bracket:
+                      bracket -= 1; buf.append(pair); i += 2; continue
+                  ch = inner[i]
+                  if ch == '|' and brace == 0 and bracket == 0:
+                      parts.append(''.join(buf)); buf = []; i += 1; continue
+                  buf.append(ch); i += 1
+              parts.append(''.join(buf))
+              return parts
+
+          def parse_fields(template: str) -> dict[str, str]:
+              inner = template[2:-2]
+              parts = split_top_level(inner)
+              fields = {}
+              for part in parts[1:]:
+                  if '=' not in part:
+                      continue
+                  key, value = part.split('=', 1)
+                  key = fold(key.strip()).replace(' ', '')
+                  fields[key] = value.strip()
+              return fields
+
+          def display_name(raw: str | None) -> str | None:
+              if not raw:
+                  return None
+              m = re.search(r'\[\[([^\]]+)\]\]', raw)
+              if m:
+                  return m.group(1).split('|')[-1].strip()
+              clean = re.sub(r'<ref\b.*?</ref>', '', raw, flags=re.I | re.S)
+              clean = re.sub(r'\{\{.*?\}\}', '', clean, flags=re.S)
+              clean = re.sub(r"''+", '', clean)
+              clean = re.sub(r'<[^>]+>', '', clean)
+              clean = clean.strip()
+              return clean or None
+
+          def parse_dob(raw: str | None) -> str | None:
+              if not raw:
+                  return None
+              m = re.search(r'\{\{\s*edad\s*\|\s*(\d{1,2})\s*\|\s*(\d{1,2})\s*\|\s*(\d{4})', raw, re.I)
+              if not m:
+                  return None
+              d, mo, y = map(int, m.groups())
+              try:
+                  return f'{y:04d}-{mo:02d}-{d:02d}'
+              except ValueError:
+                  return None
+
+          def normalize_nat(raw: str | None) -> str | None:
+              if not raw:
+                  return None
+              clean = re.sub(r'\{\{.*?\}\}', '', raw, flags=re.S).strip()
+              aliases = {'arg': 'Argentina', 'argentina': 'Argentina'}
+              return aliases.get(fold(clean), clean or None)
+
+          def parse_player(template: str) -> dict:
+              fields = parse_fields(template)
+              raw_name = fields.get('name') or fields.get('nombre')
+              raw_number = fields.get('no') or fields.get('num') or fields.get('numero')
+              raw_nat = fields.get('nat') or fields.get('nac') or fields.get('nacionalidad')
+              raw_pos = fields.get('pos') or fields.get('posicion')
+              raw_age = fields.get('edad') or fields.get('nacimiento')
+              name = display_name(raw_name)
+              number = None
+              if raw_number:
+                  m = re.search(r'\d+', raw_number)
+                  number = int(m.group()) if m else None
+              pos_code = re.sub(r'[^A-Za-z]', '', raw_pos or '').upper() or None
+              return {
+                  'name': name,
+                  'shirt_number': number,
+                  'position_code': pos_code,
+                  'position': POSITION_MAP.get(pos_code),
+                  'nationality': normalize_nat(raw_nat),
+                  'date_of_birth': parse_dob(raw_age),
+                  'raw_name': raw_name,
               }
 
-              out.append({
-                  'requested_title': title,
-                  'resolved_title': page.get('title'),
-                  'pageid': page.get('pageid'),
-                  'state': 'revision_found',
-                  'revid': rev.get('revid'),
-                  'timestamp': rev.get('timestamp'),
-                  'bytes': len(text.encode('utf-8')),
-                  'candidate_headings': headings,
-                  'diagnostics': diagnostics,
-                  'candidate_snippets': snippets,
-              })
-              time.sleep(0.2)
+          def declared_update(section: str) -> str | None:
+              for line in section.splitlines()[:20]:
+                  if 'actualiz' in fold(line):
+                      clean = re.sub(r'\{\{.*?\}\}', '', line)
+                      clean = re.sub(r'\[\[|\]\]', '', clean)
+                      clean = re.sub(r'<[^>]+>', '', clean)
+                      clean = re.sub(r"''+", '', clean)
+                      return re.sub(r'\s+', ' ', clean).strip()[:300]
+              return None
 
-          Path('probe_out/summary.json').write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding='utf-8')
-          print(json.dumps(out, indent=2, ensure_ascii=False))
+          results = []
+          all_player_rows = []
+          for club, titles in CLUB_TITLES.items():
+              revision, attempts = revision_for_explicit_titles(titles)
+              if revision is None:
+                  results.append({'club': club, 'state': 'page_unresolved', 'attempts': attempts, 'players': []})
+                  continue
+
+              text = revision.pop('text')
+              sections = roster_sections(text)
+              if not sections:
+                  results.append({
+                      'club': club, 'state': 'no_roster_section', 'attempts': attempts,
+                      **revision, 'players': [],
+                  })
+                  continue
+
+              chosen = sections[0]
+              parsed = [parse_player(t) for t in iter_player_templates(chosen['section'])]
+              valid = [p for p in parsed if p['name']]
+              normalized_names = [fold(p['name']) for p in valid if p['name']]
+              duplicates = sorted(name for name, n in Counter(normalized_names).items() if n > 1)
+              unique_by_name = {}
+              for player in valid:
+                  unique_by_name.setdefault(fold(player['name']), player)
+              players = list(unique_by_name.values())
+
+              rev_dt = datetime.fromisoformat(str(revision['timestamp']).replace('Z', '+00:00'))
+              row = {
+                  'club': club,
+                  'state': 'roster_parsed' if players else 'roster_section_without_parsed_players',
+                  'attempts': attempts,
+                  **revision,
+                  'revision_age_days': round((CUTOFF_DT - rev_dt).total_seconds() / 86400, 3),
+                  'section_label': chosen['label'],
+                  'section_mentions_2016': '2016' in chosen['label'] or '2016' in chosen['section'][:1500],
+                  'declared_update': declared_update(chosen['section']),
+                  'candidate_roster_sections': [
+                      {'label': s['label'], 'template_count': s['template_count']} for s in sections[:5]
+                  ],
+                  'raw_player_template_count': len(parsed),
+                  'parsed_player_count': len(players),
+                  'duplicate_normalized_names': duplicates,
+                  'players_with_number': sum(p['shirt_number'] is not None for p in players),
+                  'players_with_position': sum(p['position'] is not None for p in players),
+                  'players_with_nationality': sum(p['nationality'] is not None for p in players),
+                  'players_with_dob': sum(p['date_of_birth'] is not None for p in players),
+                  'players': players,
+              }
+              results.append(row)
+              for player in players:
+                  all_player_rows.append({'club': club, 'revid': revision['revid'], **player})
+              time.sleep(0.15)
+
+          parsed_rows = [r for r in results if r['state'] == 'roster_parsed']
+          counts = [r['parsed_player_count'] for r in parsed_rows]
+          strong_clubs = sum(r['parsed_player_count'] >= 20 for r in parsed_rows)
+          section_2016_clubs = sum(bool(r.get('section_mentions_2016')) for r in parsed_rows)
+          summary = {
+              'source': 'Spanish Wikipedia historical revisions',
+              'license_role': 'CC BY-SA source; attribution/revision provenance required',
+              'cutoff': CUTOFF,
+              'clubs_total': len(CLUB_TITLES),
+              'clubs_page_resolved': sum(r['state'] != 'page_unresolved' for r in results),
+              'clubs_with_roster_section': sum(r['state'] in {'roster_parsed', 'roster_section_without_parsed_players'} for r in results),
+              'clubs_with_parsed_roster': len(parsed_rows),
+              'clubs_with_at_least_20_players': strong_clubs,
+              'clubs_roster_section_mentions_2016': section_2016_clubs,
+              'parsed_players_total_by_club_sum': sum(counts),
+              'parsed_players_min': min(counts) if counts else 0,
+              'parsed_players_median': sorted(counts)[len(counts)//2] if counts else 0,
+              'parsed_players_max': max(counts) if counts else 0,
+              'decision': (
+                  'A_roster_snapshot_viable' if strong_clubs >= 27 and len(parsed_rows) >= 28
+                  else 'B_useful_partial' if strong_clubs >= 20
+                  else 'C_insufficient'
+              ),
+              'results': results,
+          }
+          Path('probe_out/summary.json').write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding='utf-8')
+          Path('probe_out/player_rows.json').write_text(json.dumps(all_player_rows, indent=2, ensure_ascii=False), encoding='utf-8')
+          print(json.dumps({k: v for k, v in summary.items() if k != 'results'}, indent=2, ensure_ascii=False))
+          for r in results:
+              print(f"{r['club']}: {r['state']} count={r.get('parsed_player_count', 0)} section={r.get('section_label')!r} revid={r.get('revid')}")
           PY
 
-      - name: Upload bounded revision probe
+      - name: Upload bounded 30-club audit
         uses: actions/upload-artifact@v4
         with:
-          name: wikipedia-arg-2016-roster-revision-probe
+          name: wikipedia-arg-2016-roster-30club-audit
           path: |
             probe_out/summary.json
-            probe_out/raw/
+            probe_out/player_rows.json
           if-no-files-found: error
           retention-days: 7
