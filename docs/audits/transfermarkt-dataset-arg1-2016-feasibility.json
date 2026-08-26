@@ -1,0 +1,49 @@
+{
+  "status": "NO_GO_HISTORICAL_ARG_2016",
+  "decision": "Do not use the current dcaribou/transfermarkt-datasets snapshot as the Argentina 2016 appearance/minute source. Keep it as a candidate for recent Argentina and for other competitions only after measured coverage audits.",
+  "scope": {
+    "competition_id": "ARG1",
+    "target_competition": "Argentina Primera Division 2016",
+    "target_window": ["2016-02-05", "2016-05-29"]
+  },
+  "source": {
+    "repository": "dcaribou/transfermarkt-datasets",
+    "publisher_license": "CC0-1.0",
+    "upstream_provenance": "Transfermarkt-derived dataset published by dcaribou",
+    "consumption_mode": "Published dataset only; Football Intelligence did not scrape Transfermarkt directly."
+  },
+  "measured_current_snapshot": {
+    "arg1_games_total": 418,
+    "season_labels": {
+      "2024": 178,
+      "2025": 240
+    },
+    "date_ranges": {
+      "2024": ["2025-01-24", "2025-05-04"],
+      "2025": ["2026-01-22", "2026-05-05"]
+    },
+    "target_window_games": 0,
+    "target_window_appearance_rows": 0,
+    "target_window_players": 0
+  },
+  "upstream_history": {
+    "arg1_added_to_config_commit": "b6253b6b6442a7a3388fec381185ff4bcd862cee",
+    "arg1_added_to_config_date": "2026-03-27",
+    "arg1_added_commit_message_excerpt": "Add first-tier leagues from Americas (BRA1, ARG1, MLS1, MEX1, COL1)",
+    "github_releases_found": 0,
+    "interpretation": "The configured season list includes historical years, but the published ARG1 data measured today does not contain them. Configuration intent must not be treated as measured coverage."
+  },
+  "verification": {
+    "initial_season_filter_run": 33005674839,
+    "date_window_run": 33005892272,
+    "date_window_artifact_id": 9620505719,
+    "date_window_artifact_sha256": "29a3f556808963776fd2975bf4d3262d1f8d7640caf2b3dd296d0ff9f5e80a6c",
+    "quality_run_on_probe_commit": 33005892257
+  },
+  "non_claims": [
+    "This does not say the dataset is low quality for competitions/seasons it actually contains.",
+    "This does not say Transfermarkt itself lacks Argentina 2016 data.",
+    "This does not treat the publisher CC0 declaration as a legal opinion clearing every possible upstream right.",
+    "No production data, player crosswalk, or database row was written by this spike."
+  ]
+}
