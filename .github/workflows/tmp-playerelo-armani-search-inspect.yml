@@ -1,0 +1,99 @@
+name: PlayerElo Armani search inspect
+
+on:
+  push:
+    branches:
+      - lab/playerelo-provider-audit
+    paths:
+      - .github/workflows/tmp-playerelo-armani-search-inspect.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    env:
+      PLAYERELO_API_KEY: ${{ secrets.PLAYERELO_API_KEY }}
+    steps:
+      - name: Inspect Armani search without auto-linking
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PLAYERELO_API_KEY:-}" || { echo "missing PLAYERELO_API_KEY"; exit 1; }
+          rm -rf /tmp/playerelo-armani-search
+          mkdir -p /tmp/playerelo-armani-search
+          python - <<'PY'
+          import hashlib, json, os, urllib.parse, urllib.request
+          from pathlib import Path
+
+          base = "https://data-api.playerelo.football"
+          key = os.environ["PLAYERELO_API_KEY"]
+          out = Path("/tmp/playerelo-armani-search")
+
+          def fetch(path):
+              req = urllib.request.Request(
+                  base + path,
+                  headers={"Accept":"application/json","Authorization":f"Bearer {key}"},
+              )
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  return response.read()
+
+          usage_before_raw = fetch("/v1/usage")
+          usage_before = json.loads(usage_before_raw)
+          search_raw = fetch("/v1/players?" + urllib.parse.urlencode({"search":"Armani","limit":10}))
+          search = json.loads(search_raw)
+          usage_after_raw = fetch("/v1/usage")
+          usage_after = json.loads(usage_after_raw)
+
+          (out / "usage-before.json").write_bytes(usage_before_raw)
+          (out / "search-armani.json").write_bytes(search_raw)
+          (out / "usage-after.json").write_bytes(usage_after_raw)
+
+          if not isinstance(search, list):
+              raise SystemExit("search root was not a list")
+          compact = []
+          for item in search:
+              if not isinstance(item, dict):
+                  continue
+              compact.append({
+                  key_name: item.get(key_name)
+                  for key_name in (
+                      "player_id", "id", "player_name", "name", "position",
+                      "club_id", "club_name", "team_id", "team_name",
+                      "league_id", "league_name", "country", "nationality",
+                      "birth_date", "date_of_birth", "age"
+                  )
+                  if key_name in item
+              })
+          before = usage_before.get("used_this_month") if isinstance(usage_before, dict) else None
+          after = usage_after.get("used_this_month") if isinstance(usage_after, dict) else None
+          summary = {
+              "usage_before": usage_before,
+              "usage_after": usage_after,
+              "counted_delta": (after - before) if isinstance(before, int) and isinstance(after, int) else None,
+              "results": compact,
+          }
+          (out / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+
+          manifest = {"files": []}
+          for path in sorted(p for p in out.iterdir() if p.is_file() and p.name != "manifest.json"):
+              raw = path.read_bytes()
+              manifest["files"].append({"path": path.name, "sha256": hashlib.sha256(raw).hexdigest(), "byte_size": len(raw)})
+          (out / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+          print(f"PLAYERELO ARMANI SEARCH: PASS results={len(compact)} counted_delta={summary['counted_delta']}")
+          for item in compact:
+              print(json.dumps(item, sort_keys=True, ensure_ascii=False))
+          PY
+          if grep -R --fixed-strings --binary-files=without-match -- "${PLAYERELO_API_KEY}" /tmp/playerelo-armani-search >/dev/null; then
+            echo "secret found in artifact directory"
+            exit 1
+          fi
+      - name: Upload search evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: playerelo-armani-search-${{ github.run_id }}
+          path: /tmp/playerelo-armani-search
+          if-no-files-found: error
+          retention-days: 7
