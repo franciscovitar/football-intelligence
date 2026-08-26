@@ -16,7 +16,7 @@ jobs:
     env:
       PLAYERELO_API_KEY: ${{ secrets.PLAYERELO_API_KEY }}
     steps:
-      - name: Probe exact Argentina historical player and quota accounting
+      - name: Probe resolved Argentina historical player and quota accounting
         shell: bash
         run: |
           set -euo pipefail
@@ -33,15 +33,14 @@ jobs:
           import hashlib
           import json
           import os
-          import urllib.parse
           import urllib.request
           from pathlib import Path
-          from typing import Any
 
           BASE = "https://data-api.playerelo.football"
           KEY = os.environ["PLAYERELO_API_KEY"]
           OUT = Path("/tmp/playerelo-arg-probe")
           RAW = OUT / "raw"
+          PLAYER_ID = 2463
 
           def fetch(path: str) -> bytes:
               request = urllib.request.Request(
@@ -60,33 +59,11 @@ jobs:
           usage_before = json.loads(usage_before_raw)
           (RAW / "usage-before.json").write_bytes(usage_before_raw)
 
-          search_query = urllib.parse.urlencode({"search": "Franco Armani", "limit": 5})
-          search_raw = fetch(f"/v1/players?{search_query}")
-          search_payload = json.loads(search_raw)
-          (RAW / "search-franco-armani.json").write_bytes(search_raw)
-          if not isinstance(search_payload, list):
-              raise SystemExit("PlayerElo search payload was not a list")
-
-          exact = []
-          for item in search_payload:
-              if not isinstance(item, dict):
-                  continue
-              name = str(item.get("player_name") or item.get("name") or "").strip().casefold()
-              if name == "franco armani":
-                  exact.append(item)
-          if len(exact) != 1:
-              raise SystemExit(f"Expected exactly one exact Franco Armani search result, got {len(exact)}")
-
-          player = exact[0]
-          player_id = player.get("player_id") or player.get("id")
-          if not isinstance(player_id, int) or isinstance(player_id, bool) or player_id <= 0:
-              raise SystemExit(f"Unexpected Franco Armani player ID: {player_id!r}")
-
-          history_raw = fetch(f"/v1/players/{player_id}/history")
+          history_raw = fetch(f"/v1/players/{PLAYER_ID}/history")
           history = json.loads(history_raw)
-          (RAW / f"player-{player_id}-history.json").write_bytes(history_raw)
+          (RAW / f"player-{PLAYER_ID}-history.json").write_bytes(history_raw)
           if not isinstance(history, list) or not history:
-              raise SystemExit("Franco Armani history was not a non-empty list")
+              raise SystemExit("Resolved F. Armani history was not a non-empty list")
 
           usage_after_raw = fetch("/v1/usage")
           usage_after = json.loads(usage_after_raw)
@@ -99,9 +76,9 @@ jobs:
           counted_delta = used_after - used_before if isinstance(used_before, int) and isinstance(used_after, int) else None
 
           summary = {
-              "search_exact_match_count": len(exact),
-              "provider_player_id": player_id,
-              "search_player_record": player,
+              "provider_player_id": PLAYER_ID,
+              "provider_display_name_from_prior_search": "F. Armani",
+              "identity_note": "Provider ID 2463 resolved by the prior bounded surname search; no name-only canonical linking implied.",
               "history_row_count": len(history),
               "history_earliest_date": min(dates) if dates else None,
               "history_latest_date": max(dates) if dates else None,
@@ -109,7 +86,7 @@ jobs:
               "usage_before": usage_before,
               "usage_after": usage_after,
               "counted_request_delta": counted_delta,
-              "expected_counted_request_delta": 2,
+              "expected_counted_request_delta": 1,
           }
           (OUT / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
 
@@ -125,18 +102,18 @@ jobs:
               "snapshot_id": "playerelo-arg-history-quota-${{ github.run_id }}",
               "source_code": "playerelo",
               "competition_codes": ["ARG_LPF"],
-              "provider_player_ids": [player_id],
+              "provider_player_ids": [PLAYER_ID],
               "data_grains": ["player_match"],
               "files": files,
               "notes": "Bounded technical evaluation only; no product or rights approval implied.",
           }
           (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
-          if counted_delta != 2:
-              raise SystemExit(f"Unexpected counted request delta: {counted_delta!r}, expected 2")
+          if counted_delta != 1:
+              raise SystemExit(f"Unexpected counted request delta: {counted_delta!r}, expected 1")
           print(
               "PLAYERELO ARG PROBE: PASS "
-              f"player_id={player_id} rows={len(history)} earliest={summary['history_earliest_date']} "
+              f"player_id={PLAYER_ID} rows={len(history)} earliest={summary['history_earliest_date']} "
               f"latest={summary['history_latest_date']} counted_delta={counted_delta}"
           )
           PY
