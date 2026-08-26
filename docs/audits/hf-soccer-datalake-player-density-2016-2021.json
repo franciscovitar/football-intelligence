@@ -1,0 +1,112 @@
+{
+  "audit_id": "hf-soccer-datalake-player-density-2016-2021",
+  "status": "candidate_rights_blocked",
+  "audited_at": "2026-08-26",
+  "source": {
+    "dataset": "eatpizzanot/soccer-dataset",
+    "distribution": "https://huggingface.co/datasets/eatpizzanot/soccer-dataset",
+    "code": "https://github.com/v-eatpizzanot/soccer-dataset",
+    "declared_license": "CC-BY-4.0",
+    "upstream_sources": ["API-Football", "football-data.co.uk"]
+  },
+  "scope": {
+    "competition_codes": ["ARG_LPF", "ENG_PL", "ESP_LL", "ITA_SA", "GER_BL1", "FRA_L1"],
+    "calendar_years": "2016-2021",
+    "grain_warning": "Calendar-year audit only; not canonical season coverage.",
+    "no_database_write": true,
+    "no_product_promotion": true
+  },
+  "runtime_evidence": {
+    "density_run": {
+      "workflow_run_id": 32993243428,
+      "artifact_id": 9615443955,
+      "artifact_digest": "sha256:0f4bc812df44f9f2cbbd7305879f96fd48b26778ffc064ac1efff27874562570"
+    },
+    "semantics_run": {
+      "workflow_run_id": 32993975454,
+      "artifact_id": 9615730300,
+      "artifact_digest": "sha256:936577b7b1375c71fc8f1509a16e5f63070b1280c05b2f5cb63dc7865ded1a26"
+    }
+  },
+  "league_mapping": [
+    {"competition_code": "ARG_LPF", "api_football_id": 128, "dataset_league_id": 28, "name": "Liga Profesional", "country": "Argentina"},
+    {"competition_code": "ENG_PL", "api_football_id": 39, "dataset_league_id": 1, "name": "Premier League", "country": "England"},
+    {"competition_code": "ESP_LL", "api_football_id": 140, "dataset_league_id": 5, "name": "La Liga", "country": "Spain"},
+    {"competition_code": "FRA_L1", "api_football_id": 61, "dataset_league_id": 9, "name": "Ligue 1", "country": "France"},
+    {"competition_code": "GER_BL1", "api_football_id": 78, "dataset_league_id": 11, "name": "Bundesliga", "country": "Germany"},
+    {"competition_code": "ITA_SA", "api_football_id": 135, "dataset_league_id": 7, "name": "Serie A", "country": "Italy"}
+  ],
+  "feasibility_rule": {
+    "strong": "fixtures_with_players_pct >= 85 and fixtures_with_stats_pct >= 70",
+    "partial": "otherwise, fixtures_with_players_pct >= 50 or fixtures_with_stats_pct >= 40",
+    "weak": "below partial thresholds"
+  },
+  "classification_counts": {"weak": 1, "partial": 3, "strong": 32},
+  "weighted_coverage_2016_2021": {
+    "ARG_LPF": {"played_fixtures": 2680, "fixtures_with_players": 2064, "fixtures_with_players_pct": 77.0, "fixtures_with_stats": 1914, "fixtures_with_stats_pct": 71.4, "strong_years": 3, "partial_years": 2, "weak_years": 1},
+    "ENG_PL": {"played_fixtures": 2273, "fixtures_with_players": 2273, "fixtures_with_players_pct": 100.0, "fixtures_with_stats": 2273, "fixtures_with_stats_pct": 100.0, "strong_years": 6, "partial_years": 0, "weak_years": 0},
+    "ESP_LL": {"played_fixtures": 2574, "fixtures_with_players": 2293, "fixtures_with_players_pct": 89.1, "fixtures_with_stats": 2292, "fixtures_with_stats_pct": 89.0, "strong_years": 5, "partial_years": 1, "weak_years": 0},
+    "FRA_L1": {"played_fixtures": 2179, "fixtures_with_players": 2179, "fixtures_with_players_pct": 100.0, "fixtures_with_stats": 2178, "fixtures_with_stats_pct": 100.0, "strong_years": 6, "partial_years": 0, "weak_years": 0},
+    "GER_BL1": {"played_fixtures": 1927, "fixtures_with_players": 1842, "fixtures_with_players_pct": 95.6, "fixtures_with_stats": 1841, "fixtures_with_stats_pct": 95.5, "strong_years": 6, "partial_years": 0, "weak_years": 0},
+    "ITA_SA": {"played_fixtures": 2509, "fixtures_with_players": 2300, "fixtures_with_players_pct": 91.7, "fixtures_with_stats": 2299, "fixtures_with_stats_pct": 91.6, "strong_years": 6, "partial_years": 0, "weak_years": 0}
+  },
+  "non_strong_cells": [
+    {"competition_code": "ARG_LPF", "calendar_year": 2016, "fixtures_played": 510, "fixtures_with_players_pct": 41.2, "fixtures_with_stats_pct": 20.6, "games_rating_pct": 0.0, "passes_total_pct": 1.0, "duels_total_pct": 0.0, "tackles_total_pct": 100.0, "density_class": "weak"},
+    {"competition_code": "ARG_LPF", "calendar_year": 2017, "fixtures_played": 489, "fixtures_with_players_pct": 83.0, "fixtures_with_stats_pct": 82.4, "games_rating_pct": 97.6, "passes_total_pct": 99.8, "duels_total_pct": 97.6, "tackles_total_pct": 2.4, "density_class": "partial"},
+    {"competition_code": "ARG_LPF", "calendar_year": 2018, "fixtures_played": 477, "fixtures_with_players_pct": 83.9, "fixtures_with_stats_pct": 83.0, "games_rating_pct": 98.2, "passes_total_pct": 100.0, "duels_total_pct": 98.2, "tackles_total_pct": 37.5, "density_class": "partial"},
+    {"competition_code": "ESP_LL", "calendar_year": 2017, "fixtures_played": 466, "fixtures_with_players_pct": 83.7, "fixtures_with_stats_pct": 83.7, "games_rating_pct": 100.0, "passes_total_pct": 100.0, "duels_total_pct": 100.0, "tackles_total_pct": 0.0, "density_class": "partial"}
+  ],
+  "appearance_semantics": {
+    "guard": "games_minutes non-null is direct appearance evidence; null is missing and is not promoted to an appearance.",
+    "observations": [
+      "fixture_players behaves as matchday-squad evidence and can include unused substitutes.",
+      "fixture_players_stats_flat includes unused substitute rows in later years.",
+      "ratings and passes were not observed on rows with null games_minutes in audited cells.",
+      "appearance rows per covered fixture are football-plausible: about 27-31 depending on league/year.",
+      "raw field non-null percentages must not be compared across years without conditioning on appearance evidence."
+    ],
+    "league_ranges": {
+      "ARG_LPF": {"appearance_rows_per_covered_fixture": [27.71, 30.53], "rating_on_appearance_pct": [0.0, 100.0], "passes_on_appearance_pct": [1.0, 100.0], "max_rating_without_minutes_pct": 0.0, "max_passes_without_minutes_pct": 0.0},
+      "ENG_PL": {"appearance_rows_per_covered_fixture": [27.47, 27.9], "rating_on_appearance_pct": [98.0, 100.0], "passes_on_appearance_pct": [98.8, 100.0], "max_rating_without_minutes_pct": 0.0, "max_passes_without_minutes_pct": 0.0},
+      "ESP_LL": {"appearance_rows_per_covered_fixture": [27.75, 30.82], "rating_on_appearance_pct": [98.1, 100.0], "passes_on_appearance_pct": [98.9, 100.0], "max_rating_without_minutes_pct": 0.0, "max_passes_without_minutes_pct": 0.0},
+      "FRA_L1": {"appearance_rows_per_covered_fixture": [27.66, 30.15], "rating_on_appearance_pct": [96.9, 100.0], "passes_on_appearance_pct": [98.5, 100.0], "max_rating_without_minutes_pct": 0.0, "max_passes_without_minutes_pct": 0.0},
+      "GER_BL1": {"appearance_rows_per_covered_fixture": [27.75, 30.54], "rating_on_appearance_pct": [97.0, 100.0], "passes_on_appearance_pct": [98.4, 100.0], "max_rating_without_minutes_pct": 0.0, "max_passes_without_minutes_pct": 0.0},
+      "ITA_SA": {"appearance_rows_per_covered_fixture": [27.82, 30.8], "rating_on_appearance_pct": [97.9, 100.0], "passes_on_appearance_pct": [99.1, 100.0], "max_rating_without_minutes_pct": 0.0, "max_passes_without_minutes_pct": 0.0}
+    }
+  },
+  "argentina_gap": {
+    "2016_monthly": [
+      {"month": 2, "played": 74, "fixtures_with_players": 0, "fixtures_with_stats": 0},
+      {"month": 3, "played": 54, "fixtures_with_players": 0, "fixtures_with_stats": 0},
+      {"month": 4, "played": 75, "fixtures_with_players": 0, "fixtures_with_stats": 0},
+      {"month": 5, "played": 55, "fixtures_with_players": 0, "fixtures_with_stats": 0},
+      {"month": 8, "played": 19, "fixtures_with_players": 15, "fixtures_with_stats": 1},
+      {"month": 9, "played": 59, "fixtures_with_players": 46, "fixtures_with_stats": 2},
+      {"month": 10, "played": 71, "fixtures_with_players": 58, "fixtures_with_stats": 11},
+      {"month": 11, "played": 52, "fixtures_with_players": 46, "fixtures_with_stats": 46},
+      {"month": 12, "played": 51, "fixtures_with_players": 45, "fixtures_with_stats": 45}
+    ],
+    "covered_date_ranges_2016_2018": [
+      {"year": 2016, "first_player_fixture": "2016-08-26 22:00:00", "last_player_fixture": "2016-12-20 00:15:00", "first_stat_fixture": "2016-08-27 21:00:00", "last_stat_fixture": "2016-12-20 00:15:00"},
+      {"year": 2017, "first_player_fixture": "2017-03-10 00:00:00", "last_player_fixture": "2017-12-12 00:30:00", "first_stat_fixture": "2017-03-10 00:00:00", "last_stat_fixture": "2017-12-12 00:30:00"},
+      {"year": 2018, "first_player_fixture": "2018-01-25 00:10:00", "last_player_fixture": "2018-12-14 00:00:00", "first_stat_fixture": "2018-01-25 00:10:00", "last_stat_fixture": "2018-12-14 00:00:00"}
+    ],
+    "finding": "February-May 2016 has zero player/stat coverage; evidence begins late August and detailed stats become broadly dense around November. 2017-2018 are broad but incomplete."
+  },
+  "semantic_warnings": [
+    "Null goals/assists are not proven zeros.",
+    "tackles_total availability changes sharply by league/year.",
+    "xG was not evaluated by this player-density audit."
+  ],
+  "decision": {
+    "technical": "conditional_go",
+    "product": "blocked",
+    "reason": "32/36 league-year cells pass the strong-density gate, but rights/provenance are unresolved and Argentina early 2016 is a real gap.",
+    "next_steps": [
+      "Resolve rights/redistribution.",
+      "Map canonical seasons before ingestion.",
+      "Audit metric-specific null/zero semantics.",
+      "Find Argentina early-2016 player evidence."
+    ]
+  }
+}
