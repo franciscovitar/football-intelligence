@@ -1,7 +1,7 @@
 """Collect immutable historical Wikipedia article revisions for squad evidence.
 
 The collector freezes exact raw MediaWiki API responses for an explicit bounded
-set of ``article title + snapshot target`` requests.  It never renders historical
+set of ``article title + snapshot target`` requests. It never renders historical
 pages, expands live templates, searches player names, creates canonical players,
 or writes product/database state.
 
@@ -14,7 +14,7 @@ Each collection writes:
   byte-size integrity metadata for every cached file.
 
 Wikipedia text remains subject to Wikimedia's applicable CC BY-SA attribution
-requirements.  Source approval/promotion remains a separate repository gate.
+requirements. Source approval/promotion remains a separate repository gate.
 """
 
 from __future__ import annotations
@@ -126,13 +126,16 @@ def collect_snapshot(
             f"got {len(canonical_requests)}"
         )
 
+    raw_files = tuple(
+        f"revisions/{index:03d}-{revision_request.stable_request_id}.json"
+        for index, revision_request in enumerate(canonical_requests, start=1)
+    )
+    _preflight_output_paths(output_dir=output_dir, raw_files=raw_files)
+
     fetched: list[_FetchedRevision] = []
-    for index, revision_request in enumerate(canonical_requests, start=1):
+    for revision_request, raw_file in zip(canonical_requests, raw_files, strict=True):
         raw = _fetch_revision(revision_request)
         parsed = _parse_revision_response(raw, revision_request)
-        raw_file = (
-            f"revisions/{index:03d}-{revision_request.stable_request_id}.json"
-        )
         fetched.append(
             _FetchedRevision(
                 request=revision_request,
@@ -145,18 +148,10 @@ def collect_snapshot(
     output_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = output_dir / "manifest.json"
     index_path = output_dir / "index.json"
-    if manifest_path.exists() or index_path.exists():
-        raise WikipediaHistoricalCollectionError(
-            f"refusing to overwrite existing snapshot metadata in {output_dir}"
-        )
 
     snapshot_files: list[SnapshotFile] = []
     for item in fetched:
         target = output_dir / item.raw_file
-        if target.exists():
-            raise WikipediaHistoricalCollectionError(
-                f"refusing to overwrite existing revision file {target}"
-            )
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(item.raw)
         snapshot_files.append(_snapshot_file(item.raw_file, item.raw))
@@ -194,6 +189,21 @@ def collect_snapshot(
         encoding="utf-8",
     )
     return manifest
+
+
+def _preflight_output_paths(*, output_dir: Path, raw_files: tuple[str, ...]) -> None:
+    """Fail before network access if collection would overwrite existing evidence."""
+
+    protected_paths = (
+        output_dir / "manifest.json",
+        output_dir / "index.json",
+        *(output_dir / raw_file for raw_file in raw_files),
+    )
+    existing = next((path for path in protected_paths if path.exists()), None)
+    if existing is not None:
+        raise WikipediaHistoricalCollectionError(
+            f"refusing to overwrite existing snapshot evidence {existing}"
+        )
 
 
 def _fetch_revision(revision_request: HistoricalRevisionRequest) -> bytes:
@@ -271,7 +281,11 @@ def _parse_revision_response(
     if not isinstance(resolved_title, str) or not resolved_title.strip():
         raise WikipediaHistoricalCollectionError("MediaWiki page has no usable resolved title")
     page_id_raw = page.get("pageid")
-    page_id = page_id_raw if isinstance(page_id_raw, int) and not isinstance(page_id_raw, bool) else None
+    page_id = (
+        page_id_raw
+        if isinstance(page_id_raw, int) and not isinstance(page_id_raw, bool)
+        else None
+    )
 
     revisions = page.get("revisions")
     if (
