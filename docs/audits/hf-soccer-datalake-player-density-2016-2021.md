@@ -15,7 +15,7 @@ Two bounded read-only GitHub Actions laboratories downloaded only the four publi
 - density run: `32993243428`; artifact digest `sha256:0f4bc812df44f9f2cbbd7305879f96fd48b26778ffc064ac1efff27874562570`;
 - player-semantics run: `32993975454`; artifact digest `sha256:936577b7b1375c71fc8f1509a16e5f63070b1280c05b2f5cb63dc7865ded1a26`.
 
-The durable machine-readable summary is `docs/audits/hf-soccer-datalake-player-density-2016-2021.json`.
+The durable machine-readable summary is `docs/audits/hf-soccer-datalake-player-density-2016-2021.json`. The large source Parquet files and disposable workflows are **not** retained in the repository.
 
 ## League identity
 
