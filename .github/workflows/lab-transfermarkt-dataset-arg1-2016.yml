@@ -1,0 +1,167 @@
+name: Lab Transfermarkt dataset ARG1 2016
+
+on:
+  push:
+    branches:
+      - lab/transfermarkt-dataset-arg1-2016
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - name: Measure ARG1 2016 appearance/minute coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p probe_out data
+          python - <<'PY'
+          from __future__ import annotations
+
+          import csv
+          import gzip
+          import json
+          import statistics
+          import urllib.request
+          from collections import Counter, defaultdict
+          from pathlib import Path
+
+          BASE='https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data'
+          UA='FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
+          FILES=('competitions.csv.gz','games.csv.gz','appearances.csv.gz')
+
+          def download(name: str) -> Path:
+              target=Path('data')/name
+              req=urllib.request.Request(f'{BASE}/{name}',headers={'User-Agent':UA})
+              with urllib.request.urlopen(req,timeout=90) as resp, target.open('wb') as out:
+                  while True:
+                      chunk=resp.read(1024*1024)
+                      if not chunk: break
+                      out.write(chunk)
+              return target
+
+          paths={name:download(name) for name in FILES}
+
+          with gzip.open(paths['competitions.csv.gz'],'rt',encoding='utf-8',newline='') as f:
+              competitions=list(csv.DictReader(f))
+          arg1=[r for r in competitions if r.get('competition_id')=='ARG1']
+
+          games=[]
+          with gzip.open(paths['games.csv.gz'],'rt',encoding='utf-8',newline='') as f:
+              reader=csv.DictReader(f)
+              game_fields=reader.fieldnames or []
+              for r in reader:
+                  if r.get('competition_id')=='ARG1' and str(r.get('season'))=='2016':
+                      games.append(r)
+          game_ids={r['game_id'] for r in games}
+          clubs=set()
+          for r in games:
+              if r.get('home_club_id'): clubs.add(r['home_club_id'])
+              if r.get('away_club_id'): clubs.add(r['away_club_id'])
+
+          per_game_rows=Counter()
+          per_game_minutes=Counter()
+          per_player=defaultdict(lambda:{'name':None,'club_ids':set(),'appearances':0,'minutes':0,'goals':0,'assists':0,'yellow_cards':0,'red_cards':0})
+          appearance_rows=0
+          minute_nulls=0
+          minute_zeros=0
+          minute_values=[]
+          appearance_fields=[]
+          with gzip.open(paths['appearances.csv.gz'],'rt',encoding='utf-8',newline='') as f:
+              reader=csv.DictReader(f)
+              appearance_fields=reader.fieldnames or []
+              for r in reader:
+                  if r.get('game_id') not in game_ids:
+                      continue
+                  appearance_rows += 1
+                  gid=r['game_id']; pid=r['player_id']
+                  raw_min=r.get('minutes_played')
+                  if raw_min in (None,''):
+                      minute_nulls += 1; mins=0
+                  else:
+                      mins=int(float(raw_min)); minute_values.append(mins)
+                      if mins==0: minute_zeros += 1
+                  per_game_rows[gid]+=1
+                  per_game_minutes[gid]+=mins
+                  p=per_player[pid]
+                  p['name']=r.get('player_name')
+                  if r.get('player_club_id'): p['club_ids'].add(r['player_club_id'])
+                  p['appearances']+=1; p['minutes']+=mins
+                  for field in ('goals','assists','yellow_cards','red_cards'):
+                      raw=r.get(field)
+                      if raw not in (None,''):
+                          p[field]+=int(float(raw))
+
+          dates=sorted(r.get('date') for r in games if r.get('date'))
+          rounds=Counter(r.get('round') or '' for r in games)
+          minute_sums=list(per_game_minutes.values())
+          row_counts=list(per_game_rows.values())
+
+          def med(values):
+              return statistics.median(values) if values else None
+
+          # Known independent validation anchors previously found in ESPN/DataFactory coverage of champion Lanus.
+          anchors={
+              'José Sand': {'appearances':17,'minutes':1478},
+              'Fernando Monetti': {'appearances':16,'minutes':1440},
+              'Román Martínez': {'appearances':16,'minutes':1178},
+              'Gustavo Gómez': {'appearances':16,'minutes':1399},
+          }
+          anchor_matches={}
+          for target,expected in anchors.items():
+              candidates=[]
+              for pid,p in per_player.items():
+                  name=(p['name'] or '').casefold()
+                  if all(token in name for token in target.casefold().split()):
+                      candidates.append({'player_id':pid,'name':p['name'],'appearances':p['appearances'],'minutes':p['minutes'],'goals':p['goals'],'assists':p['assists'],'club_ids':sorted(p['club_ids'])})
+              anchor_matches[target]={'expected':expected,'candidates':candidates}
+
+          top_minutes=sorted(({'player_id':pid,'name':p['name'],'appearances':p['appearances'],'minutes':p['minutes'],'goals':p['goals'],'assists':p['assists'],'club_ids':sorted(p['club_ids'])} for pid,p in per_player.items()),key=lambda x:(-x['minutes'],-x['appearances'],x['name'] or ''))[:30]
+
+          payload={
+              'status':'MEASURED',
+              'source':{
+                  'dataset':'dcaribou/transfermarkt-datasets',
+                  'publisher_license':'CC0-1.0',
+                  'upstream_provenance':'Transfermarkt-derived dataset published by dcaribou; this audit uses the published CC0 dataset rather than scraping Transfermarkt directly',
+                  'base_url':BASE,
+              },
+              'scope':{'competition_id':'ARG1','season':2016},
+              'competition_record':arg1,
+              'schemas':{'games':game_fields,'appearances':appearance_fields},
+              'games':{
+                  'count':len(games),'distinct_clubs':len(clubs),'date_min':dates[0] if dates else None,'date_max':dates[-1] if dates else None,
+                  'round_counts':dict(sorted(rounds.items())),
+                  'sample':[ {k:r.get(k) for k in ('game_id','date','round','home_club_id','home_club_name','away_club_id','away_club_name','home_club_goals','away_club_goals')} for r in games[:5] ],
+              },
+              'appearances':{
+                  'rows':appearance_rows,'distinct_players':len(per_player),'minute_nulls':minute_nulls,'minute_zeros':minute_zeros,
+                  'minutes_min':min(minute_values) if minute_values else None,'minutes_max':max(minute_values) if minute_values else None,
+                  'appearance_rows_per_game_min':min(row_counts) if row_counts else None,'appearance_rows_per_game_median':med(row_counts),'appearance_rows_per_game_max':max(row_counts) if row_counts else None,
+                  'player_minutes_sum_per_game_min':min(minute_sums) if minute_sums else None,'player_minutes_sum_per_game_median':med(minute_sums),'player_minutes_sum_per_game_max':max(minute_sums) if minute_sums else None,
+              },
+              'validation_anchors':anchor_matches,
+              'top_players_by_minutes':top_minutes,
+              'download_sizes_bytes':{name:path.stat().st_size for name,path in paths.items()},
+              'non_claims':[
+                  'This audit does not treat the publisher CC0 declaration as a legal opinion about every possible upstream right.',
+                  'This audit does not yet validate all six target leagues or all seasons.',
+                  'This audit does not write production data or create entity crosswalks.',
+              ],
+          }
+          Path('probe_out/summary.json').write_text(json.dumps(payload,indent=2,ensure_ascii=False),encoding='utf-8')
+          print(json.dumps(payload,indent=2,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: transfermarkt-dataset-arg1-2016-audit
+          path: probe_out/summary.json
+          if-no-files-found: error
+          retention-days: 7
