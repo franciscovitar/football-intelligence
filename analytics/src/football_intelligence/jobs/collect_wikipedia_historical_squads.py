@@ -281,18 +281,10 @@ def _parse_revision_response(
     if not isinstance(resolved_title, str) or not resolved_title.strip():
         raise WikipediaHistoricalCollectionError("MediaWiki page has no usable resolved title")
     page_id_raw = page.get("pageid")
-    page_id = (
-        page_id_raw
-        if isinstance(page_id_raw, int) and not isinstance(page_id_raw, bool)
-        else None
-    )
+    page_id: int | None = page_id_raw if type(page_id_raw) is int else None
 
     revisions = page.get("revisions")
-    if (
-        not isinstance(revisions, list)
-        or len(revisions) != 1
-        or not isinstance(revisions[0], dict)
-    ):
+    if not isinstance(revisions, list) or len(revisions) != 1 or not isinstance(revisions[0], dict):
         raise WikipediaHistoricalCollectionError(
             f"no unique historical revision at or before {revision_request.api_snapshot_target} "
             f"for {revision_request.canonical_article_title}"
