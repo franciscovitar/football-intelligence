@@ -48,7 +48,8 @@ _ACCEPTED_HEADINGS: dict[str, int] = {
     "squad": 2,
 }
 _EXCLUDED_CHILD_HEADING_RE = re.compile(
-    r"out on loan|loaned|reserve|reserves|youth|academy|other players|former players|notable players",
+    r"out on loan|loaned|reserve|reserves|youth|academy|other players|"
+    r"former players|notable players",
     re.IGNORECASE,
 )
 _HEADING_RE = re.compile(r"(?m)^(={2,5})\s*(.*?)\s*\1\s*$")
