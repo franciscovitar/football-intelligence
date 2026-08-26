@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.error import HTTPError
 
 import pytest
-from urllib.error import HTTPError
 
 from football_intelligence.ingestion.static_snapshot import (
     load_static_snapshot_manifest,
@@ -127,6 +127,32 @@ def test_collector_is_hard_bounded_before_network_access(
         collect_wikipedia_historical_squads.collect_snapshot(
             requests=requests,
             snapshot_id="too-large",
+            competition_codes=("ARG_LPF",),
+            season_labels=("2024",),
+            output_dir=tmp_path,
+        )
+
+    assert calls == 0
+
+
+def test_collector_refuses_overwrite_before_network_access(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = 0
+    (tmp_path / "manifest.json").write_text("existing evidence\n", encoding="utf-8")
+
+    def fake_fetch(request: HistoricalRevisionRequest) -> bytes:
+        nonlocal calls
+        del request
+        calls += 1
+        return _response_bytes()
+
+    monkeypatch.setattr(collect_wikipedia_historical_squads, "_fetch_revision", fake_fetch)
+
+    with pytest.raises(WikipediaHistoricalCollectionError, match="refusing to overwrite"):
+        collect_wikipedia_historical_squads.collect_snapshot(
+            requests=(_request(),),
+            snapshot_id="already-exists",
             competition_codes=("ARG_LPF",),
             season_labels=("2024",),
             output_dir=tmp_path,
