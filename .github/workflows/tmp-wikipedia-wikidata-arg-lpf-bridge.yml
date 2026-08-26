@@ -1,0 +1,363 @@
+name: Wikipedia to Wikidata ARG_LPF 2024 bridge lab
+
+on:
+  push:
+    branches:
+      - lab/wikipedia-arg-lpf-2024-roster
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bridge-lab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.12'
+      - name: Measure deterministic Wikipedia article to Wikidata QID bridge
+        env:
+          USER_AGENT: FootballIntelligenceRosterLab/0.5 (https://github.com/franciscovitar/football-intelligence)
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import time
+          import unicodedata
+          import urllib.parse
+          import urllib.request
+
+          API = "https://en.wikipedia.org/w/api.php"
+          UA = os.environ["USER_AGENT"]
+          SNAPSHOTS = [
+              "2024-05-10T23:59:59Z",
+              "2024-07-15T23:59:59Z",
+              "2024-09-06T23:59:59Z",
+              "2024-12-16T23:59:59Z",
+          ]
+          CLUBS = [
+              ("Argentinos Juniors", "Argentinos Juniors"),
+              ("Atlético Tucumán", "Atlético Tucumán"),
+              ("Banfield", "Club Atlético Banfield"),
+              ("Barracas Central", "Barracas Central"),
+              ("Belgrano", "Club Atlético Belgrano"),
+              ("Boca Juniors", "Boca Juniors"),
+              ("Central Córdoba (SE)", "Central Córdoba de Santiago del Estero"),
+              ("Defensa y Justicia", "Defensa y Justicia"),
+              ("Deportivo Riestra", "Deportivo Riestra"),
+              ("Estudiantes de La Plata", "Estudiantes de La Plata"),
+              ("Gimnasia La Plata", "Gimnasia y Esgrima de La Plata"),
+              ("Godoy Cruz", "Godoy Cruz Antonio Tomba"),
+              ("Huracán", "Club Atlético Huracán"),
+              ("Independiente", "Club Atlético Independiente"),
+              ("Independiente Rivadavia", "Independiente Rivadavia"),
+              ("Instituto", "Instituto Atlético Central Córdoba"),
+              ("Lanús", "Club Atlético Lanús"),
+              ("Newell's Old Boys", "Newell's Old Boys"),
+              ("Platense", "Club Atlético Platense"),
+              ("Racing Club", "Racing Club de Avellaneda"),
+              ("River Plate", "Club Atlético River Plate"),
+              ("Rosario Central", "Rosario Central"),
+              ("San Lorenzo", "San Lorenzo de Almagro"),
+              ("Sarmiento", "Sarmiento de Junín"),
+              ("Talleres de Córdoba", "Talleres de Córdoba"),
+              ("Tigre", "Club Atlético Tigre"),
+              ("Unión Santa Fe", "Unión de Santa Fe"),
+              ("Vélez Sarsfield", "Vélez Sarsfield"),
+          ]
+          ACCEPTED = {
+              "current squad": 0,
+              "first-team squad": 1,
+              "first team squad": 1,
+              "senior squad": 1,
+              "first team": 1,
+              "squad": 2,
+          }
+          EXCLUDED_CHILD = re.compile(
+              r"out on loan|loaned|reserve|reserves|youth|academy|other players|former players|notable players",
+              re.I,
+          )
+          PLAYER_RE = re.compile(
+              r"\{\{\s*(?:fs player|football squad player\d*|football squad player)\b(.*?)\}\}",
+              re.I | re.S,
+          )
+          HEAD_RE = re.compile(r"(?m)^(={2,5})\s*(.*?)\s*\1\s*$")
+          QID_RE = re.compile(r"^Q[1-9][0-9]*$")
+
+          def api(params, *, post=False):
+              params = dict(params)
+              params.update({"format": "json", "formatversion": "2", "maxlag": "5"})
+              encoded = urllib.parse.urlencode(params).encode("utf-8")
+              if post:
+                  req = urllib.request.Request(
+                      API,
+                      data=encoded,
+                      headers={"User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded"},
+                      method="POST",
+                  )
+              else:
+                  req = urllib.request.Request(
+                      API + "?" + encoded.decode("utf-8"),
+                      headers={"User-Agent": UA},
+                  )
+              last = None
+              for attempt in range(4):
+                  try:
+                      with urllib.request.urlopen(req, timeout=20) as response:
+                          return json.load(response)
+                  except Exception as exc:
+                      last = exc
+                      time.sleep(2 ** attempt)
+              raise RuntimeError(f"MediaWiki request failed: {last}")
+
+          def clean(value):
+              value = re.sub(r"<ref\b[^>]*>.*?</ref>|<ref\b[^>]*/>", "", value, flags=re.I | re.S)
+              value = re.sub(r"\[\[([^\]|]+)\|([^\]]+)\]\]", r"\2", value)
+              value = re.sub(r"\[\[([^\]]+)\]\]", r"\1", value)
+              value = re.sub(r"'{2,5}", "", value)
+              value = re.sub(r"\{\{[^{}]*\}\}", "", value)
+              value = unicodedata.normalize("NFKC", value)
+              return re.sub(r"\s+", " ", value).strip(" *†‡\n\t")
+
+          def norm_key(value):
+              return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", value)).strip().casefold()
+
+          def historical_revision(title, timestamp):
+              data = api({
+                  "action": "query",
+                  "prop": "revisions",
+                  "titles": title,
+                  "rvprop": "ids|timestamp|content",
+                  "rvslots": "main",
+                  "rvlimit": "1",
+                  "rvstart": timestamp,
+                  "rvdir": "older",
+                  "redirects": "1",
+              })
+              page = data["query"]["pages"][0]
+              if page.get("missing"):
+                  return None, page.get("title", title)
+              revisions = page.get("revisions") or []
+              if not revisions:
+                  return None, page.get("title", title)
+              rev = revisions[0]
+              slot = (rev.get("slots") or {}).get("main") or {}
+              text = slot.get("content") or rev.get("content") or rev.get("*") or ""
+              return {
+                  "revid": rev.get("revid"),
+                  "timestamp": rev.get("timestamp"),
+                  "text": text,
+              }, page.get("title", title)
+
+          def active_sections(text):
+              headings = list(HEAD_RE.finditer(text))
+              candidates = []
+              for index, heading in enumerate(headings):
+                  raw_heading = clean(heading.group(2))
+                  key = raw_heading.casefold().replace("–", "-").replace("—", "-")
+                  if key not in ACCEPTED:
+                      continue
+                  level = len(heading.group(1))
+                  end = len(text)
+                  for later in headings[index + 1:]:
+                      later_level = len(later.group(1))
+                      later_title = clean(later.group(2))
+                      if later_level <= level or (
+                          later_level > level and EXCLUDED_CHILD.search(later_title)
+                      ):
+                          end = later.start()
+                          break
+                  body = text[heading.end():end]
+                  entries = []
+                  for block in PLAYER_RE.findall(body):
+                      match = re.search(
+                          r"(?:^|\|)\s*name\s*=\s*(.*?)(?=(?:\n?\s*\|\s*[A-Za-z0-9_ -]+\s*=)|$)",
+                          block,
+                          re.I | re.S,
+                      )
+                      if not match:
+                          continue
+                      raw_value = match.group(1).strip()
+                      display_name = clean(raw_value)
+                      if not display_name or len(display_name) > 100:
+                          continue
+                      link = re.search(r"\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]", raw_value)
+                      article_title = link.group(1).strip() if link else None
+                      entries.append({
+                          "display_name": display_name,
+                          "article_title": article_title,
+                      })
+                  dedup = {}
+                  for entry in entries:
+                      key2 = norm_key(entry["article_title"] or entry["display_name"])
+                      dedup[key2] = entry
+                  candidates.append({
+                      "heading": raw_heading,
+                      "priority": ACCEPTED[key],
+                      "entries": sorted(dedup.values(), key=lambda item: item["display_name"].casefold()),
+                  })
+              valid = [candidate for candidate in candidates if candidate["entries"]]
+              valid.sort(key=lambda candidate: (candidate["priority"], -len(candidate["entries"])))
+              return valid[0] if valid else None
+
+          clubs = []
+          article_titles = set()
+          for club, title in CLUBS:
+              result = {"club": club, "requested_title": title, "snapshots": []}
+              union = {}
+              for target in SNAPSHOTS:
+                  try:
+                      revision, resolved_title = historical_revision(title, target)
+                      if not revision:
+                          result["snapshots"].append({"target": target, "error": "missing_revision"})
+                          continue
+                      selected = active_sections(revision["text"])
+                      if not selected:
+                          result["snapshots"].append({
+                              "target": target,
+                              "revision_id": revision["revid"],
+                              "revision_timestamp": revision["timestamp"],
+                              "error": "no_specific_active_squad",
+                          })
+                          continue
+                      for entry in selected["entries"]:
+                          key = norm_key(entry["article_title"] or entry["display_name"])
+                          union[key] = entry
+                          if entry["article_title"]:
+                              article_titles.add(entry["article_title"])
+                      result["snapshots"].append({
+                          "target": target,
+                          "revision_id": revision["revid"],
+                          "revision_timestamp": revision["timestamp"],
+                          "resolved_title": resolved_title,
+                          "heading": selected["heading"],
+                          "entries_count": len(selected["entries"]),
+                      })
+                  except Exception as exc:
+                      result["snapshots"].append({"target": target, "error": f"{type(exc).__name__}:{exc}"})
+                  time.sleep(0.12)
+              result["union_entries"] = sorted(union.values(), key=lambda item: item["display_name"].casefold())
+              result["union_entries_count"] = len(union)
+              result["union_article_linked_count"] = sum(bool(item["article_title"]) for item in union.values())
+              clubs.append(result)
+              print(
+                  f"{club:28} entries={len(union):3} linked={result['union_article_linked_count']:3}"
+              )
+
+          def resolve_batch(titles):
+              data = api({
+                  "action": "query",
+                  "prop": "pageprops",
+                  "ppprop": "wikibase_item",
+                  "redirects": "1",
+                  "titles": "|".join(titles),
+              }, post=True)
+              query = data.get("query") or {}
+              aliases = {}
+              for item in query.get("normalized") or []:
+                  if item.get("from") and item.get("to"):
+                      aliases[item["from"]] = item["to"]
+              for item in query.get("redirects") or []:
+                  if item.get("from") and item.get("to"):
+                      aliases[item["from"]] = item["to"]
+              pages = {
+                  page.get("title"): page
+                  for page in query.get("pages") or []
+                  if page.get("title")
+              }
+              out = {}
+              for requested in titles:
+                  final = requested
+                  seen = set()
+                  while final in aliases and final not in seen:
+                      seen.add(final)
+                      final = aliases[final]
+                  page = pages.get(final)
+                  if page is None:
+                      # Fall back to case-insensitive title lookup after normalization.
+                      page = next(
+                          (candidate for title, candidate in pages.items() if title.casefold() == final.casefold()),
+                          None,
+                      )
+                  qid = None
+                  if page and not page.get("missing"):
+                      value = (page.get("pageprops") or {}).get("wikibase_item")
+                      if isinstance(value, str) and QID_RE.fullmatch(value):
+                          qid = value
+                  out[requested] = {
+                      "resolved_title": page.get("title") if page else final,
+                      "missing": bool(page.get("missing")) if page else True,
+                      "qid": qid,
+                  }
+              return out
+
+          title_to_item = {}
+          ordered_titles = sorted(article_titles, key=str.casefold)
+          for offset in range(0, len(ordered_titles), 40):
+              batch = ordered_titles[offset:offset + 40]
+              title_to_item.update(resolve_batch(batch))
+              time.sleep(0.2)
+
+          for club in clubs:
+              for entry in club["union_entries"]:
+                  article = entry["article_title"]
+                  entry["article_resolution"] = title_to_item.get(article) if article else None
+              club["union_qid_count"] = sum(
+                  bool((entry.get("article_resolution") or {}).get("qid"))
+                  for entry in club["union_entries"]
+              )
+
+          total_entries = sum(club["union_entries_count"] for club in clubs)
+          linked_entries = sum(club["union_article_linked_count"] for club in clubs)
+          qid_entries = sum(club["union_qid_count"] for club in clubs)
+          clubs_with_entries = [club for club in clubs if club["union_entries_count"]]
+          unique_qids = {
+              resolution["qid"]
+              for resolution in title_to_item.values()
+              if resolution.get("qid")
+          }
+          qid_to_titles = {}
+          for title, resolution in title_to_item.items():
+              qid = resolution.get("qid")
+              if qid:
+                  qid_to_titles.setdefault(qid, []).append(title)
+          multi_title_qids = {
+              qid: sorted(titles, key=str.casefold)
+              for qid, titles in qid_to_titles.items()
+              if len(titles) > 1
+          }
+
+          report = {
+              "source": "English Wikipedia exact historical revision wikitext + MediaWiki pageprops.wikibase_item",
+              "scope": "ARG_LPF 2024 observed active-squad membership identity bridge",
+              "semantic_boundary": "Article/QID links are provider-local identity evidence only; they do not create FI canonical players or prove Torneo appearances.",
+              "clubs": clubs,
+              "aggregate": {
+                  "clubs_total": len(CLUBS),
+                  "clubs_with_active_squad_entries": len(clubs_with_entries),
+                  "club_membership_entries": total_entries,
+                  "club_membership_entries_with_article_link": linked_entries,
+                  "club_membership_entries_with_qid": qid_entries,
+                  "article_link_ratio": round(linked_entries / total_entries, 4) if total_entries else 0,
+                  "qid_ratio_over_all_entries": round(qid_entries / total_entries, 4) if total_entries else 0,
+                  "qid_ratio_over_linked_entries": round(qid_entries / linked_entries, 4) if linked_entries else 0,
+                  "unique_article_titles": len(ordered_titles),
+                  "unique_qids": len(unique_qids),
+                  "qids_linked_from_multiple_article_titles": len(multi_title_qids),
+              },
+              "multi_title_qids": multi_title_qids,
+          }
+
+          print(json.dumps(report["aggregate"], indent=2))
+          with open("wikipedia-wikidata-arg-lpf-2024-bridge.json", "w", encoding="utf-8") as handle:
+              json.dump(report, handle, ensure_ascii=False, indent=2)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wikipedia-wikidata-arg-lpf-2024-bridge-${{ github.run_id }}
+          path: wikipedia-wikidata-arg-lpf-2024-bridge.json
+          retention-days: 30
