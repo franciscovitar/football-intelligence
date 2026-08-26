@@ -1,0 +1,79 @@
+name: Lab AFA ARG_LPF 2016 refined signals
+
+on:
+  push:
+    branches:
+      - lab/afa-arg-2016-refined-signals
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - name: Inspect official AFA article embeds
+        run: |
+          set -euo pipefail
+          mkdir -p probe_out
+          python - <<'PY'
+          import html
+          import json
+          import re
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          URLS={
+            'goals':'https://www.afa.com.ar/Sitio/posts/numerosdeprimera-sand-el-artillero',
+            'recoveries':'https://www.afa.com.ar/Sitio/posts/numerosdeprimera-recuperaciones',
+            'fouls_received':'https://www.afa.com.ar/Sitio/posts/numerosdeprimera-faltas-recibidas',
+            'assists':'https://www.afa.com.ar/es/posts/numerosdeprimera-malcorra-el-asistidor',
+            'shots':'https://www.afa.com.ar/a/posts/numerosdeprimera-tiros-al-arco',
+            'passes':'https://www.afa.com.ar/es/posts/numerosdeprimera-pases',
+          }
+          UA='FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
+
+          def get(url):
+              req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept':'text/html,*/*'})
+              with urllib.request.urlopen(req,timeout=20) as resp:
+                  return resp.status,resp.headers.get('Content-Type'),resp.geturl(),resp.read()
+
+          report=[]
+          for key,url in URLS.items():
+              try:
+                  status,ctype,final,body=get(url)
+                  text=body.decode('utf-8','replace')
+                  iframe_srcs=[]
+                  for m in re.finditer(r'<iframe\b[^>]*?\bsrc=["\']([^"\']+)["\']',text,re.I|re.S):
+                      src=html.unescape(m.group(1)); iframe_srcs.append(urllib.parse.urljoin(final,src))
+                  interesting=[]
+                  for m in re.finditer(r'(?:href|src)=["\']([^"\']+)["\']',text,re.I):
+                      raw=html.unescape(m.group(1)); absolute=urllib.parse.urljoin(final,raw)
+                      low=absolute.casefold()
+                      if any(token in low for token in ('datafactory','tableau','infogram','flourish','iframe','embed','docs.google','drive.google','youtube')):
+                          if absolute not in interesting: interesting.append(absolute)
+                  embed_checks=[]
+                  for src in iframe_srcs[:10]:
+                      try:
+                          s,ct,fin,b=get(src)
+                          embed_checks.append({'url':src,'status':s,'content_type':ct,'final_url':fin,'bytes':len(b),'html_prefix':b[:250].decode('utf-8','replace') if 'text' in (ct or '') or 'html' in (ct or '') else None})
+                      except Exception as exc:
+                          embed_checks.append({'url':src,'error':type(exc).__name__+': '+str(exc)[:200]})
+                  report.append({'key':key,'url':url,'status':status,'content_type':ctype,'final_url':final,'bytes':len(body),'iframe_srcs':iframe_srcs,'interesting_links':interesting[:30],'embed_checks':embed_checks})
+              except Exception as exc:
+                  report.append({'key':key,'url':url,'error':type(exc).__name__+': '+str(exc)[:300]})
+          Path('probe_out/summary.json').write_text(json.dumps(report,indent=2,ensure_ascii=False),encoding='utf-8')
+          print(json.dumps(report,indent=2,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: afa-arg-2016-refined-signal-embed-probe
+          path: probe_out/summary.json
+          if-no-files-found: error
+          retention-days: 7
