@@ -1,0 +1,105 @@
+name: Wikipedia membership transform real snapshot smoke
+
+on:
+  push:
+    branches:
+      - lab/wikipedia-static-membership-transform
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  real-snapshot-smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v6.0.2
+
+      - name: Download frozen opening snapshot
+        uses: actions/download-artifact@v4
+        with:
+          name: wikipedia-arg-lpf-2024-opening-32921437933
+          path: /tmp/wikipedia-arg-lpf-2024-opening
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: franciscovitar/football-intelligence
+          run-id: 32921437933
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Install locked analytics environment
+        working-directory: analytics
+        run: uv sync --dev --locked
+
+      - name: Verify frozen snapshot checksums
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-validate-static-snapshot \
+            --manifest /tmp/wikipedia-arg-lpf-2024-opening/manifest.json \
+            --base-dir /tmp/wikipedia-arg-lpf-2024-opening \
+            --report /tmp/wikipedia-arg-lpf-2024-opening/pre-transform-verification.json
+
+      - name: Transform frozen membership evidence twice
+        working-directory: analytics
+        run: |
+          uv run football-intelligence-transform-wikipedia-memberships \
+            --manifest /tmp/wikipedia-arg-lpf-2024-opening/manifest.json \
+            --base-dir /tmp/wikipedia-arg-lpf-2024-opening \
+            --output /tmp/wikipedia-arg-lpf-2024-opening/memberships-a.json
+          uv run football-intelligence-transform-wikipedia-memberships \
+            --manifest /tmp/wikipedia-arg-lpf-2024-opening/manifest.json \
+            --base-dir /tmp/wikipedia-arg-lpf-2024-opening \
+            --output /tmp/wikipedia-arg-lpf-2024-opening/memberships-b.json
+          cmp \
+            /tmp/wikipedia-arg-lpf-2024-opening/memberships-a.json \
+            /tmp/wikipedia-arg-lpf-2024-opening/memberships-b.json
+
+      - name: Audit real transform output
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('/tmp/wikipedia-arg-lpf-2024-opening/memberships-a.json')
+          payload = json.loads(path.read_text(encoding='utf-8'))
+          assert payload['status'] == 'PASS'
+          assert payload['source_code'] == 'wikipedia'
+          assert payload['snapshot_id'] == 'wikipedia-arg-lpf-2024-opening-32921437933'
+          assert payload['requests_total'] == 26
+          assert payload['requests_with_evidence'] == 26
+          assert payload['requests_without_evidence'] == 0
+          assert payload['rows_emitted'] == 752
+          assert len(payload['memberships']) == 752
+          assert len(payload['requests']) == 26
+          assert all(row['source_code'] == 'wikipedia' for row in payload['memberships'])
+          assert all(row['provider_player_key'] for row in payload['memberships'])
+          assert all(row['membership_observation_key'] for row in payload['memberships'])
+          assert all(
+              'on loan from' not in row['provider_player_key'].casefold()
+              for row in payload['memberships']
+          )
+          assert all(
+              row['revision_timestamp'] <= row['snapshot_target']
+              for row in payload['memberships']
+          )
+          print(
+              'REAL MEMBERSHIP TRANSFORM: PASS '
+              f"requests={payload['requests_total']} rows={payload['rows_emitted']} "
+              f"linked={payload['rows_with_player_article']}"
+          )
+          PY
+
+      - name: Upload transform report only
+        uses: actions/upload-artifact@v4
+        with:
+          name: wikipedia-membership-transform-real-smoke-${{ github.run_id }}
+          path: |
+            /tmp/wikipedia-arg-lpf-2024-opening/memberships-a.json
+            /tmp/wikipedia-arg-lpf-2024-opening/pre-transform-verification.json
+          retention-days: 30
