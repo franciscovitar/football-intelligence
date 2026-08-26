@@ -12,20 +12,16 @@ permissions:
 jobs:
   roster-lab:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6.0.2
-
       - uses: actions/setup-python@v6.2.0
         with:
           python-version: '3.12'
 
-      - name: Install bounded parser dependency
-        run: python -m pip install --disable-pip-version-check beautifulsoup4==4.13.4
-
-      - name: Measure historical English Wikipedia squad snapshots
+      - name: Measure immutable historical Wikipedia roster evidence
         env:
-          USER_AGENT: FootballIntelligenceRosterLab/0.1 (https://github.com/franciscovitar/football-intelligence)
+          USER_AGENT: FootballIntelligenceRosterLab/0.2 (https://github.com/franciscovitar/football-intelligence)
         run: |
           python - <<'PY'
           import json
@@ -35,7 +31,6 @@ jobs:
           import unicodedata
           import urllib.parse
           import urllib.request
-          from bs4 import BeautifulSoup
 
           API = "https://en.wikipedia.org/w/api.php"
           UA = os.environ["USER_AGENT"]
@@ -80,30 +75,23 @@ jobs:
               params = dict(params)
               params.update({"format": "json", "formatversion": "2", "maxlag": "5"})
               url = API + "?" + urllib.parse.urlencode(params)
-              req = urllib.request.Request(url, headers={"User-Agent": UA})
               last_error = None
-              for attempt in range(4):
+              for attempt in range(3):
+                  req = urllib.request.Request(url, headers={"User-Agent": UA})
                   try:
-                      with urllib.request.urlopen(req, timeout=30) as response:
+                      with urllib.request.urlopen(req, timeout=15) as response:
                           return json.load(response)
                   except Exception as exc:
                       last_error = exc
                       time.sleep(2 ** attempt)
               raise RuntimeError(f"MediaWiki request failed: {last_error}")
 
-          def normalize_name(value):
-              value = unicodedata.normalize("NFKC", value)
-              value = re.sub(r"\[[^\]]+\]", "", value)
-              value = re.sub(r"\([^)]*(captain|vice-captain|loan)[^)]*\)", "", value, flags=re.I)
-              value = re.sub(r"\s+", " ", value).strip(" *†‡\n\t")
-              return value
-
-          def revision_at_or_before(title, timestamp):
+          def historical_revision(title, timestamp):
               data = api({
                   "action": "query",
                   "prop": "revisions",
                   "titles": title,
-                  "rvprop": "ids|timestamp",
+                  "rvprop": "ids|timestamp|content",
                   "rvslots": "main",
                   "rvlimit": "1",
                   "rvstart": timestamp,
@@ -116,114 +104,135 @@ jobs:
               revisions = page.get("revisions") or []
               if not revisions:
                   return None, page.get("title", title)
-              return revisions[0], page.get("title", title)
+              rev = revisions[0]
+              slot = (rev.get("slots") or {}).get("main") or {}
+              content = slot.get("content")
+              if content is None:
+                  content = rev.get("content") or rev.get("*")
+              if content is None:
+                  raise RuntimeError(f"No wikitext content for {title} revision {rev.get('revid')}")
+              return {"revid": rev.get("revid"), "timestamp": rev.get("timestamp"), "wikitext": content}, page.get("title", title)
 
-          def parse_html(oldid):
-              data = api({
-                  "action": "parse",
-                  "oldid": str(oldid),
-                  "prop": "text",
-                  "disableeditsection": "1",
-              })
-              return data["parse"]["text"]
+          def strip_markup(value):
+              value = re.sub(r"<ref\b[^>]*>.*?</ref>|<ref\b[^>]*/>", "", value, flags=re.I | re.S)
+              value = re.sub(r"\[\[([^\]|]+)\|([^\]]+)\]\]", r"\2", value)
+              value = re.sub(r"\[\[([^\]]+)\]\]", r"\1", value)
+              value = re.sub(r"'{2,5}", "", value)
+              value = re.sub(r"\{\{[^{}]*\}\}", "", value)
+              value = re.sub(r"<!--.*?-->", "", value, flags=re.S)
+              value = unicodedata.normalize("NFKC", value)
+              value = re.sub(r"\s+", " ", value).strip(" *†‡\n\t")
+              return value
 
-          def header_level(tag):
-              try:
-                  return int(tag.name[1])
-              except Exception:
-                  return 7
-
-          def extract_player_sections(html):
-              soup = BeautifulSoup(html, "html.parser")
-              candidates = []
-              section_re = re.compile(r"\b(current squad|first[- ]team squad|squad|players)\b", re.I)
-              for heading in soup.find_all(re.compile(r"^h[2-4]$")):
-                  heading_text = " ".join(heading.stripped_strings)
-                  if not section_re.search(heading_text):
+          def section_candidates(wikitext):
+              heading_re = re.compile(r"(?m)^(={2,4})\s*(.*?)\s*\1\s*$")
+              headings = list(heading_re.finditer(wikitext))
+              sections = []
+              for idx, match in enumerate(headings):
+                  title = strip_markup(match.group(2))
+                  if not re.search(r"\b(current squad|first[- ]team squad|squad|players)\b", title, flags=re.I):
                       continue
-                  level = header_level(heading)
-                  players = []
-                  tables_seen = 0
-                  for node in heading.find_all_next():
-                      if node is heading:
-                          continue
-                      if getattr(node, "name", None) and re.match(r"^h[2-4]$", node.name):
-                          if header_level(node) <= level:
-                              break
-                      if getattr(node, "name", None) != "table":
-                          continue
-                      headers = [" ".join(cell.stripped_strings).strip().lower() for cell in node.find_all("th")]
-                      if not any(h == "player" or h.endswith(" player") for h in headers):
-                          continue
-                      tables_seen += 1
-                      for row in node.find_all("tr"):
-                          cells = row.find_all(["td", "th"], recursive=False)
-                          if not cells:
-                              continue
-                          texts = [" ".join(cell.stripped_strings).strip() for cell in cells]
-                          if "player" in [t.lower() for t in texts]:
-                              continue
-                          player_cell = cells[-1] if len(cells) >= 2 else None
-                          if player_cell is None:
-                              continue
-                          name = normalize_name(" ".join(player_cell.stripped_strings))
-                          if not name or name.lower() in {"player", "name"} or len(name) > 80:
-                              continue
-                          players.append(name)
-                  unique = sorted(set(players))
-                  if unique:
-                      candidates.append({"heading": heading_text, "players": unique, "tables_seen": tables_seen})
-              if not candidates:
-                  return None
-              candidates.sort(key=lambda item: (len(item["players"]), item["tables_seen"]), reverse=True)
-              return candidates[0]
+                  level = len(match.group(1))
+                  end = len(wikitext)
+                  for later in headings[idx + 1:]:
+                      if len(later.group(1)) <= level:
+                          end = later.start()
+                          break
+                  sections.append((title, wikitext[match.end():end]))
+              return sections
+
+          PLAYER_TEMPLATE_RE = re.compile(
+              r"\{\{\s*(?:fs player|football squad player\d*|football squad player)\b(.*?)\}\}",
+              flags=re.I | re.S,
+          )
+
+          def extract_names_from_section(section):
+              names = []
+              for block in PLAYER_TEMPLATE_RE.findall(section):
+                  name_match = re.search(r"(?:^|\|)\s*name\s*=\s*(.*?)(?=(?:\n?\s*\|\s*[A-Za-z0-9_ -]+\s*=)|$)", block, flags=re.I | re.S)
+                  if name_match:
+                      candidate = strip_markup(name_match.group(1))
+                  else:
+                      links = re.findall(r"\[\[([^\]]+)\]\]", block)
+                      candidate = strip_markup(links[-1] if links else "")
+                  if candidate and len(candidate) <= 100:
+                      names.append(candidate)
+              return sorted(set(names))
+
+          def extract_immutable_squad(wikitext):
+              candidates = []
+              for heading, section in section_candidates(wikitext):
+                  names = extract_names_from_section(section)
+                  transclusions = sorted(set(re.findall(r"\{\{\s*([^{}|\n]*(?:squad|players)[^{}|\n]*)", section, flags=re.I)))
+                  candidates.append({
+                      "heading": heading,
+                      "players": names,
+                      "possible_squad_transclusions": transclusions,
+                      "has_inline_player_templates": bool(names),
+                  })
+              inline = [item for item in candidates if item["players"]]
+              if inline:
+                  inline.sort(key=lambda item: len(item["players"]), reverse=True)
+                  return inline[0], candidates
+              return None, candidates
 
           report = {
-              "source": "English Wikipedia historical revisions via MediaWiki Action API",
+              "source": "English Wikipedia immutable historical revision wikitext via MediaWiki Action API",
               "licence": "Wikipedia text reuse subject to Wikimedia Terms / CC BY-SA attribution-sharealike requirements",
+              "temporal_safety": "Rendered oldid output is not used because MediaWiki transclusions are not versioned. Only player rows contained in the exact historical article revision count as roster evidence.",
               "snapshots": SNAPSHOTS,
               "clubs": [],
           }
 
           for club, title, official_used in CLUBS:
-              club_result = {"club": club, "requested_title": title, "official_lpf_players_used": official_used, "snapshots": []}
+              result = {"club": club, "requested_title": title, "official_lpf_players_used": official_used, "snapshots": []}
               union = set()
               resolved_title = title
-              for timestamp in SNAPSHOTS:
-                  revision, resolved_title = revision_at_or_before(title, timestamp)
-                  if not revision:
-                      club_result["snapshots"].append({"target": timestamp, "error": "page_or_revision_missing"})
-                      continue
+              for target in SNAPSHOTS:
                   try:
-                      section = extract_player_sections(parse_html(revision["revid"]))
+                      rev, resolved_title = historical_revision(title, target)
+                      if not rev:
+                          result["snapshots"].append({"target": target, "error": "page_or_revision_missing"})
+                          continue
+                      selected, candidates = extract_immutable_squad(rev["wikitext"])
+                      if not selected:
+                          result["snapshots"].append({
+                              "target": target,
+                              "revision": {"revid": rev["revid"], "timestamp": rev["timestamp"]},
+                              "error": "no_inline_historical_squad_evidence",
+                              "candidate_sections": candidates,
+                          })
+                          continue
+                      union.update(selected["players"])
+                      result["snapshots"].append({
+                          "target": target,
+                          "revision": {"revid": rev["revid"], "timestamp": rev["timestamp"]},
+                          "heading": selected["heading"],
+                          "players_count": len(selected["players"]),
+                          "players": selected["players"],
+                          "possible_squad_transclusions": selected["possible_squad_transclusions"],
+                      })
                   except Exception as exc:
-                      club_result["snapshots"].append({"target": timestamp, "revision": revision, "error": f"parse_failed:{type(exc).__name__}:{exc}"})
-                      continue
-                  if not section:
-                      club_result["snapshots"].append({"target": timestamp, "revision": revision, "error": "no_squad_section_detected"})
-                      continue
-                  players = section["players"]
-                  union.update(players)
-                  club_result["snapshots"].append({"target": timestamp, "revision": revision, "heading": section["heading"], "players_count": len(players), "players": players})
+                      result["snapshots"].append({"target": target, "error": f"request_or_parse_failed:{type(exc).__name__}:{exc}"})
                   time.sleep(0.15)
-              club_result["resolved_title"] = resolved_title
-              club_result["union_players_count"] = len(union)
-              club_result["union_players"] = sorted(union)
-              club_result["difference_vs_lpf_used"] = len(union) - official_used
-              club_result["ratio_vs_lpf_used"] = round(len(union) / official_used, 4) if official_used else None
-              report["clubs"].append(club_result)
-              print(f"{club:28} wiki_union={len(union):3} lpf_used={official_used:2} diff={len(union)-official_used:+3}")
+              result["resolved_title"] = resolved_title
+              result["union_players_count"] = len(union)
+              result["union_players"] = sorted(union)
+              result["difference_vs_lpf_used"] = len(union) - official_used
+              result["ratio_vs_lpf_used"] = round(len(union) / official_used, 4) if official_used else None
+              report["clubs"].append(result)
+              print(f"{club:28} immutable_union={len(union):3} lpf_used={official_used:2} diff={len(union)-official_used:+3}")
 
           usable = [c for c in report["clubs"] if c["union_players_count"] > 0]
-          exact = [c for c in usable if c["union_players_count"] == c["official_lpf_players_used"]]
-          within_20pct = [c for c in usable if abs(c["union_players_count"] - c["official_lpf_players_used"]) / c["official_lpf_players_used"] <= 0.20]
+          within_20 = [c for c in usable if abs(c["union_players_count"] - c["official_lpf_players_used"]) / c["official_lpf_players_used"] <= 0.20]
           report["aggregate"] = {
               "clubs_total": len(CLUBS),
-              "clubs_with_detected_squad_evidence": len(usable),
-              "clubs_exact_count_match_to_lpf_used": len(exact),
-              "clubs_within_20pct_of_lpf_used": len(within_20pct),
-              "wiki_union_player_rows_sum": sum(c["union_players_count"] for c in usable),
-              "official_lpf_player_usages_sum": sum(c["official_lpf_players_used"] for c in report["clubs"]),
+              "clubs_with_immutable_inline_squad_evidence": len(usable),
+              "clubs_without_immutable_inline_squad_evidence": len(CLUBS) - len(usable),
+              "clubs_within_20pct_of_lpf_used_count": len(within_20),
+              "immutable_union_rows_sum": sum(c["union_players_count"] for c in usable),
+              "official_lpf_player_usages_sum_all_clubs": sum(c["official_lpf_players_used"] for c in report["clubs"]),
+              "official_lpf_player_usages_sum_usable_clubs": sum(c["official_lpf_players_used"] for c in usable),
           }
 
           with open("wikipedia-arg-lpf-2024-roster-lab.json", "w", encoding="utf-8") as fh:
