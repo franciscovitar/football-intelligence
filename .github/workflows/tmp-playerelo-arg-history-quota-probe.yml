@@ -1,0 +1,155 @@
+name: PlayerElo Argentina history and quota probe
+
+on:
+  push:
+    branches:
+      - lab/playerelo-provider-audit
+    paths:
+      - .github/workflows/tmp-playerelo-arg-history-quota-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    env:
+      PLAYERELO_API_KEY: ${{ secrets.PLAYERELO_API_KEY }}
+    steps:
+      - name: Probe exact Argentina historical player and quota accounting
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${PLAYERELO_API_KEY:-}" ]; then
+            echo "PLAYERELO ARG PROBE: FAIL - repository secret PLAYERELO_API_KEY is missing"
+            exit 1
+          fi
+          rm -rf /tmp/playerelo-arg-probe
+          mkdir -p /tmp/playerelo-arg-probe/raw
+
+          python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+          from typing import Any
+
+          BASE = "https://data-api.playerelo.football"
+          KEY = os.environ["PLAYERELO_API_KEY"]
+          OUT = Path("/tmp/playerelo-arg-probe")
+          RAW = OUT / "raw"
+
+          def fetch(path: str) -> bytes:
+              request = urllib.request.Request(
+                  BASE + path,
+                  headers={
+                      "Accept": "application/json",
+                      "Authorization": f"Bearer {KEY}",
+                      "User-Agent": "FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)",
+                  },
+                  method="GET",
+              )
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  return response.read()
+
+          usage_before_raw = fetch("/v1/usage")
+          usage_before = json.loads(usage_before_raw)
+          (RAW / "usage-before.json").write_bytes(usage_before_raw)
+
+          search_query = urllib.parse.urlencode({"search": "Franco Armani", "limit": 5})
+          search_raw = fetch(f"/v1/players?{search_query}")
+          search_payload = json.loads(search_raw)
+          (RAW / "search-franco-armani.json").write_bytes(search_raw)
+          if not isinstance(search_payload, list):
+              raise SystemExit("PlayerElo search payload was not a list")
+
+          exact = []
+          for item in search_payload:
+              if not isinstance(item, dict):
+                  continue
+              name = str(item.get("player_name") or item.get("name") or "").strip().casefold()
+              if name == "franco armani":
+                  exact.append(item)
+          if len(exact) != 1:
+              raise SystemExit(f"Expected exactly one exact Franco Armani search result, got {len(exact)}")
+
+          player = exact[0]
+          player_id = player.get("player_id") or player.get("id")
+          if not isinstance(player_id, int) or isinstance(player_id, bool) or player_id <= 0:
+              raise SystemExit(f"Unexpected Franco Armani player ID: {player_id!r}")
+
+          history_raw = fetch(f"/v1/players/{player_id}/history")
+          history = json.loads(history_raw)
+          (RAW / f"player-{player_id}-history.json").write_bytes(history_raw)
+          if not isinstance(history, list) or not history:
+              raise SystemExit("Franco Armani history was not a non-empty list")
+
+          usage_after_raw = fetch("/v1/usage")
+          usage_after = json.loads(usage_after_raw)
+          (RAW / "usage-after.json").write_bytes(usage_after_raw)
+
+          dates = [row.get("date") for row in history if isinstance(row, dict) and isinstance(row.get("date"), str)]
+          row_keys = sorted({key for row in history if isinstance(row, dict) for key in row})
+          used_before = usage_before.get("used_this_month") if isinstance(usage_before, dict) else None
+          used_after = usage_after.get("used_this_month") if isinstance(usage_after, dict) else None
+          counted_delta = used_after - used_before if isinstance(used_before, int) and isinstance(used_after, int) else None
+
+          summary = {
+              "search_exact_match_count": len(exact),
+              "provider_player_id": player_id,
+              "search_player_record": player,
+              "history_row_count": len(history),
+              "history_earliest_date": min(dates) if dates else None,
+              "history_latest_date": max(dates) if dates else None,
+              "history_row_keys": row_keys,
+              "usage_before": usage_before,
+              "usage_after": usage_after,
+              "counted_request_delta": counted_delta,
+              "expected_counted_request_delta": 2,
+          }
+          (OUT / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+
+          files = []
+          for path in sorted(p for p in OUT.rglob("*") if p.is_file() and p.name != "manifest.json"):
+              raw = path.read_bytes()
+              files.append({
+                  "path": str(path.relative_to(OUT)),
+                  "sha256": hashlib.sha256(raw).hexdigest(),
+                  "byte_size": len(raw),
+              })
+          manifest = {
+              "snapshot_id": "playerelo-arg-history-quota-${{ github.run_id }}",
+              "source_code": "playerelo",
+              "competition_codes": ["ARG_LPF"],
+              "provider_player_ids": [player_id],
+              "data_grains": ["player_match"],
+              "files": files,
+              "notes": "Bounded technical evaluation only; no product or rights approval implied.",
+          }
+          (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+          if counted_delta != 2:
+              raise SystemExit(f"Unexpected counted request delta: {counted_delta!r}, expected 2")
+          print(
+              "PLAYERELO ARG PROBE: PASS "
+              f"player_id={player_id} rows={len(history)} earliest={summary['history_earliest_date']} "
+              f"latest={summary['history_latest_date']} counted_delta={counted_delta}"
+          )
+          PY
+
+          if grep -R --fixed-strings --binary-files=without-match -- "${PLAYERELO_API_KEY}" /tmp/playerelo-arg-probe >/dev/null; then
+            echo "PLAYERELO ARG PROBE: FAIL - secret bytes found in artifact directory"
+            exit 1
+          fi
+
+      - name: Upload frozen probe evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: playerelo-arg-history-quota-${{ github.run_id }}
+          path: /tmp/playerelo-arg-probe
+          if-no-files-found: error
+          retention-days: 7
