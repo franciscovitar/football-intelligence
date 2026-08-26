@@ -17,63 +17,91 @@ jobs:
       - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.13"
-      - name: Inspect official AFA article embeds
+      - name: Probe legacy AFA stats-center hosts
         run: |
           set -euo pipefail
           mkdir -p probe_out
           python - <<'PY'
-          import html
+          from __future__ import annotations
+
           import json
           import re
           import urllib.parse
           import urllib.request
           from pathlib import Path
 
-          URLS={
-            'goals':'https://www.afa.com.ar/Sitio/posts/numerosdeprimera-sand-el-artillero',
-            'recoveries':'https://www.afa.com.ar/Sitio/posts/numerosdeprimera-recuperaciones',
-            'fouls_received':'https://www.afa.com.ar/Sitio/posts/numerosdeprimera-faltas-recibidas',
-            'assists':'https://www.afa.com.ar/es/posts/numerosdeprimera-malcorra-el-asistidor',
-            'shots':'https://www.afa.com.ar/a/posts/numerosdeprimera-tiros-al-arco',
-            'passes':'https://www.afa.com.ar/es/posts/numerosdeprimera-pases',
-          }
           UA='FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
+          CHANNEL='deportes.futbol.primeraa.statsCenterPerPlayer'
+          TABLES=['passes','correctPasses','passesAccuracy','stealing','stealingsPM','foulsReceived','foulsReceivedPJ','goalAssistances']
 
-          def get(url):
-              req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept':'text/html,*/*'})
-              with urllib.request.urlopen(req,timeout=20) as resp:
+          def get(url: str):
+              req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept':'text/html,application/javascript,*/*'})
+              with urllib.request.urlopen(req,timeout=15) as resp:
                   return resp.status,resp.headers.get('Content-Type'),resp.geturl(),resp.read()
 
+          urls=[]
+          for host in ('www.afa.org.ar','info.afa.org.ar'):
+              urls.append((f'{host}-index',f'https://{host}/deposito/html/v3/index.html?'+urllib.parse.urlencode({'channel':CHANNEL,'lang':'es_LA'})))
+              for table in TABLES:
+                  urls.append((f'{host}-module-{table}',f'https://{host}/deposito/html/v3/module.html?'+urllib.parse.urlencode({'channel':CHANNEL,'lang':'es_LA','module':'statsCenterPerPlayer','tableType':table,'hideStatsCenterMenu':'true'})))
+          urls.extend([
+              ('info-iframeResizer','https://info.afa.org.ar/deposito/html/v3/htmlCenter/assets/libs/iframeResizer/iframeResizer.min.js'),
+              ('info-htmlCenter','https://info.afa.org.ar/deposito/html/v3/htmlCenter/'),
+              ('info-v3-root','https://info.afa.org.ar/deposito/html/v3/'),
+          ])
+
           report=[]
-          for key,url in URLS.items():
+          candidate_assets=[]
+          for key,url in urls:
+              row={'key':key,'url':url}
               try:
                   status,ctype,final,body=get(url)
-                  text=body.decode('utf-8','replace')
-                  iframe_srcs=[]
-                  for m in re.finditer(r'<iframe\b[^>]*?\bsrc=["\']([^"\']+)["\']',text,re.I|re.S):
-                      src=html.unescape(m.group(1)); iframe_srcs.append(urllib.parse.urljoin(final,src))
-                  interesting=[]
-                  for m in re.finditer(r'(?:href|src)=["\']([^"\']+)["\']',text,re.I):
-                      raw=html.unescape(m.group(1)); absolute=urllib.parse.urljoin(final,raw)
-                      low=absolute.casefold()
-                      if any(token in low for token in ('datafactory','tableau','infogram','flourish','iframe','embed','docs.google','drive.google','youtube')):
-                          if absolute not in interesting: interesting.append(absolute)
-                  embed_checks=[]
-                  for src in iframe_srcs[:10]:
-                      try:
-                          s,ct,fin,b=get(src)
-                          embed_checks.append({'url':src,'status':s,'content_type':ct,'final_url':fin,'bytes':len(b),'html_prefix':b[:250].decode('utf-8','replace') if 'text' in (ct or '') or 'html' in (ct or '') else None})
-                      except Exception as exc:
-                          embed_checks.append({'url':src,'error':type(exc).__name__+': '+str(exc)[:200]})
-                  report.append({'key':key,'url':url,'status':status,'content_type':ctype,'final_url':final,'bytes':len(body),'iframe_srcs':iframe_srcs,'interesting_links':interesting[:30],'embed_checks':embed_checks})
+                  row.update({'status':status,'content_type':ctype,'final_url':final,'bytes':len(body)})
+                  text=body.decode('utf-8','replace') if ('text' in (ctype or '').lower() or 'javascript' in (ctype or '').lower() or 'html' in (ctype or '').lower()) else ''
+                  row['contains_stats_center']='statsCenterPerPlayer' in text
+                  row['contains_datafactory']='datafactory' in text.casefold()
+                  row['contains_table_type']='tableType' in text
+                  row['prefix']=re.sub(r'\s+',' ',text[:500]) if text else None
+                  if text:
+                      assets=[]
+                      for m in re.finditer(r'(?:src|href)=["\']([^"\']+)["\']',text,re.I):
+                          absolute=urllib.parse.urljoin(final,m.group(1))
+                          low=absolute.casefold()
+                          if any(token in low for token in ('.js','.json','statscenter','datafactory','htmlcenter','service','api')) and absolute not in assets:
+                              assets.append(absolute)
+                              candidate_assets.append(absolute)
+                      row['candidate_assets']=assets[:60]
               except Exception as exc:
-                  report.append({'key':key,'url':url,'error':type(exc).__name__+': '+str(exc)[:300]})
-          Path('probe_out/summary.json').write_text(json.dumps(report,indent=2,ensure_ascii=False),encoding='utf-8')
-          print(json.dumps(report,indent=2,ensure_ascii=False))
+                  row['error']=type(exc).__name__+': '+str(exc)[:300]
+              report.append(row)
+
+          # Probe a bounded set of unique assets discovered from any non-redirected legacy page.
+          asset_rows=[]
+          seen=set()
+          for url in candidate_assets:
+              if url in seen or len(asset_rows)>=40:
+                  continue
+              seen.add(url)
+              try:
+                  status,ctype,final,body=get(url)
+                  text=body.decode('utf-8','replace') if ('text' in (ctype or '').lower() or 'javascript' in (ctype or '').lower() or 'json' in (ctype or '').lower()) else ''
+                  asset_rows.append({
+                      'url':url,'status':status,'content_type':ctype,'final_url':final,'bytes':len(body),
+                      'contains_stats_center':'statsCenterPerPlayer' in text,
+                      'contains_datafactory':'datafactory' in text.casefold(),
+                      'contains_api':'api' in text.casefold(),
+                      'interesting_strings':sorted(set(re.findall(r'https?://[^\"\'\s)]+|/[A-Za-z0-9_./?-]*(?:api|service|stats)[A-Za-z0-9_./?=&-]*',text,re.I)))[:80],
+                  })
+              except Exception as exc:
+                  asset_rows.append({'url':url,'error':type(exc).__name__+': '+str(exc)[:300]})
+
+          payload={'requests':report,'discovered_assets':asset_rows}
+          Path('probe_out/legacy-host-summary.json').write_text(json.dumps(payload,indent=2,ensure_ascii=False),encoding='utf-8')
+          print(json.dumps(payload,indent=2,ensure_ascii=False))
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: afa-arg-2016-refined-signal-embed-probe
-          path: probe_out/summary.json
+          name: afa-arg-2016-legacy-stats-host-probe
+          path: probe_out/legacy-host-summary.json
           if-no-files-found: error
           retention-days: 7
