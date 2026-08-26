@@ -11,13 +11,7 @@ from football_intelligence.providers.wikipedia_historical_squads import (
 
 
 def _player(name_value: str, number: int = 1) -> str:
-    return (
-        "{{fs player\n"
-        f"| no = {number}\n"
-        f"| name = {name_value}\n"
-        "| pos = DF\n"
-        "}}\n"
-    )
+    return f"{{{{fs player\n| no = {number}\n| name = {name_value}\n| pos = DF\n}}}}\n"
 
 
 def _snapshot(wikitext: str):
@@ -45,9 +39,7 @@ def _item_statement(qid: str, *, rank: str = "normal") -> dict[str, object]:
 
 def test_explicit_active_squad_is_parsed_with_revision_provenance() -> None:
     snapshot = _snapshot(
-        "== Current squad ==\n"
-        + _player("[[Player One|One]]", 2)
-        + _player("Player Two", 3)
+        "== Current squad ==\n" + _player("[[Player One|One]]", 2) + _player("Player Two", 3)
     )
 
     assert snapshot is not None
