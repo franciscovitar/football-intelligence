@@ -94,6 +94,20 @@ def test_annotation_only_link_is_never_promoted_to_player_article() -> None:
     assert leading_player_article_title("Lucas Lopez (on loan from [[CA Nueva Chicago]])") is None
 
 
+def test_loan_annotation_is_preserved_raw_but_removed_from_display_identity() -> None:
+    snapshot = _snapshot(
+        "== Current squad ==\n"
+        + _player("Lucas Lopez (on loan from [[CA Nueva Chicago]])", 7)
+    )
+
+    assert snapshot is not None
+    assert len(snapshot.observations) == 1
+    observation = snapshot.observations[0]
+    assert observation.raw_name == "Lucas Lopez (on loan from [[CA Nueva Chicago]])"
+    assert observation.display_name == "Lucas Lopez"
+    assert observation.player_article_title is None
+
+
 def test_human_wikidata_item_passes_fail_closed_gate() -> None:
     payload = {
         "entities": {
