@@ -1,3 +1,4 @@
+# Disposable technical-spike workflow; remove after evidence is captured.
 name: Lab HF soccer data lake player density
 
 on:
@@ -49,7 +50,6 @@ jobs:
 
           import duckdb
 
-          root = Path('.lab_hf')
           con = duckdb.connect()
           con.execute("PRAGMA threads=4")
 
@@ -233,8 +233,6 @@ jobs:
           if len(rows) != 36:
               raise SystemExit(f'expected 36 league-year rows, got {len(rows)}')
 
-          # Pre-declared feasibility rule for this spike. It is intentionally conservative:
-          # player identities on >=85% of played fixtures and detailed player stats on >=70%.
           for row in rows:
               p_players = row['fixtures_with_players_pct'] or 0
               p_stats = row['fixtures_with_stats_pct'] or 0
