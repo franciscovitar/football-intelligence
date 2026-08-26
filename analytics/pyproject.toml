@@ -42,6 +42,7 @@ football-intelligence-audit-statsbomb-adapter = "football_intelligence.jobs.audi
 football-intelligence-audit-wyscout-statsbomb-overlap = "football_intelligence.jobs.audit_wyscout_statsbomb_overlap:main"
 football-intelligence-validate-static-snapshot = "football_intelligence.jobs.validate_static_snapshot:main"
 football-intelligence-collect-wikipedia-historical-squads = "football_intelligence.jobs.collect_wikipedia_historical_squads:main"
+football-intelligence-transform-wikipedia-memberships = "football_intelligence.jobs.transform_wikipedia_historical_memberships:main"
 football-intelligence-collect-wikidata-profiles = "football_intelligence.jobs.collect_wikidata_profiles:main"
 football-intelligence-audit-wikidata-profiles = "football_intelligence.jobs.audit_wikidata_profiles:main"
 football-intelligence-audit-wyscout-wikidata-overlap = "football_intelligence.jobs.audit_wyscout_wikidata_overlap:main"
