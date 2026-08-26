@@ -14,6 +14,8 @@ Evidence boundaries:
 - a linked Wikipedia article is retained only when the link syntactically starts
   the player-name value.  Links appearing later in annotations (for example
   ``on loan from [[Club]]``) are never treated as player identity;
+- trailing loan annotations are preserved in ``raw_name`` but removed from the
+  source-local ``display_name`` used for identity fallback;
 - a Wikipedia article -> Wikidata bridge is usable only when the resolved item
   is explicitly ``instance of (P31) human (Q5)``;
 - Wikidata QIDs remain provider-native identifiers and are never canonical
@@ -65,6 +67,7 @@ _LEADING_ARTICLE_LINK_RE = re.compile(
     r"^\s*'{0,5}\s*\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]",
     re.DOTALL,
 )
+_TRAILING_LOAN_ANNOTATION_RE = re.compile(r"\s*\((?:on loan|loaned|loan)\b.*\)\s*$", re.IGNORECASE)
 _QID_RE = re.compile(r"^Q[1-9][0-9]*$")
 
 
@@ -233,7 +236,7 @@ def _parse_player_rows(section_body: str) -> list[tuple[str, str, str | None]]:
         if name_match is None:
             continue
         raw_name = name_match.group(1).strip()
-        display_name = _clean_wikitext_text(raw_name)
+        display_name = _clean_player_display_name(raw_name)
         if not display_name or len(display_name) > 100:
             continue
         article_target = leading_player_article_title(raw_name)
@@ -274,6 +277,11 @@ def _clean_wikitext_text(value: str) -> str:
     value = re.sub(r"\{\{[^{}]*\}\}", "", value)
     value = unicodedata.normalize("NFKC", value)
     return re.sub(r"\s+", " ", value).strip(" *†‡\n\t")
+
+
+def _clean_player_display_name(raw_name: str) -> str:
+    display_name = _clean_wikitext_text(raw_name)
+    return _TRAILING_LOAN_ANNOTATION_RE.sub("", display_name).strip()
 
 
 def _normalize_heading(value: str) -> str:
