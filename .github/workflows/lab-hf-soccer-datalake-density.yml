@@ -1,11 +1,10 @@
 # Disposable technical-spike workflow; remove after evidence is captured.
-name: Lab HF soccer data lake player density
+name: Lab HF soccer data lake player semantics
 
 on:
   push:
     branches:
       - lab/hf-soccer-datalake-player-density
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,13 +15,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Install audit dependency
-        run: python -m pip install --disable-pip-version-check duckdb
+      - run: python -m pip install --disable-pip-version-check duckdb
 
       - name: Download public parquet tables
         shell: bash
@@ -31,262 +27,183 @@ jobs:
           mkdir -p .lab_hf
           base='https://huggingface.co/datasets/eatpizzanot/soccer-dataset/resolve/main'
           for table in leagues fixtures fixture_players fixture_players_stats_flat; do
-            echo "downloading ${table}.parquet"
             curl --fail --location --silent --show-error --retry 2 \
-              "${base}/${table}.parquet" \
-              --output ".lab_hf/${table}.parquet"
+              "${base}/${table}.parquet" --output ".lab_hf/${table}.parquet"
             test -s ".lab_hf/${table}.parquet"
           done
-          du -h .lab_hf/*.parquet
 
-      - name: Measure 2016-2021 player density
+      - name: Measure Argentina gaps and appearance semantics
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import csv
           import json
           from pathlib import Path
 
           import duckdb
 
           con = duckdb.connect()
-          con.execute("PRAGMA threads=4")
-
+          con.execute('PRAGMA threads=4')
           con.execute("""
           CREATE TEMP TABLE target_leagues AS
-          SELECT
-            id AS dataset_league_id,
-            api_football_id,
-            CASE api_football_id
-              WHEN 128 THEN 'ARG_LPF'
-              WHEN 39 THEN 'ENG_PL'
-              WHEN 140 THEN 'ESP_LL'
-              WHEN 135 THEN 'ITA_SA'
-              WHEN 78 THEN 'GER_BL1'
-              WHEN 61 THEN 'FRA_L1'
-            END AS competition_code,
-            name,
-            country
+          SELECT id AS dataset_league_id, api_football_id,
+                 CASE api_football_id
+                   WHEN 128 THEN 'ARG_LPF' WHEN 39 THEN 'ENG_PL'
+                   WHEN 140 THEN 'ESP_LL' WHEN 135 THEN 'ITA_SA'
+                   WHEN 78 THEN 'GER_BL1' WHEN 61 THEN 'FRA_L1'
+                 END AS competition_code
           FROM read_parquet('.lab_hf/leagues.parquet')
-          WHERE api_football_id IN (128, 39, 140, 135, 78, 61)
+          WHERE api_football_id IN (128,39,140,135,78,61)
           """)
-
-          mapping = con.execute("""
-            SELECT competition_code, api_football_id, dataset_league_id, name, country
-            FROM target_leagues
-            ORDER BY competition_code
-          """).fetchall()
-          if len(mapping) != 6:
-              raise SystemExit(f'expected 6 unique target leagues, got {len(mapping)}: {mapping}')
-
           con.execute("""
-          CREATE TEMP TABLE target_fixtures AS
-          SELECT
-            f.id AS fixture_id,
-            tl.competition_code,
-            tl.api_football_id,
-            EXTRACT(year FROM f.date_utc)::INTEGER AS calendar_year,
-            f.is_played
+          CREATE TEMP TABLE fx AS
+          SELECT f.id AS fixture_id, tl.competition_code, f.date_utc,
+                 EXTRACT(year FROM f.date_utc)::INTEGER AS calendar_year,
+                 EXTRACT(month FROM f.date_utc)::INTEGER AS calendar_month,
+                 f.is_played
           FROM read_parquet('.lab_hf/fixtures.parquet') f
-          JOIN target_leagues tl ON tl.dataset_league_id = f.league_id
+          JOIN target_leagues tl ON tl.dataset_league_id=f.league_id
           WHERE EXTRACT(year FROM f.date_utc) BETWEEN 2016 AND 2021
           """)
-
           con.execute("""
-          CREATE TEMP TABLE target_fp AS
-          SELECT
-            tf.competition_code,
-            tf.calendar_year,
-            fp.fixture_id,
-            fp.player_id,
-            fp.minutes,
-            fp.rating,
-            fp.is_starter
-          FROM read_parquet('.lab_hf/fixture_players.parquet') fp
-          JOIN target_fixtures tf ON tf.fixture_id = fp.fixture_id
+          CREATE TEMP TABLE fp AS
+          SELECT fx.competition_code, fx.calendar_year, fx.calendar_month, fx.date_utc,
+                 p.fixture_id, p.player_id, p.is_starter, p.minutes, p.rating
+          FROM read_parquet('.lab_hf/fixture_players.parquet') p
+          JOIN fx ON fx.fixture_id=p.fixture_id
           """)
-
           con.execute("""
-          CREATE TEMP TABLE target_stats AS
-          SELECT
-            tf.competition_code,
-            tf.calendar_year,
-            s.fixture_id,
-            s.player_id,
-            s.games_minutes,
-            s.games_rating,
-            s.goals_total,
-            s.goals_assists,
-            s.passes_total,
-            s.passes_accuracy,
-            s.passes_key,
-            s.duels_total,
-            s.duels_won,
-            s.tackles_total,
-            s.tackles_interceptions,
-            s.tackles_blocks,
-            s.dribbles_attempts,
-            s.dribbles_success,
-            s.shots_total,
-            s.shots_on,
-            s.fouls_committed,
-            s.fouls_drawn
+          CREATE TEMP TABLE st AS
+          SELECT fx.competition_code, fx.calendar_year, fx.calendar_month, fx.date_utc,
+                 s.fixture_id, s.player_id, s.games_minutes, s.games_rating,
+                 s.games_substitute, s.games_position, s.passes_total,
+                 s.goals_total, s.goals_assists
           FROM read_parquet('.lab_hf/fixture_players_stats_flat.parquet') s
-          JOIN target_fixtures tf ON tf.fixture_id = s.fixture_id
+          JOIN fx ON fx.fixture_id=s.fixture_id
           """)
 
-          query = """
+          arg_monthly_cursor = con.execute("""
           WITH base AS (
-            SELECT
-              competition_code,
-              calendar_year,
-              COUNT(*) AS fixtures_total,
-              COUNT(*) FILTER (WHERE is_played) AS fixtures_played
-            FROM target_fixtures
+            SELECT calendar_year, calendar_month, COUNT(*) FILTER (WHERE is_played) AS played
+            FROM fx WHERE competition_code='ARG_LPF' AND calendar_year BETWEEN 2016 AND 2018
             GROUP BY 1,2
-          ),
-          fp AS (
-            SELECT
-              competition_code,
-              calendar_year,
-              COUNT(*) AS fixture_player_rows,
-              COUNT(DISTINCT fixture_id) AS fixtures_with_players,
-              COUNT(DISTINCT player_id) AS unique_players,
-              COUNT(*) FILTER (WHERE minutes IS NOT NULL) AS fp_minutes_nonnull,
-              COUNT(*) FILTER (WHERE rating IS NOT NULL) AS fp_rating_nonnull
-            FROM target_fp
+          ), p AS (
+            SELECT calendar_year, calendar_month, COUNT(DISTINCT fixture_id) AS player_fixtures
+            FROM fp WHERE competition_code='ARG_LPF' AND calendar_year BETWEEN 2016 AND 2018
             GROUP BY 1,2
-          ),
-          st AS (
-            SELECT
-              competition_code,
-              calendar_year,
-              COUNT(*) AS stat_rows,
-              COUNT(DISTINCT fixture_id) AS fixtures_with_stats,
-              COUNT(DISTINCT player_id) AS stat_unique_players,
-              COUNT(*) FILTER (WHERE games_minutes IS NOT NULL) AS games_minutes_nonnull,
-              COUNT(*) FILTER (WHERE games_rating IS NOT NULL) AS games_rating_nonnull,
-              COUNT(*) FILTER (WHERE goals_total IS NOT NULL) AS goals_total_nonnull,
-              COUNT(*) FILTER (WHERE goals_assists IS NOT NULL) AS goals_assists_nonnull,
-              COUNT(*) FILTER (WHERE passes_total IS NOT NULL) AS passes_total_nonnull,
-              COUNT(*) FILTER (WHERE passes_accuracy IS NOT NULL) AS passes_accuracy_nonnull,
-              COUNT(*) FILTER (WHERE passes_key IS NOT NULL) AS passes_key_nonnull,
-              COUNT(*) FILTER (WHERE duels_total IS NOT NULL) AS duels_total_nonnull,
-              COUNT(*) FILTER (WHERE duels_won IS NOT NULL) AS duels_won_nonnull,
-              COUNT(*) FILTER (WHERE tackles_total IS NOT NULL) AS tackles_total_nonnull,
-              COUNT(*) FILTER (WHERE tackles_interceptions IS NOT NULL) AS tackles_interceptions_nonnull,
-              COUNT(*) FILTER (WHERE tackles_blocks IS NOT NULL) AS tackles_blocks_nonnull,
-              COUNT(*) FILTER (WHERE dribbles_attempts IS NOT NULL) AS dribbles_attempts_nonnull,
-              COUNT(*) FILTER (WHERE dribbles_success IS NOT NULL) AS dribbles_success_nonnull,
-              COUNT(*) FILTER (WHERE shots_total IS NOT NULL) AS shots_total_nonnull,
-              COUNT(*) FILTER (WHERE shots_on IS NOT NULL) AS shots_on_nonnull,
-              COUNT(*) FILTER (WHERE fouls_committed IS NOT NULL) AS fouls_committed_nonnull,
-              COUNT(*) FILTER (WHERE fouls_drawn IS NOT NULL) AS fouls_drawn_nonnull
-            FROM target_stats
+          ), s AS (
+            SELECT calendar_year, calendar_month, COUNT(DISTINCT fixture_id) AS stat_fixtures
+            FROM st WHERE competition_code='ARG_LPF' AND calendar_year BETWEEN 2016 AND 2018
             GROUP BY 1,2
           )
-          SELECT
-            b.competition_code,
-            b.calendar_year,
-            b.fixtures_total,
-            b.fixtures_played,
-            COALESCE(fp.fixtures_with_players, 0) AS fixtures_with_players,
-            COALESCE(fp.fixture_player_rows, 0) AS fixture_player_rows,
-            COALESCE(fp.unique_players, 0) AS unique_players,
-            COALESCE(st.fixtures_with_stats, 0) AS fixtures_with_stats,
-            COALESCE(st.stat_rows, 0) AS stat_rows,
-            COALESCE(st.stat_unique_players, 0) AS stat_unique_players,
-            ROUND(100.0 * COALESCE(fp.fixtures_with_players, 0) / NULLIF(b.fixtures_played, 0), 1) AS fixtures_with_players_pct,
-            ROUND(100.0 * COALESCE(st.fixtures_with_stats, 0) / NULLIF(b.fixtures_played, 0), 1) AS fixtures_with_stats_pct,
-            ROUND(1.0 * COALESCE(fp.fixture_player_rows, 0) / NULLIF(fp.fixtures_with_players, 0), 1) AS player_rows_per_covered_fixture,
-            ROUND(100.0 * COALESCE(fp.fp_minutes_nonnull, 0) / NULLIF(fp.fixture_player_rows, 0), 1) AS fp_minutes_pct,
-            ROUND(100.0 * COALESCE(fp.fp_rating_nonnull, 0) / NULLIF(fp.fixture_player_rows, 0), 1) AS fp_rating_pct,
-            ROUND(100.0 * COALESCE(st.games_minutes_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS games_minutes_pct,
-            ROUND(100.0 * COALESCE(st.games_rating_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS games_rating_pct,
-            ROUND(100.0 * COALESCE(st.goals_total_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS goals_total_pct,
-            ROUND(100.0 * COALESCE(st.goals_assists_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS goals_assists_pct,
-            ROUND(100.0 * COALESCE(st.passes_total_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS passes_total_pct,
-            ROUND(100.0 * COALESCE(st.passes_accuracy_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS passes_accuracy_pct,
-            ROUND(100.0 * COALESCE(st.passes_key_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS passes_key_pct,
-            ROUND(100.0 * COALESCE(st.duels_total_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS duels_total_pct,
-            ROUND(100.0 * COALESCE(st.duels_won_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS duels_won_pct,
-            ROUND(100.0 * COALESCE(st.tackles_total_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS tackles_total_pct,
-            ROUND(100.0 * COALESCE(st.tackles_interceptions_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS tackles_interceptions_pct,
-            ROUND(100.0 * COALESCE(st.tackles_blocks_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS tackles_blocks_pct,
-            ROUND(100.0 * COALESCE(st.dribbles_attempts_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS dribbles_attempts_pct,
-            ROUND(100.0 * COALESCE(st.dribbles_success_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS dribbles_success_pct,
-            ROUND(100.0 * COALESCE(st.shots_total_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS shots_total_pct,
-            ROUND(100.0 * COALESCE(st.shots_on_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS shots_on_pct,
-            ROUND(100.0 * COALESCE(st.fouls_committed_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS fouls_committed_pct,
-            ROUND(100.0 * COALESCE(st.fouls_drawn_nonnull, 0) / NULLIF(st.stat_rows, 0), 1) AS fouls_drawn_pct
-          FROM base b
-          LEFT JOIN fp USING (competition_code, calendar_year)
-          LEFT JOIN st USING (competition_code, calendar_year)
-          ORDER BY b.competition_code, b.calendar_year
-          """
+          SELECT b.calendar_year, b.calendar_month, b.played,
+                 COALESCE(p.player_fixtures,0), COALESCE(s.stat_fixtures,0),
+                 ROUND(100.0*COALESCE(p.player_fixtures,0)/NULLIF(b.played,0),1),
+                 ROUND(100.0*COALESCE(s.stat_fixtures,0)/NULLIF(b.played,0),1)
+          FROM base b LEFT JOIN p USING(calendar_year,calendar_month)
+          LEFT JOIN s USING(calendar_year,calendar_month)
+          ORDER BY 1,2
+          """)
+          arg_monthly_cols = [d[0] for d in arg_monthly_cursor.description]
+          arg_monthly = [dict(zip(arg_monthly_cols,row)) for row in arg_monthly_cursor.fetchall()]
 
-          cursor = con.execute(query)
-          columns = [d[0] for d in cursor.description]
-          rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+          semantics_cursor = con.execute("""
+          WITH f AS (
+            SELECT competition_code, calendar_year,
+                   COUNT(*) FILTER (WHERE is_played) AS played
+            FROM fx GROUP BY 1,2
+          ), p AS (
+            SELECT competition_code, calendar_year,
+                   COUNT(*) AS rows,
+                   COUNT(DISTINCT fixture_id) AS covered_fixtures,
+                   COUNT(*) FILTER (WHERE minutes IS NOT NULL) AS minutes_nonnull,
+                   COUNT(*) FILTER (WHERE minutes IS NULL) AS minutes_null,
+                   COUNT(*) FILTER (WHERE is_starter) AS starters,
+                   COUNT(*) FILTER (WHERE rating IS NOT NULL) AS rating_nonnull
+            FROM fp GROUP BY 1,2
+          ), s AS (
+            SELECT competition_code, calendar_year,
+                   COUNT(*) AS rows,
+                   COUNT(DISTINCT fixture_id) AS covered_fixtures,
+                   COUNT(*) FILTER (WHERE games_minutes IS NOT NULL) AS minutes_nonnull,
+                   COUNT(*) FILTER (WHERE games_minutes IS NULL) AS minutes_null,
+                   COUNT(*) FILTER (WHERE games_minutes=0) AS minutes_zero,
+                   COUNT(*) FILTER (WHERE games_rating IS NOT NULL) AS rating_nonnull,
+                   COUNT(*) FILTER (WHERE games_minutes IS NOT NULL AND games_rating IS NOT NULL) AS rating_on_appearance,
+                   COUNT(*) FILTER (WHERE games_minutes IS NULL AND games_rating IS NOT NULL) AS rating_without_minutes,
+                   COUNT(*) FILTER (WHERE games_substitute AND games_minutes IS NOT NULL) AS used_subs,
+                   COUNT(*) FILTER (WHERE games_substitute AND games_minutes IS NULL) AS unused_sub_rows,
+                   COUNT(*) FILTER (WHERE games_minutes IS NOT NULL AND passes_total IS NOT NULL) AS passes_on_appearance,
+                   COUNT(*) FILTER (WHERE games_minutes IS NULL AND passes_total IS NOT NULL) AS passes_without_minutes
+            FROM st GROUP BY 1,2
+          )
+          SELECT f.competition_code, f.calendar_year, f.played,
+                 p.covered_fixtures AS player_fixtures,
+                 ROUND(1.0*p.rows/NULLIF(p.covered_fixtures,0),2) AS matchday_rows_per_fixture,
+                 ROUND(100.0*p.minutes_nonnull/NULLIF(p.rows,0),1) AS fp_minutes_nonnull_pct,
+                 ROUND(100.0*p.rating_nonnull/NULLIF(p.rows,0),1) AS fp_rating_nonnull_pct,
+                 s.covered_fixtures AS stat_fixtures,
+                 ROUND(1.0*s.rows/NULLIF(s.covered_fixtures,0),2) AS stat_rows_per_fixture,
+                 ROUND(1.0*s.minutes_nonnull/NULLIF(s.covered_fixtures,0),2) AS appearance_rows_per_fixture,
+                 ROUND(100.0*s.minutes_null/NULLIF(s.rows,0),1) AS stat_minutes_null_pct,
+                 ROUND(100.0*s.minutes_zero/NULLIF(s.rows,0),2) AS stat_minutes_zero_pct,
+                 ROUND(100.0*s.rating_on_appearance/NULLIF(s.minutes_nonnull,0),1) AS rating_on_appearance_pct,
+                 ROUND(100.0*s.rating_without_minutes/NULLIF(s.minutes_null,0),1) AS rating_without_minutes_pct,
+                 ROUND(1.0*s.used_subs/NULLIF(s.covered_fixtures,0),2) AS used_subs_per_fixture,
+                 ROUND(1.0*s.unused_sub_rows/NULLIF(s.covered_fixtures,0),2) AS unused_sub_rows_per_fixture,
+                 ROUND(100.0*s.passes_on_appearance/NULLIF(s.minutes_nonnull,0),1) AS passes_on_appearance_pct,
+                 ROUND(100.0*s.passes_without_minutes/NULLIF(s.minutes_null,0),1) AS passes_without_minutes_pct
+          FROM f JOIN p USING(competition_code,calendar_year)
+          JOIN s USING(competition_code,calendar_year)
+          ORDER BY 1,2
+          """)
+          semantics_cols = [d[0] for d in semantics_cursor.description]
+          semantics = [dict(zip(semantics_cols,row)) for row in semantics_cursor.fetchall()]
 
-          if len(rows) != 36:
-              raise SystemExit(f'expected 36 league-year rows, got {len(rows)}')
-
-          for row in rows:
-              p_players = row['fixtures_with_players_pct'] or 0
-              p_stats = row['fixtures_with_stats_pct'] or 0
-              if p_players >= 85 and p_stats >= 70:
-                  row['density_class'] = 'strong'
-              elif p_players >= 50 or p_stats >= 40:
-                  row['density_class'] = 'partial'
-              else:
-                  row['density_class'] = 'weak'
+          arg_ranges = con.execute("""
+          WITH pf AS (SELECT DISTINCT fixture_id FROM fp WHERE competition_code='ARG_LPF'),
+               sf AS (SELECT DISTINCT fixture_id FROM st WHERE competition_code='ARG_LPF')
+          SELECT EXTRACT(year FROM fx.date_utc)::INTEGER AS year,
+                 MIN(fx.date_utc) FILTER (WHERE pf.fixture_id IS NOT NULL) AS first_player_fixture,
+                 MAX(fx.date_utc) FILTER (WHERE pf.fixture_id IS NOT NULL) AS last_player_fixture,
+                 MIN(fx.date_utc) FILTER (WHERE sf.fixture_id IS NOT NULL) AS first_stat_fixture,
+                 MAX(fx.date_utc) FILTER (WHERE sf.fixture_id IS NOT NULL) AS last_stat_fixture
+          FROM fx LEFT JOIN pf USING(fixture_id) LEFT JOIN sf USING(fixture_id)
+          WHERE fx.competition_code='ARG_LPF' AND EXTRACT(year FROM fx.date_utc) BETWEEN 2016 AND 2018
+          GROUP BY 1 ORDER BY 1
+          """).fetchall()
 
           payload = {
               'source': 'eatpizzanot/soccer-dataset',
-              'source_url': 'https://huggingface.co/datasets/eatpizzanot/soccer-dataset',
-              'grain_note': 'calendar-year audit; not a canonical season assignment',
-              'target_window': [2016, 2021],
-              'feasibility_rule': {
-                  'strong': 'fixtures_with_players_pct >= 85 and fixtures_with_stats_pct >= 70',
-                  'partial': 'otherwise, fixtures_with_players_pct >= 50 or fixtures_with_stats_pct >= 40',
-                  'weak': 'below partial thresholds',
-              },
-              'league_mapping': [
-                  dict(zip(['competition_code','api_football_id','dataset_league_id','name','country'], row))
-                  for row in mapping
+              'argentina_monthly_2016_2018': arg_monthly,
+              'player_semantics_2016_2021': semantics,
+              'argentina_covered_date_ranges': [
+                  {
+                      'year': r[0],
+                      'first_player_fixture': str(r[1]) if r[1] else None,
+                      'last_player_fixture': str(r[2]) if r[2] else None,
+                      'first_stat_fixture': str(r[3]) if r[3] else None,
+                      'last_stat_fixture': str(r[4]) if r[4] else None,
+                  }
+                  for r in arg_ranges
               ],
-              'rows': rows,
+              'interpretation_guard': 'games_minutes non-null is appearance evidence; null is not zero and is not promoted to an appearance',
           }
-          Path('.lab_hf/summary.json').write_text(json.dumps(payload, indent=2), encoding='utf-8')
+          Path('.lab_hf/detail.json').write_text(json.dumps(payload,indent=2),encoding='utf-8')
 
-          with Path('.lab_hf/summary.csv').open('w', newline='', encoding='utf-8') as fh:
-              writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
-              writer.writeheader()
-              writer.writerows(rows)
-
-          print('LEAGUE MAPPING')
-          for item in payload['league_mapping']:
-              print(item)
-          print('\nDENSITY SUMMARY')
-          print('code year played player-fixtures% stat-fixtures% player-rows/fx rating% passes% duels% tackles% class')
-          for r in rows:
-              print(
-                  r['competition_code'], r['calendar_year'], r['fixtures_played'],
-                  r['fixtures_with_players_pct'], r['fixtures_with_stats_pct'],
-                  r['player_rows_per_covered_fixture'], r['games_rating_pct'],
-                  r['passes_total_pct'], r['duels_total_pct'], r['tackles_total_pct'],
-                  r['density_class']
-              )
+          print('ARG_MONTH|year|month|played|player_fx|stat_fx|player_pct|stat_pct')
+          for r in arg_monthly:
+              print('ARG_MONTH|'+'|'.join(str(r[c]) for c in arg_monthly_cols))
+          print('SEM|code|year|played|player_fx|matchday_rows_fx|fp_minutes_pct|fp_rating_pct|stat_fx|stat_rows_fx|appearance_rows_fx|stat_minutes_null_pct|stat_minutes_zero_pct|rating_on_appearance_pct|rating_without_minutes_pct|used_subs_fx|unused_sub_rows_fx|passes_on_appearance_pct|passes_without_minutes_pct')
+          for r in semantics:
+              print('SEM|'+'|'.join(str(r[c]) for c in semantics_cols))
+          print('ARG_RANGES', payload['argentina_covered_date_ranges'])
           PY
 
       - name: Upload bounded audit artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hf-soccer-datalake-player-density
-          path: |
-            .lab_hf/summary.json
-            .lab_hf/summary.csv
+          name: hf-soccer-datalake-player-semantics
+          path: .lab_hf/detail.json
           if-no-files-found: error
           retention-days: 7
