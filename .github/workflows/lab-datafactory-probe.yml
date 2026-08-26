@@ -1,0 +1,120 @@
+# Disposable technical-spike workflow; remove after evidence is captured.
+name: Lab DataFactory API feasibility
+
+on:
+  push:
+    branches:
+      - lab/datafactory-api-feasibility
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+
+      - name: Probe public OpenAPI and health
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .lab_datafactory
+          base='https://www.datafactory.la/api'
+
+          curl --fail --location --silent --show-error --max-time 30 \
+            -D .lab_datafactory/openapi.headers \
+            "$base/openapi.json" \
+            -o .lab_datafactory/openapi.json
+
+          curl --location --silent --show-error --max-time 30 \
+            -D .lab_datafactory/health.headers \
+            -w '%{http_code}' \
+            "$base/health" \
+            -o .lab_datafactory/health.body \
+            > .lab_datafactory/health.status
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('.lab_datafactory')
+          spec = json.loads((root / 'openapi.json').read_text(encoding='utf-8'))
+          target_paths = [
+              '/api/v1/sports/{sport}/{competition}/fixture',
+              '/api/v1/sports/{sport}/{competition}/leaders',
+              '/api/v1/sports/{sport}/{competition}/match/{id}',
+              '/api/v1/sports/{sport}/{competition}/positions',
+              '/api/v1/sports/{sport}/{competition}/rosters',
+              '/api/v1/updates',
+              '/health',
+          ]
+
+          def summarize_parameter(p):
+              if '$ref' in p:
+                  return {'ref': p['$ref']}
+              return {
+                  'name': p.get('name'),
+                  'in': p.get('in'),
+                  'required': p.get('required'),
+                  'description': p.get('description'),
+                  'schema': p.get('schema'),
+                  'example': p.get('example'),
+                  'examples': p.get('examples'),
+              }
+
+          paths = {}
+          for path in target_paths:
+              item = spec.get('paths', {}).get(path)
+              if item is None:
+                  paths[path] = None
+                  continue
+              path_params = [summarize_parameter(p) for p in item.get('parameters', [])]
+              methods = {}
+              for method in ('get', 'post', 'put', 'patch', 'delete'):
+                  op = item.get(method)
+                  if not op:
+                      continue
+                  methods[method] = {
+                      'summary': op.get('summary'),
+                      'description': op.get('description'),
+                      'security': op.get('security'),
+                      'parameters': path_params + [summarize_parameter(p) for p in op.get('parameters', [])],
+                      'responses': sorted(op.get('responses', {}).keys()),
+                  }
+              paths[path] = methods
+
+          summary = {
+              'openapi': spec.get('openapi'),
+              'info': spec.get('info'),
+              'servers': spec.get('servers'),
+              'top_level_security': spec.get('security'),
+              'security_schemes': spec.get('components', {}).get('securitySchemes'),
+              'paths': paths,
+              'health': {
+                  'status': (root / 'health.status').read_text().strip(),
+                  'body': (root / 'health.body').read_text(encoding='utf-8', errors='replace')[:2000],
+              },
+          }
+          (root / 'summary.json').write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding='utf-8')
+          print(json.dumps(summary, indent=2, ensure_ascii=False))
+          PY
+
+      - name: Upload bounded probe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: datafactory-openapi-health-probe
+          path: |
+            .lab_datafactory/summary.json
+            .lab_datafactory/openapi.json
+            .lab_datafactory/openapi.headers
+            .lab_datafactory/health.status
+            .lab_datafactory/health.body
+            .lab_datafactory/health.headers
+          if-no-files-found: error
+          retention-days: 7
