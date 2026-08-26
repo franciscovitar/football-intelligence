@@ -95,7 +95,7 @@ def test_collector_writes_verifiable_raw_snapshot_and_index(
     index = json.loads((tmp_path / "index.json").read_text(encoding="utf-8"))
 
     assert manifest.source_code == "wikipedia"
-    assert manifest.data_grains == ("player_season",)
+    assert manifest.data_grains == ("player_membership",)
     assert len(manifest.files) == 3
     assert verification.passed
     assert [item["requested_title"] for item in index["requests"]] == ["Club A", "Club B"]
