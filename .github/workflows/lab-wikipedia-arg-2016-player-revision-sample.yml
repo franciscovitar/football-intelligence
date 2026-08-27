@@ -1,0 +1,128 @@
+# Disposable technical-spike workflow; remove after evidence is captured.
+name: Lab Wikipedia ARG_LPF 2016 player revision sample
+
+on:
+  push:
+    branches:
+      - lab/wikipedia-arg-2016-roster-revisions
+    paths:
+      - .github/workflows/lab-wikipedia-arg-2016-player-revision-sample.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - name: Compare end-of-tournament historical revisions with current pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p probe_out
+          python - <<'PY'
+          from __future__ import annotations
+          import json,re,time,unicodedata,urllib.parse,urllib.request
+          from collections import Counter
+          from pathlib import Path
+
+          API='https://es.wikipedia.org/w/api.php'
+          UA='FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
+          HIST_CUTOFF='2016-08-15T23:59:59Z'
+          SAMPLE=json.loads(r'''[
+            {"club":"Aldosivi","name":"Alexis Nicolás Castro","title":"Alexis Nicolás Castro"},{"club":"Aldosivi","name":"Damián Ledesma","title":"Damián Ledesma"},
+            {"club":"Argentinos Juniors","name":"Cristian Ledesma","title":"Cristian Ledesma"},{"club":"Argentinos Juniors","name":"Damián Batallini","title":"Damián Batallini"},
+            {"club":"Arsenal de Sarandí","name":"Agustín Vuletich","title":"Agustín Vuletich"},{"club":"Arsenal de Sarandí","name":"Claudio Corvalán","title":"Claudio Corvalán"},
+            {"club":"Atlético Tucumán","name":"Bruno Bianchi","title":"Bruno Bianchi"},{"club":"Atlético Tucumán","name":"Cristian Lucchetti","title":"Cristian Lucchetti"},
+            {"club":"Atlético de Rafaela","name":"Agustín Díaz","title":"Agustín Díaz (futbolista argentino)"},{"club":"Atlético de Rafaela","name":"Axel Werner","title":"Axel Werner"},
+            {"club":"Banfield","name":"Carlos Matheu","title":"Carlos Matheu"},{"club":"Banfield","name":"Claudio Villagra","title":"Claudio Villagra"},
+            {"club":"Belgrano de Córdoba","name":"Adrián Argachá","title":"Adrián Argachá"},{"club":"Belgrano de Córdoba","name":"César Pereyra","title":"César Pereyra"},
+            {"club":"Boca Juniors","name":"Adrián Cubas","title":"Adrián Cubas"},{"club":"Boca Juniors","name":"Agustín Orion","title":"Agustín Orion"},
+            {"club":"Colón","name":"Adrian Bastía","title":"Adrian Bastía"},{"club":"Colón","name":"Alan Ruiz","title":"Alan Ruiz"},
+            {"club":"Defensa y Justicia","name":"Agustín Bouzat","title":"Agustín Bouzat"},{"club":"Defensa y Justicia","name":"Ciro Rius","title":"Ciro Rius"},
+            {"club":"Estudiantes","name":"Agustín Rossi","title":"Agustín Rossi (futbolista)"},{"club":"Estudiantes","name":"Agustín Silva","title":"Agustín Silva"},
+            {"club":"Gimnasia de La Plata","name":"Alexis Arias","title":"Alexis Martín Arias"},{"club":"Gimnasia de La Plata","name":"Álvaro Fernández","title":"Álvaro Fernández (futbolista)"},
+            {"club":"Godoy Cruz","name":"Ángel González","title":"Ángel González (futbolista)"},{"club":"Godoy Cruz","name":"David Ramírez","title":"David Ramírez (futbolista)"},
+            {"club":"Huracán","name":"Alejandro Romero Gamarra","title":"Alejandro Romero Gamarra"},{"club":"Huracán","name":"Carlos Araujo","title":"Carlos Araujo"},
+            {"club":"Independiente","name":"Claudio Aquino","title":"Claudio Aquino"},{"club":"Independiente","name":"Cristian Rodríguez","title":"Cristian Rodríguez"},
+            {"club":"Lanús","name":"Agustín Pelletieri","title":"Agustín Pelletieri"},{"club":"Lanús","name":"Diego Braghieri","title":"Diego Braghieri"},
+            {"club":"Newell's Old Boys","name":"Daniel Mancini","title":"Daniel Mancini"},{"club":"Newell's Old Boys","name":"Denis Rodríguez","title":"Denis Rodríguez"},
+            {"club":"Olimpo","name":"Brian Ferreira","title":"Brian Ferreira"},{"club":"Olimpo","name":"Cristian Villanueva","title":"Cristian Villanueva"},
+            {"club":"Patronato","name":"Agustín Bossio","title":"Agustín Bossio"},{"club":"Patronato","name":"Alejandro Almada","title":"Alejandro Almada"},
+            {"club":"Quilmes","name":"Adrián Calello","title":"Adrián Calello"},{"club":"Quilmes","name":"Alan Alegre","title":"Alan Alegre"},
+            {"club":"Racing Club","name":"Carlos Núñez","title":"Carlos Rodrigo Núñez"},{"club":"Racing Club","name":"Damian Schmidt","title":"Damian Schmidt"},
+            {"club":"River Plate","name":"Alexander Barboza","title":"Alexander Barboza"},{"club":"River Plate","name":"Augusto Batalla","title":"Augusto Batalla"},
+            {"club":"Rosario Central","name":"Alejandro Donatti","title":"Alejandro Donatti"},{"club":"Rosario Central","name":"César Delgado","title":"César Delgado"},
+            {"club":"San Lorenzo","name":"Bautista Merlini","title":"Bautista Merlini"},{"club":"San Lorenzo","name":"Emmanuel Mas","title":"Emmanuel Mas"},
+            {"club":"San Martín de San Juan","name":"Daniel Franco","title":"Daniel Franco"},{"club":"San Martín de San Juan","name":"Daniel González","title":"Daniel Gonzalez (futbolista argentino)"},
+            {"club":"Sarmiento de Junín","name":"Carlos Bueno","title":"Carlos Bueno"},{"club":"Sarmiento de Junín","name":"Diego Chaves","title":"Diego Chaves (futbolista)"},
+            {"club":"Temperley","name":"Abel Peralta","title":"Abel Peralta"},{"club":"Temperley","name":"Adrián Arregui","title":"Adrián Arregui"},
+            {"club":"Tigre","name":"Adrián Gabbarini","title":"Adrián Gabbarini"},{"club":"Tigre","name":"Carlos Luna","title":"Carlos Luna"},
+            {"club":"Unión de Santa Fe","name":"Agustín Sandona","title":"Agustín Sandona"},{"club":"Unión de Santa Fe","name":"Brian Blasi","title":"Brian Blasi"},
+            {"club":"Vélez Sarsfield","name":"Agustín Doffo","title":"Agustín Doffo"},{"club":"Vélez Sarsfield","name":"Alan Aguerre","title":"Alan Aguerre"},
+            {"club":"Lanús","name":"Iván Marcone","title":"Iván Marcone"},{"club":"Colón","name":"Gerónimo Poblete","title":"Gerónimo Poblete"},{"club":"Lanús","name":"José Sand","title":"José Sand"}
+          ]''')
+          ALIASES={'Aldosivi':['aldosivi'],'Argentinos Juniors':['argentinos juniors'],'Arsenal de Sarandí':['arsenal'],'Atlético de Rafaela':['atletico de rafaela','rafaela'],'Atlético Tucumán':['atletico tucuman'],'Banfield':['banfield'],'Belgrano de Córdoba':['belgrano'],'Boca Juniors':['boca juniors','boca'],'Colón':['colon'],'Defensa y Justicia':['defensa y justicia'],'Estudiantes':['estudiantes'],'Gimnasia de La Plata':['gimnasia'],'Godoy Cruz':['godoy cruz'],'Huracán':['huracan'],'Independiente':['independiente'],'Lanús':['lanus'],"Newell's Old Boys":["newell's","newells"],'Olimpo':['olimpo'],'Patronato':['patronato'],'Quilmes':['quilmes'],'Racing Club':['racing'],'River Plate':['river plate','river'],'Rosario Central':['rosario central'],'San Lorenzo':['san lorenzo'],'San Martín de San Juan':['san martin'],'Sarmiento de Junín':['sarmiento'],'Temperley':['temperley'],'Tigre':['tigre'],'Unión de Santa Fe':['union'],'Vélez Sarsfield':['velez']}
+          EXPLICIT=re.compile(r'\[\[Campeonato de Primera División 2016(?: \(Argentina\))?\|(?:Campeonato de Primera División 2016|Primera División 2016|2016)\]\]',re.I)
+          PLAIN=re.compile(r'(?m)^\s*\|\s*2016\s*(?=\|\||$)')
+
+          def fold(v):
+              d=unicodedata.normalize('NFKD',v or '')
+              return ''.join(c for c in d if not unicodedata.combining(c)).casefold()
+          def request(params):
+              url=f"{API}?{urllib.parse.urlencode(params)}";req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept':'application/json'})
+              for attempt in range(1,5):
+                  try:
+                      with urllib.request.urlopen(req,timeout=35) as resp:p=json.loads(resp.read())
+                      if 'error' in p:raise RuntimeError(str(p['error']))
+                      return p
+                  except Exception:
+                      if attempt==4:raise
+                      time.sleep(attempt*1.2)
+              raise AssertionError
+          def revision(title,cutoff=None):
+              params={'action':'query','prop':'revisions','titles':title,'redirects':'1','rvlimit':'1','rvprop':'ids|timestamp|content','rvslots':'main','format':'json','formatversion':'2'}
+              if cutoff:params.update({'rvstart':cutoff,'rvdir':'older'})
+              p=request(params);pages=p.get('query',{}).get('pages',[])
+              if not pages:return {'state':'unresolved'}
+              pg=pages[0];revs=pg.get('revisions') or []
+              if pg.get('missing') is True or not revs:return {'state':'missing','title':pg.get('title')}
+              rv=revs[0];text=((rv.get('slots') or {}).get('main') or {}).get('content')
+              return {'state':'resolved' if isinstance(text,str) else 'no_content','title':pg.get('title'),'pageid':pg.get('pageid'),'revid':rv.get('revid'),'timestamp':rv.get('timestamp'),'text':text}
+          def values(text,club,pattern):
+              if not isinstance(text,str):return []
+              vals=[]
+              for m in pattern.finditer(text):
+                  tail=text[m.end():m.end()+260];bounds=[p for p in (tail.find('|-'),tail.find('|}')) if p>=0];seg=tail[:min(bounds) if bounds else len(tail)]
+                  nm=re.search(r'(?:\|\||\|)\s*(?:\'\'\')?(\d{1,2})(?:\'\'\')?(?=\s*(?:\|\||\||\n|$))',seg)
+                  if not nm:continue
+                  prior=text[max(0,m.start()-1800):m.start()]
+                  if '|}' in prior:prior=prior.split('|}')[-1]
+                  fp=fold(prior)
+                  if not any(fold(a) in fp for a in ALIASES[club]):continue
+                  vals.append(int(nm.group(1)))
+              return sorted(set(vals))
+
+          results=[]
+          for i,item in enumerate(SAMPLE,1):
+              cur=revision(item['title']);hist=revision(item['title'],HIST_CUTOFF)
+              ce=values(cur.get('text'),item['club'],EXPLICIT);he=values(hist.get('text'),item['club'],EXPLICIT)
+              cp=values(cur.get('text'),item['club'],PLAIN);hp=values(hist.get('text'),item['club'],PLAIN)
+              results.append({**item,'current':{k:cur.get(k) for k in ('state','title','pageid','revid','timestamp')},'historical':{k:hist.get(k) for k in ('state','title','pageid','revid','timestamp')},'current_explicit_values':ce,'historical_explicit_values':he,'current_plain_2016_values':cp,'historical_plain_2016_values':hp,'explicit_conflict':bool(ce and he and ce!=he)})
+              time.sleep(.2)
+          summary={'status':'PASS','sample_size':len(results),'selection':'Two deterministic current strict-missing linked players per club from v2 coverage output, plus Iván Marcone, Gerónimo Poblete and José Sand anchors.','historical_cutoff':HIST_CUTOFF,'historical_pages_resolved':sum(r['historical']['state']=='resolved' for r in results),'historical_explicit_rows':sum(len(r['historical_explicit_values'])==1 for r in results),'current_explicit_rows':sum(len(r['current_explicit_values'])==1 for r in results),'historical_plain_rows':sum(len(r['historical_plain_2016_values'])==1 for r in results),'current_plain_rows':sum(len(r['current_plain_2016_values'])==1 for r in results),'explicit_conflicts':sum(r['explicit_conflict'] for r in results),'anchor_results':[r for r in results if r['name'] in {'Iván Marcone','Gerónimo Poblete','José Sand'}],'non_claims':['Plain 2016 rows are classified separately because a calendar-year label can mix official competition phases.','Historical absence is not a sporting zero.','This sample is a stop/go test, not a population completeness estimate.']}
+          Path('probe_out/summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2,sort_keys=True)+'\n');Path('probe_out/results.json').write_text(json.dumps(results,ensure_ascii=False,indent=2,sort_keys=True)+'\n')
+          print(json.dumps({k:summary[k] for k in ('sample_size','historical_pages_resolved','historical_explicit_rows','current_explicit_rows','historical_plain_rows','current_plain_rows','explicit_conflicts')},ensure_ascii=False,sort_keys=True))
+          PY
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: wikipedia-arg-2016-player-revision-sample-${{ github.run_id }}
+          path: probe_out
+          if-no-files-found: error
+          retention-days: 7
