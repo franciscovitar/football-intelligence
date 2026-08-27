@@ -38,12 +38,15 @@ def test_rsssf_competition_mapping_is_explicit_and_bounded() -> None:
     assert resolution.status == "resolved"
     assert resolution.logical_key == "competition:ARG_LPF"
     assert resolve_competition(source_code="rsssf", external_id="ARG_LPF").status == "unresolved"
-    assert resolve_competition(source_code="rsssf", external_id="arg2017.html").status == "unresolved"
+    unknown_year = resolve_competition(source_code="rsssf", external_id="arg2017.html")
+    assert unknown_year.status == "unresolved"
 
 
 def test_rsssf_match_observation_resolves_from_date_only_identity_hints() -> None:
     observations = _final_observations()
-    status = next(observation for observation in observations if observation.metric_name == "status")
+    status = next(
+        observation for observation in observations if observation.metric_name == "status"
+    )
 
     resolution = resolve_logical_key(
         status,
