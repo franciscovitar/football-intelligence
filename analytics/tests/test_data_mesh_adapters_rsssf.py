@@ -68,7 +68,9 @@ def test_match_identity_hints_preserve_date_without_fabricating_kickoff_time() -
     )
 
     observations = adapt_argentina_2016_snapshot(_snapshot(match), ingestion_run_id=42)
-    status = next(observation for observation in observations if observation.metric_name == "status")
+    status = next(
+        observation for observation in observations if observation.metric_name == "status"
+    )
     round_name = next(
         observation for observation in observations if observation.metric_name == "round_name"
     )
