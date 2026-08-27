@@ -1,4 +1,4 @@
-name: PlayerElo ARG 2016 Poblete context-full probe
+name: PlayerElo Lanus 2016 club-history probe
 
 on:
   push:
@@ -18,100 +18,96 @@ jobs:
     env:
       PLAYERELO_API_KEY: ${{ secrets.PLAYERELO_API_KEY }}
     steps:
-      - name: Probe independently anchored G. Poblete provider candidate
+      - name: Check whether club history preserves the missing short tournament
         shell: bash
         run: |
           set -euo pipefail
           test -n "${PLAYERELO_API_KEY:-}" || { echo "missing PLAYERELO_API_KEY"; exit 1; }
-          rm -rf /tmp/playerelo-poblete-2016-context-full
-          mkdir -p /tmp/playerelo-poblete-2016-context-full
+          rm -rf /tmp/playerelo-lanus-2016-club-history
+          mkdir -p /tmp/playerelo-lanus-2016-club-history
           python - <<'PY'
           import hashlib
           import json
           import os
+          import re
+          import unicodedata
+          import urllib.parse
           import urllib.request
           from datetime import date
           from pathlib import Path
 
           BASE = "https://data-api.playerelo.football"
           KEY = os.environ["PLAYERELO_API_KEY"]
-          PLAYER_ID = "6623"
-          OUT = Path("/tmp/playerelo-poblete-2016-context-full")
+          OUT = Path("/tmp/playerelo-lanus-2016-club-history")
           START = date.fromisoformat("2016-02-05")
           END = date.fromisoformat("2016-05-29")
-          ARG_LEAGUE_ID = 128
 
           def fetch(path):
-              req = urllib.request.Request(
-                  BASE + path,
-                  headers={"Accept": "application/json", "Authorization": f"Bearer {KEY}"},
-              )
+              req = urllib.request.Request(BASE + path, headers={"Accept":"application/json", "Authorization":f"Bearer {KEY}"})
               with urllib.request.urlopen(req, timeout=60) as response:
                   return response.read()
 
-          def rows_from(payload):
+          def norm(value):
+              value = unicodedata.normalize("NFKD", str(value or ""))
+              value = "".join(ch for ch in value if not unicodedata.combining(ch)).lower()
+              return re.sub(r"[^a-z0-9]+", " ", value).strip()
+
+          def as_list(payload):
               if isinstance(payload, list):
                   return payload
               if isinstance(payload, dict):
-                  for key in ("history", "data", "results", "response"):
+                  for key in ("clubs", "history", "data", "results", "response"):
                       if isinstance(payload.get(key), list):
                           return payload[key]
               return []
 
-          def lid(row):
-              value = row.get("league_id") if isinstance(row, dict) else None
-              if value is None and isinstance(row, dict) and isinstance(row.get("league"), dict):
-                  value = row["league"].get("id")
-              try:
-                  return int(value) if value is not None else None
-              except (TypeError, ValueError):
-                  return None
+          def club_name(item):
+              if not isinstance(item, dict): return None
+              for key in ("club_name", "team_name", "name"):
+                  if item.get(key): return str(item[key])
+              club = item.get("club") or item.get("team")
+              if isinstance(club, dict): return club.get("name")
+              return None
 
-          def mins(row):
-              value = row.get("minutes", row.get("minutes_played")) if isinstance(row, dict) else None
-              if value is None:
-                  return None
-              try:
-                  return float(value)
-              except (TypeError, ValueError):
-                  return None
+          def club_id(item):
+              if not isinstance(item, dict): return None
+              for key in ("club_id", "team_id", "id"):
+                  if item.get(key) is not None: return item[key]
+              club = item.get("club") or item.get("team")
+              if isinstance(club, dict): return club.get("id")
+              return None
 
           usage_before_raw = fetch("/v1/usage")
           usage_before = json.loads(usage_before_raw)
           (OUT / "usage-before.json").write_bytes(usage_before_raw)
 
-          detail_raw = fetch(f"/v1/players/{PLAYER_ID}")
-          detail = json.loads(detail_raw)
-          (OUT / "player-detail-6623.json").write_bytes(detail_raw)
-
-          detail_name = None
-          if isinstance(detail, dict):
-              detail_name = detail.get("player_name") or detail.get("name") or detail.get("full_name")
-              if detail_name is None and isinstance(detail.get("player"), dict):
-                  detail_name = detail["player"].get("name") or detail["player"].get("player_name")
-
-          # The previous retained search artifact returned two Poblete candidates:
-          # I. Poblete (11801) and G. Poblete (6623). AFA independently names
-          # Geronimo Poblete, so this second-stage probe only proceeds if the
-          # provider detail still identifies 6623 as a G. Poblete candidate.
-          normalized_name = str(detail_name or "").strip().lower()
-          identity_gate = normalized_name.startswith("g") and "poblete" in normalized_name
+          search_raw = fetch("/v1/clubs?" + urllib.parse.urlencode({"search":"Lanus", "limit":10}))
+          search = json.loads(search_raw)
+          (OUT / "search-lanus.json").write_bytes(search_raw)
+          results = as_list(search)
+          candidates = []
+          for item in results:
+              name = club_name(item)
+              cid = club_id(item)
+              if cid is not None and "lanus" in norm(name).split():
+                  candidates.append({"id": cid, "name": name, "raw": item})
 
           summary = {
-              "provider_player_id": PLAYER_ID,
-              "provider_name": detail_name,
-              "identity_gate": identity_gate,
-              "identity_note": "bounded provider-candidate probe only; AFA independently anchors Geronimo Poblete; no canonical PlayerCrosswalk created",
-              "afa_validation_anchor": "Geronimo Poblete: 61 recoveries in 14 appearances in AFA #NumerosDePrimera",
+              "query": "Lanus",
+              "search_result_count": len(results),
+              "candidates": [{"id": c["id"], "name": c["name"]} for c in candidates],
+              "candidate_count": len(candidates),
               "window": {"start": START.isoformat(), "end": END.isoformat()},
-              "arg_league_id": ARG_LEAGUE_ID,
+              "selection_policy": "exact normalized Lanus token; provider candidate only; no canonical crosswalk",
           }
 
-          if identity_gate:
-              history_raw = fetch(f"/v1/players/{PLAYER_ID}/history?context=full")
+          if len(candidates) == 1:
+              candidate = candidates[0]
+              summary["selection"] = {"id": candidate["id"], "name": candidate["name"]}
+              history_raw = fetch(f"/v1/clubs/{urllib.parse.quote(str(candidate['id']))}/history?context=full")
               history = json.loads(history_raw)
-              (OUT / "history-poblete-context-full.json").write_bytes(history_raw)
-              rows = rows_from(history)
+              (OUT / "history-lanus-context-full.json").write_bytes(history_raw)
+              rows = as_list(history)
               in_window = []
               for row in rows:
                   if not isinstance(row, dict) or not row.get("date"):
@@ -122,66 +118,54 @@ jobs:
                       continue
                   if START <= d <= END:
                       in_window.append(row)
-              target = [row for row in in_window if lid(row) == ARG_LEAGUE_ID]
-              fixture_ids = [row.get("fixture_id") for row in target if row.get("fixture_id") is not None]
-              minute_values = [mins(row) for row in target]
-              numeric_minutes = [value for value in minute_values if value is not None]
-              before_window = [row for row in rows if isinstance(row, dict) and str(row.get("date", ""))[:10] < START.isoformat()]
-              after_window = [row for row in rows if isinstance(row, dict) and str(row.get("date", ""))[:10] > END.isoformat()]
+              before = [row for row in rows if isinstance(row, dict) and str(row.get("date", ""))[:10] < START.isoformat()]
+              after = [row for row in rows if isinstance(row, dict) and str(row.get("date", ""))[:10] > END.isoformat()]
               summary["history"] = {
                   "row_count": len(rows),
                   "keys": sorted({key for row in rows if isinstance(row, dict) for key in row.keys()}),
-                  "window_rows_all_leagues": len(in_window),
-                  "window_league_ids": sorted({lid(row) for row in in_window if lid(row) is not None}),
-                  "arg_2016_rows": len(target),
-                  "unique_fixtures": len(set(fixture_ids)),
-                  "duplicate_fixture_rows": len(fixture_ids) - len(set(fixture_ids)),
-                  "minutes_sum": sum(numeric_minutes) if numeric_minutes else None,
-                  "minutes_numeric_count": len(numeric_minutes),
-                  "minutes_null_count": sum(value is None for value in minute_values),
-                  "first_target_date": min((str(row.get("date"))[:10] for row in target), default=None),
-                  "last_target_date": max((str(row.get("date"))[:10] for row in target), default=None),
-                  "nearest_before_window": max((str(row.get("date"))[:10] for row in before_window), default=None),
-                  "nearest_after_window": min((str(row.get("date"))[:10] for row in after_window), default=None),
-                  "target_rows": target,
+                  "window_row_count": len(in_window),
+                  "window_rows": in_window,
+                  "nearest_before_window": max((str(row.get("date"))[:10] for row in before), default=None),
+                  "nearest_after_window": min((str(row.get("date"))[:10] for row in after), default=None),
               }
+          else:
+              summary["selection"] = None
 
           usage_after_raw = fetch("/v1/usage")
           usage_after = json.loads(usage_after_raw)
           (OUT / "usage-after.json").write_bytes(usage_after_raw)
-          before = usage_before.get("used_this_month") if isinstance(usage_before, dict) else None
-          after = usage_after.get("used_this_month") if isinstance(usage_after, dict) else None
+          before_used = usage_before.get("used_this_month") if isinstance(usage_before, dict) else None
+          after_used = usage_after.get("used_this_month") if isinstance(usage_after, dict) else None
+          summary["counted_delta"] = (after_used - before_used) if isinstance(before_used, int) and isinstance(after_used, int) else None
           summary["usage_before"] = usage_before
           summary["usage_after"] = usage_after
-          summary["counted_delta"] = (after - before) if isinstance(before, int) and isinstance(after, int) else None
 
           (OUT / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
-
           manifest = {"files": []}
           for path in sorted(p for p in OUT.iterdir() if p.is_file() and p.name != "manifest.json"):
               raw = path.read_bytes()
-              manifest["files"].append({"path": path.name, "sha256": hashlib.sha256(raw).hexdigest(), "byte_size": len(raw)})
+              manifest["files"].append({"path":path.name, "sha256":hashlib.sha256(raw).hexdigest(), "byte_size":len(raw)})
           (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
           hist = summary.get("history") or {}
           print(json.dumps({
-              "provider_player_id": PLAYER_ID,
-              "provider_name": detail_name,
-              "identity_gate": identity_gate,
-              "arg_2016_rows": hist.get("arg_2016_rows"),
+              "candidate_count": summary["candidate_count"],
+              "selection": summary.get("selection"),
+              "history_rows": hist.get("row_count"),
+              "window_rows": hist.get("window_row_count"),
               "nearest_before": hist.get("nearest_before_window"),
               "nearest_after": hist.get("nearest_after_window"),
               "counted_delta": summary.get("counted_delta"),
           }, ensure_ascii=False, sort_keys=True))
           PY
-          if grep -R --fixed-strings --binary-files=without-match -- "${PLAYERELO_API_KEY}" /tmp/playerelo-poblete-2016-context-full >/dev/null; then
+          if grep -R --fixed-strings --binary-files=without-match -- "${PLAYERELO_API_KEY}" /tmp/playerelo-lanus-2016-club-history >/dev/null; then
             echo "secret found in artifact directory"
             exit 1
           fi
-      - name: Upload Poblete evidence
+      - name: Upload club-history evidence
         uses: actions/upload-artifact@v4
         with:
-          name: playerelo-poblete-2016-context-full-${{ github.run_id }}
-          path: /tmp/playerelo-poblete-2016-context-full
+          name: playerelo-lanus-2016-club-history-${{ github.run_id }}
+          path: /tmp/playerelo-lanus-2016-club-history
           if-no-files-found: error
           retention-days: 7
