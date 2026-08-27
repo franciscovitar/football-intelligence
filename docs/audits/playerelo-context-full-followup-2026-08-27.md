@@ -117,6 +117,33 @@ Second probe:
 - digest: `sha256:33d8cea4618791ea918ac9d5520715f1e94d062d1b5aed15c542fe672970eaee`;
 - counted Free-tier calls during the run: `2` (player detail plus enriched history).
 
+### Club-history fallback: Lanús
+
+A final bounded fallback tested whether club history might preserve the missing fixtures even though the player timelines do not.
+
+PlayerElo club search returned one exact normalized candidate:
+
+- provider club ID: `446`;
+- provider club name: `Lanus`.
+
+`GET /v1/clubs/446/history?context=full` returned:
+
+- `299` rows;
+- row keys only `date` and `team_elo`;
+- **0 rows** between `2016-02-05` and `2016-05-29`;
+- no row before the tournament window;
+- first row after the window: `2019-08-30`.
+
+So the club-history route cannot supply hidden fixture IDs for the short 2016 tournament and does not provide a path to reconstruct player minutes from PlayerElo fixture context.
+
+Club probe:
+
+- workflow run: `33075905849`;
+- artifact: `playerelo-lanus-2016-club-history-33075905849`;
+- artifact ID: `9647827505`;
+- digest: `sha256:9d9b5fb98889195797d3064514ed16fdcbee82dff06e46983a6fc6979a9fd72f`;
+- counted Free-tier calls during the run: `2` (club search plus club history).
+
 ## Decision
 
 ### Enriched PlayerElo history as match-context evidence
@@ -131,7 +158,7 @@ The context fields are not themselves permission to treat Elo/EAR as direct obje
 
 **NO-GO.**
 
-The two independently anchored probes both show a clear gap across the February–May 2016 tournament despite PlayerElo history existing both before and after the window. The result is strong enough to stop spending Free-tier quota on more players from the same tournament unless new provider evidence contradicts it.
+The two independently anchored player probes both show a clear gap across the February–May 2016 tournament despite PlayerElo history existing both before and after the window. The Lanús club-history fallback also contains no target-window rows and only begins in 2019. The result is strong enough to stop spending Free-tier quota on more PlayerElo routes for this tournament unless new provider evidence contradicts it.
 
 Do not use PlayerElo to infer zero appearances or zero minutes for Argentina short 2016. The evidence is **missing because the provider timeline is absent**, not a sporting zero.
 
