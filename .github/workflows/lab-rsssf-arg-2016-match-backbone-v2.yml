@@ -1,0 +1,166 @@
+# Disposable technical-spike workflow; remove after evidence is captured.
+name: Lab RSSSF ARG_LPF 2016 match backbone v2
+
+on:
+  push:
+    branches:
+      - lab/rsssf-arg-2016-match-backbone
+    paths:
+      - .github/workflows/lab-rsssf-arg-2016-match-backbone-v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - name: Parse bounded Primera 2016 section with normalized selectors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p probe_out
+          python - <<'PY'
+          import hashlib, html, json, re, time, unicodedata, urllib.request
+          from collections import Counter
+          from datetime import date
+          from html.parser import HTMLParser
+          from pathlib import Path
+
+          URL='https://www.rsssf.org/tablesa/arg2016.html'
+          UA='FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
+          MONTHS={'Jan':1,'Feb':2,'Mar':3,'Apr':4,'May':5,'Jun':6,'Jul':7,'Aug':8,'Sep':9,'Oct':10,'Nov':11,'Dec':12}
+
+          def fold(v):
+              d=unicodedata.normalize('NFKD',v or '')
+              return ''.join(c for c in d if not unicodedata.combining(c)).casefold()
+
+          class Extractor(HTMLParser):
+              def __init__(self):
+                  super().__init__(convert_charrefs=True); self.parts=[]
+              def handle_starttag(self,tag,attrs):
+                  if tag.lower() in {'br','p','div','pre','h1','h2','h3','h4','hr'}: self.parts.append('\n')
+              def handle_endtag(self,tag):
+                  if tag.lower() in {'p','div','pre','h1','h2','h3','h4'}: self.parts.append('\n')
+              def handle_data(self,data): self.parts.append(data)
+              def text(self): return html.unescape(''.join(self.parts)).replace('\r\n','\n').replace('\r','\n')
+
+          req=urllib.request.Request(URL,headers={'User-Agent':UA,'Accept':'text/html,*/*;q=0.8'})
+          last=None
+          for attempt in range(1,5):
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as resp:
+                      raw=resp.read(); content_type=resp.headers.get('Content-Type',''); charset=resp.headers.get_content_charset()
+                  break
+              except Exception as exc:
+                  last=exc
+                  if attempt==4: raise
+                  time.sleep(attempt*1.25)
+          else: raise last
+
+          decoded=None; used_charset=None
+          for charset in [charset,'utf-8','latin-1']:
+              if not charset: continue
+              try:
+                  candidate=raw.decode(charset)
+              except (UnicodeDecodeError,LookupError):
+                  continue
+              ex=Extractor(); ex.feed(candidate); t=ex.text()
+              if 'campeonato de primera division 2016' in fold(t):
+                  decoded=t; used_charset=charset; break
+          if decoded is None:
+              # Last-resort replacement decode only for diagnosis; still fail closed if markers do not resolve.
+              ex=Extractor(); ex.feed(raw.decode('latin-1',errors='replace')); decoded=ex.text(); used_charset='latin-1-replace'
+
+          all_lines=[re.sub(r'[ \t\u00a0]+',' ',ln).strip() for ln in decoded.splitlines()]
+          all_lines=[ln for ln in all_lines if ln]
+          heading_idx=next((i for i,ln in enumerate(all_lines) if 'campeonato de primera division 2016' in fold(ln)),None)
+          if heading_idx is None: raise RuntimeError('normalized Primera Division 2016 heading not found')
+          start_idx=next((i for i in range(heading_idx+1,len(all_lines)) if fold(all_lines[i])=='round 1:'),None)
+          if start_idx is None: raise RuntimeError('Primera Division Round 1 not found after heading')
+          end_idx=next((i for i in range(start_idx+1,len(all_lines)) if fold(all_lines[i])=='relegation'),None)
+          if end_idx is None: raise RuntimeError('Primera Division Relegation boundary not found')
+          lines=all_lines[start_idx:end_idx]
+
+          date_re=re.compile(r'^\[(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})(?:,)?\s+[^\]]+\]$')
+          round_re=re.compile(r'^Round\s+(\d+):$',re.I)
+          match_re=re.compile(r'^(?P<home>.+?)\s+(?P<h>\d+)\s*-\s*(?P<a>\d+)\s+(?P<away>.+?)\s+\[(?P<venue>[^\]]+)\](?:\s*.*)?$')
+
+          current_round=None; current_group=None; current_date=None; final_mode=False; matches=[]
+          for ln in lines:
+              rm=round_re.match(ln)
+              if rm:
+                  current_round=int(rm.group(1)); current_group=None; final_mode=False; continue
+              if ln in {'Group 1','Group 2','Intergroup'}:
+                  current_group=ln; continue
+              if ln=='Final' and current_round==17:
+                  final_mode=True; current_group='Final'; continue
+              dm=date_re.match(ln)
+              if dm:
+                  current_date=date(2016,MONTHS[dm.group(1)],int(dm.group(2))).isoformat(); continue
+              mm=match_re.match(ln)
+              if not mm or current_round is None: continue
+              phase=(
+                  {'Group 1':'regular_group_1','Group 2':'regular_group_2','Intergroup':'regular_intergroup'}.get(current_group,'regular_unknown')
+                  if current_round<=16 else
+                  'final' if current_round==17 and final_mode else
+                  'third_place_playoff' if current_round==17 else 'unexpected'
+              )
+              home=mm.group('home').strip(); away=mm.group('away').strip(); venue=mm.group('venue').strip()
+              stable=f'{current_date}|{home}|{away}|{mm.group("h")}-{mm.group("a")}'
+              matches.append({
+                  'source':'RSSSF','source_url':URL,
+                  'source_external_id':'rsssf-arg2016-'+hashlib.sha256(stable.encode()).hexdigest()[:20],
+                  'match_date':current_date,'kickoff_time_known':False,
+                  'round':current_round,'subgroup':current_group,'phase':phase,
+                  'home_team_raw':home,'away_team_raw':away,
+                  'home_score':int(mm.group('h')),'away_score':int(mm.group('a')),
+                  'venue_raw':venue,'source_line':ln,
+              })
+
+          regular=[m for m in matches if m['round']<=16]
+          raw_teams=sorted({m['home_team_raw'] for m in matches}|{m['away_team_raw'] for m in matches})
+          round_counts=Counter(m['round'] for m in matches); phase_counts=Counter(m['phase'] for m in matches)
+          regular_team_counts=Counter()
+          for m in regular:
+              regular_team_counts[m['home_team_raw']]+=1; regular_team_counts[m['away_team_raw']]+=1
+
+          summary={
+              'status':'PASS',
+              'source':{'provider':'RSSSF','url':URL,'raw_sha256':'sha256:'+hashlib.sha256(raw).hexdigest(),'content_type':content_type,'decoded_charset':used_charset,'document_author':'Osvaldo José Gorgazzi','reuse_notice':'Copy whole or part only with proper acknowledgement to the author, per document notice.'},
+              'scope':{'competition_code':'ARG_LPF','season_label':'2016','bounded_from':'Round 1 after Campeonato de Primera División 2016','bounded_until':'Relegation heading'},
+              'counts':{'matches_total':len(matches),'regular_matches':len(regular),'raw_team_labels':len(raw_teams),'matches_with_date':sum(bool(m['match_date']) for m in matches),'matches_with_venue':sum(bool(m['venue_raw']) for m in matches)},
+              'round_counts':{str(k):v for k,v in sorted(round_counts.items())},
+              'phase_counts':dict(sorted(phase_counts.items())),
+              'raw_team_labels':raw_teams,
+              'regular_raw_team_match_counts':dict(sorted(regular_team_counts.items())),
+              'round_17_matches':[m for m in matches if m['round']==17],
+              'dto_note':'RSSSF has calendar date but no kickoff time. Do not fabricate a timezone-aware kickoff_at merely to satisfy MatchRecord; production use needs explicit temporal-precision handling.',
+              'non_claims':['No canonical team mapping created.','No player participation derived.','Provider-local labels remain unresolved until exact mapping review.','Spike code is disposable.'],
+          }
+
+          expected_rounds=Counter({**{i:15 for i in range(1,17)},17:2})
+          assert len(matches)==242, summary
+          assert len(regular)==240, summary
+          assert round_counts==expected_rounds, {'observed':dict(round_counts),'expected':dict(expected_rounds)}
+          assert phase_counts['third_place_playoff']==1 and phase_counts['final']==1, dict(phase_counts)
+          assert all(m['match_date'] for m in matches), 'missing date'
+          assert all(m['venue_raw'] for m in matches), 'missing venue'
+          assert len({m['source_external_id'] for m in matches})==242, 'duplicate source ids'
+
+          Path('probe_out/summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2,sort_keys=True)+'\n')
+          Path('probe_out/matches.json').write_text(json.dumps(matches,ensure_ascii=False,indent=2,sort_keys=True)+'\n')
+          print(json.dumps({'counts':summary['counts'],'round_counts':summary['round_counts'],'phase_counts':summary['phase_counts'],'charset':used_charset,'raw_sha256':summary['source']['raw_sha256']},ensure_ascii=False,sort_keys=True))
+          PY
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rsssf-arg-2016-match-backbone-v2-${{ github.run_id }}
+          path: probe_out/
+          if-no-files-found: error
+          retention-days: 7
