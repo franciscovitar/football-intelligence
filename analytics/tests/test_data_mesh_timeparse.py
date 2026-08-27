@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
+import pytest
+
 from football_intelligence.data_mesh.timeparse import (
+    calendar_year_season_label,
     normalize_season_label,
     parse_date,
     parse_utc_timestamp,
@@ -38,6 +41,18 @@ def test_normalize_season_label_expands_single_start_year() -> None:
 
 def test_normalize_season_label_keeps_already_split_label() -> None:
     assert normalize_season_label("2025-2026") == "2025-2026"
+
+
+def test_explicit_calendar_year_roundtrips_without_becoming_split_season() -> None:
+    encoded = calendar_year_season_label(2016)
+    assert encoded == "calendar-year:2016"
+    assert normalize_season_label(encoded) == "2016"
+    assert normalize_season_label("calendar-year:20x6") == ""
+
+
+def test_calendar_year_encoder_rejects_non_four_digit_year() -> None:
+    with pytest.raises(ValueError, match="four-digit year"):
+        calendar_year_season_label("16")
 
 
 def test_normalize_season_label_blank_is_empty_string() -> None:
