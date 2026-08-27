@@ -1,0 +1,171 @@
+# Disposable technical-spike workflow; remove after evidence is captured.
+name: Lab Wikipedia ARG_LPF 2016 strict full-page appearance coverage
+
+on:
+  push:
+    branches:
+      - lab/wikipedia-arg-2016-roster-revisions
+    paths:
+      - .github/workflows/lab-wikipedia-arg-2016-player-strict-fullpage.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - name: Download validated 903-slot roster-link artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wikipedia-arg-2016-player-appearance-coverage-v2-33078390845
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 33078390845
+          path: input_artifact
+      - name: Parse full current player pages with strict competition semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p probe_out
+          python - <<'PY'
+          from __future__ import annotations
+          import json,re,time,unicodedata,urllib.parse,urllib.request
+          from collections import Counter,defaultdict
+          from pathlib import Path
+
+          API='https://es.wikipedia.org/w/api.php'
+          UA='FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
+          slots=json.loads(Path('input_artifact/slots.json').read_text())
+          assert len(slots)==903, f'expected 903 roster slots, got {len(slots)}'
+
+          CLUB_ALIASES={
+            'Aldosivi':['aldosivi'],'Argentinos Juniors':['argentinos juniors'],'Arsenal de Sarandí':['arsenal'],'Atlético de Rafaela':['atletico de rafaela','rafaela'],'Atlético Tucumán':['atletico tucuman'],'Banfield':['banfield'],'Belgrano de Córdoba':['belgrano'],'Boca Juniors':['boca juniors','boca'],'Colón':['colon'],'Defensa y Justicia':['defensa y justicia'],'Estudiantes':['estudiantes'],'Gimnasia de La Plata':['gimnasia'],'Godoy Cruz':['godoy cruz'],'Huracán':['huracan'],'Independiente':['independiente'],'Lanús':['lanus'],"Newell's Old Boys":["newell's","newells"],'Olimpo':['olimpo'],'Patronato':['patronato'],'Quilmes':['quilmes'],'Racing Club':['racing'],'River Plate':['river plate','river'],'Rosario Central':['rosario central'],'San Lorenzo':['san lorenzo'],'San Martín de San Juan':['san martin'],'Sarmiento de Junín':['sarmiento'],'Temperley':['temperley'],'Tigre':['tigre'],'Unión de Santa Fe':['union'],'Vélez Sarsfield':['velez']}
+
+          def fold(v):
+              d=unicodedata.normalize('NFKD',v or '')
+              return ''.join(c for c in d if not unicodedata.combining(c)).casefold()
+
+          def request(params):
+              url=f"{API}?{urllib.parse.urlencode(params)}"
+              req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept':'application/json'})
+              for attempt in range(1,5):
+                  try:
+                      with urllib.request.urlopen(req,timeout=40) as resp:p=json.loads(resp.read())
+                      if not isinstance(p,dict) or 'error' in p:raise RuntimeError(str(p.get('error','non-object payload')))
+                      return p
+                  except Exception:
+                      if attempt==4:raise
+                      time.sleep(attempt*1.5)
+              raise AssertionError
+
+          targets=[];seen=set()
+          for s in slots:
+              t=s.get('player_target')
+              if t and t not in seen:seen.add(t);targets.append(t)
+
+          pages={}
+          for i in range(0,len(targets),40):
+              batch=targets[i:i+40]
+              p=request({'action':'query','prop':'revisions','titles':'|'.join(batch),'redirects':'1','rvprop':'ids|timestamp|content','rvslots':'main','format':'json','formatversion':'2'})
+              q=p.get('query',{})
+              normalized={x['from']:x['to'] for x in q.get('normalized',[]) if isinstance(x,dict) and 'from' in x and 'to' in x}
+              redirects={x['from']:x['to'] for x in q.get('redirects',[]) if isinstance(x,dict) and 'from' in x and 'to' in x}
+              by_title={pg.get('title'):pg for pg in q.get('pages',[]) if isinstance(pg,dict)}
+              for t in batch:
+                  n=normalized.get(t,t);resolved=redirects.get(n,n);pg=by_title.get(resolved)
+                  if not pg:pages[t]={'state':'unresolved','resolved_title':resolved};continue
+                  revs=pg.get('revisions') or [];text=None;rid=None;ts=None
+                  if revs:
+                      rv=revs[0];rid=rv.get('revid');ts=rv.get('timestamp');text=((rv.get('slots') or {}).get('main') or {}).get('content')
+                  state='resolved' if isinstance(text,str) else ('missing' if pg.get('missing') else 'no_content')
+                  pages[t]={'state':state,'resolved_title':pg.get('title'),'pageid':pg.get('pageid'),'revid':rid,'timestamp':ts,'text':text}
+              time.sleep(.12)
+
+          # Strict season marker: an explicit wikilink to the exact 2016 Argentina Primera competition.
+          explicit_patterns=[
+            re.compile(r'\[\[Campeonato de Primera División 2016(?: \(Argentina\))?\|[^\]]+\]\]',re.I),
+            re.compile(r'\[\[Campeonato de Primera División 2016(?: \(Argentina\))?\]\]',re.I),
+          ]
+          plain2016=re.compile(r'(?m)^\s*[|!]\s*(?:\'\'\')?2016(?:\'\'\')?\s*(?=\|\||\||$)')
+
+          def row_segment(text,start,end):
+              # Bound within one wiki-table row whenever possible.
+              before=text.rfind('|-',0,start);table_start=text.rfind('{|',0,start)
+              row_start=max(before,table_start)
+              if row_start<0:row_start=max(0,start-1200)
+              after_candidates=[p for p in (text.find('|-',end),text.find('|}',end)) if p>=0]
+              row_end=min(after_candidates) if after_candidates else min(len(text),end+1500)
+              return text[row_start:row_end]
+
+          def first_numeric_after_marker(row,marker_end_in_row):
+              tail=row[marker_end_in_row:]
+              # Accept first standalone integer table cell after the season marker, not years/percentages embedded in prose.
+              m=re.search(r'(?:\|\||\|)\s*(?:\'\'\')?(\d{1,3})(?:\'\'\')?\s*(?=\|\||\||\n|$)',tail)
+              return int(m.group(1)) if m else None
+
+          def table_context_ok(row,club):
+              # Require the row or immediately preceding table/header region to carry the roster club and Primera context.
+              fr=fold(row)
+              aliases=[fold(a) for a in CLUB_ALIASES[club]]
+              club_ok=any(a in fr for a in aliases)
+              primera_ok=('primera division' in fr or 'campeonato de primera division' in fr)
+              return club_ok,primera_ok
+
+          def extract(text,club):
+              if not isinstance(text,str):return {'explicit_values':[],'plain_values':[],'explicit_rows':[],'plain_rows':[]}
+              explicit=[];plain=[];erows=[];prows=[]
+              for pat in explicit_patterns:
+                  for m in pat.finditer(text):
+                      row=row_segment(text,m.start(),m.end());offset=m.end()-max(text.rfind('|-',0,m.start()),text.rfind('{|',0,m.start()),0)
+                      club_ok,primera_ok=table_context_ok(row,club)
+                      if not club_ok:continue
+                      # Exact competition link itself establishes Primera 2016; primera_ok is retained for diagnostics only.
+                      v=first_numeric_after_marker(row, max(0,offset))
+                      if v is None:continue
+                      explicit.append(v);erows.append({'value':v,'club_context':club_ok,'primera_context':primera_ok,'row':row[:1800]})
+              # Plain-year class is intentionally separate and never promoted as strict evidence.
+              for m in plain2016.finditer(text):
+                  row=row_segment(text,m.start(),m.end());base=max(text.rfind('|-',0,m.start()),text.rfind('{|',0,m.start()),0);offset=m.end()-base
+                  club_ok,primera_ok=table_context_ok(row,club)
+                  if not (club_ok and primera_ok):continue
+                  v=first_numeric_after_marker(row,max(0,offset))
+                  if v is None:continue
+                  plain.append(v);prows.append({'value':v,'row':row[:1800]})
+              return {'explicit_values':sorted(set(explicit)),'plain_values':sorted(set(plain)),'explicit_rows':erows[:8],'plain_rows':prows[:8]}
+
+          out=[]
+          for s in slots:
+              t=s.get('player_target');pg=pages.get(t) if t else None
+              ex=extract(pg.get('text') if pg else None,s['club']) if pg else {'explicit_values':[],'plain_values':[],'explicit_rows':[],'plain_rows':[]}
+              ev=ex['explicit_values'];pv=ex['plain_values']
+              if len(ev)==1:classification='strict_unique'
+              elif len(ev)>1:classification='strict_ambiguous'
+              elif len(pv)==1:classification='plain_only_unique'
+              elif len(pv)>1:classification='plain_only_ambiguous'
+              else:classification='missing'
+              out.append({'club':s['club'],'name':s['name'],'player_target':t,'player_page_state':pg.get('state') if pg else 'unlinked','player_page_title':pg.get('resolved_title') if pg else None,'player_pageid':pg.get('pageid') if pg else None,'player_revision_id':pg.get('revid') if pg else None,'player_revision_timestamp':pg.get('timestamp') if pg else None,'classification':classification,'strict_explicit_values':ev,'plain_2016_values':pv,'strict_rows':ex['explicit_rows'],'plain_rows':ex['plain_rows']})
+
+          counts=Counter(r['classification'] for r in out)
+          by_club=defaultdict(Counter)
+          for r in out:by_club[r['club']][r['classification']]+=1
+          anchors=[r for r in out if r['name'] in {'Iván Marcone','Gerónimo Poblete','José Sand'}]
+          strict_unique=counts['strict_unique'];resolved=sum(r['player_page_state']=='resolved' for r in out)
+          summary={'status':'PASS','decision_question':'Can current individual Spanish Wikipedia player pages provide dense, unambiguous, provenance-preserving Primera División 2016 appearance counts for the 903-slot historical roster without fuzzy identity matching?','population':{'roster_slots':len(out),'linked_slots':sum(bool(r['player_target']) for r in out),'unique_targets':len(targets),'resolved_page_slots':resolved},'classification_counts':dict(counts),'strict_unique_rate_all_slots':round(strict_unique/len(out),4),'strict_unique_rate_resolved_slots':round(strict_unique/resolved,4) if resolved else 0,'per_club':{club:dict(c) for club,c in sorted(by_club.items())},'anchors':anchors,'semantics':{'strict_unique':'exact Campeonato de Primera División 2016 wikilink + roster-club context + one numeric first stat cell','plain_only_unique':'plain calendar-year 2016 row under Primera/club context; kept separate because phase/season semantics can differ','missing':'no accepted row; never a sporting zero'},'non_claims':['A strict Wikipedia row is not automatically authoritative if it conflicts with AFA or another stronger source.','Plain 2016 rows are not promoted to strict appearance evidence.','No minutes are inferred.','No PlayerCrosswalk or production row is created.']}
+          Path('probe_out/summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2,sort_keys=True)+'\n')
+          Path('probe_out/slots_strict.json').write_text(json.dumps(out,ensure_ascii=False,indent=2,sort_keys=True)+'\n')
+          print(json.dumps({'population':summary['population'],'classification_counts':summary['classification_counts'],'strict_unique_rate_all_slots':summary['strict_unique_rate_all_slots']},ensure_ascii=False,sort_keys=True))
+          PY
+      - name: Upload strict evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: wikipedia-arg-2016-player-strict-fullpage-${{ github.run_id }}
+          path: probe_out
+          if-no-files-found: error
+          retention-days: 7
