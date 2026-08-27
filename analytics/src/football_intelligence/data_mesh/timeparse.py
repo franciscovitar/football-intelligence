@@ -73,10 +73,10 @@ def normalize_season_label(value: Any) -> str:
     if isinstance(value, str) and value.strip():
         text = value.strip()
         if text.startswith(_CALENDAR_YEAR_PREFIX):
-            year = text.removeprefix(_CALENDAR_YEAR_PREFIX)
-            return year if year.isdigit() and len(year) == 4 else ""
+            calendar_year = text.removeprefix(_CALENDAR_YEAR_PREFIX)
+            return calendar_year if calendar_year.isdigit() and len(calendar_year) == 4 else ""
         if text.isdigit() and len(text) == 4:
-            year = int(text)
-            return f"{year}-{year + 1}"
+            start_year = int(text)
+            return f"{start_year}-{start_year + 1}"
         return text
     return ""
