@@ -218,6 +218,11 @@ COMPETITION_MAPPINGS: tuple[CompetitionMapping, ...] = (
     # Only ENG_PL was verified/used in Block 18; other competitions are not
     # mapped here to avoid claiming coverage that was never actually probed.
     CompetitionMapping("openfootball", "en.1.json", "ENG_PL", "English Premier League"),
+    # RSSSF Argentina 2016: `external_id` is the reviewed historical document
+    # basename emitted by the bounded adapter. The page was verified live to
+    # contain exactly the 242-match Primera Division 2016 championship and
+    # is never generalized to other RSSSF documents by this mapping.
+    CompetitionMapping("rsssf", "arg2016.html", "ARG_LPF", "Primera División 2016"),
     # Wyscout Open (Block 20B, mapping added 20D.2, corrected 20D.2
     # completion pass): `external_id` is the provider's own numeric
     # `competitionId`, read directly from the real cached

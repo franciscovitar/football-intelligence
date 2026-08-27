@@ -1,0 +1,23 @@
+{
+  "artifact_digest": "sha256:93e795adc47086174f31e8978832c551dbbd3f202a3d179707db2ab275fb8d33",
+  "artifact_id": 9656051725,
+  "artifact_name": "rsssf-arg-2016-product-verification-v3-33095161343",
+  "content_type": "text/html; charset=windows-1252",
+  "decoded_charset": "windows-1252",
+  "kickoff_at_observations": 0,
+  "match_observations": 1210,
+  "matches": 242,
+  "observations": 1694,
+  "player_observations": 0,
+  "raw_sha256": "sha256:de9bea28bd098cd7094581cf4595db9d95496d42763db8530154e3ee8b0eb566",
+  "resolved_logical_matches": 242,
+  "run_id": 33095161343,
+  "scope": {
+    "competition_code": "ARG_LPF",
+    "season_label": "2016"
+  },
+  "source": "rsssf",
+  "source_url": "https://www.rsssf.org/tablesa/arg2016.html",
+  "status": "pass",
+  "team_observations": 484
+}
