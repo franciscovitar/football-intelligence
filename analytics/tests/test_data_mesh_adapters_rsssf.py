@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 
 from football_intelligence.data_mesh.adapters.rsssf import adapt_argentina_2016_snapshot
+from football_intelligence.data_mesh.timeparse import normalize_season_label
 from football_intelligence.providers.rsssf import RSSSFArgentina2016Snapshot, RSSSFMatch
 
 
@@ -36,7 +37,9 @@ def test_adapter_emits_only_team_identity_and_five_match_metrics() -> None:
 
     assert len(observations) == 7
     assert sum(observation.entity_type == "team" for observation in observations) == 2
-    match_observations = [observation for observation in observations if observation.entity_type == "match"]
+    match_observations = [
+        observation for observation in observations if observation.entity_type == "match"
+    ]
     assert {observation.metric_name for observation in match_observations} == {
         "status",
         "round_name",
@@ -71,7 +74,9 @@ def test_match_identity_hints_preserve_date_without_fabricating_kickoff_time() -
     )
 
     assert status.entity_identity_hints["competition_external_id"] == "arg2016.html"
-    assert status.entity_identity_hints["season_label"] == "2016"
+    encoded_season = status.entity_identity_hints["season_label"]
+    assert encoded_season == "calendar-year:2016"
+    assert normalize_season_label(encoded_season) == "2016"
     assert status.entity_identity_hints["kickoff_date"] == "2016-05-29"
     assert "kickoff_at" not in status.entity_identity_hints
     assert round_name.value == "Round 17 — Final"
