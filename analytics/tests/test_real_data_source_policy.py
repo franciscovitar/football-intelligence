@@ -36,6 +36,11 @@ _APPROVED_PROVIDER_CODES = frozenset(
         # allowlist at the time; added in Block 20D.2 when
         # entity_resolution.COMPETITION_MAPPINGS first referenced it.
         "wyscout-open",
+        # RSSSF Argentina 2016: bounded to the one reviewed historical
+        # document whose own notice permits copying whole or part with
+        # acknowledgement to the author. Approval is only for that
+        # fixture/result scope; it is not a blanket licence for RSSSF.
+        "rsssf",
     }
 )
 
