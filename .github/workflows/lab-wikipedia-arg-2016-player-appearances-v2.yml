@@ -1,0 +1,280 @@
+# Disposable technical-spike workflow; remove after evidence is captured.
+name: Lab Wikipedia ARG_LPF 2016 player appearance coverage v2
+
+on:
+  push:
+    branches:
+      - lab/wikipedia-arg-2016-roster-revisions
+    paths:
+      - .github/workflows/lab-wikipedia-arg-2016-player-appearances-v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - name: Measure linked-player page and 2016-stat context coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p probe_out
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json, re, time, unicodedata, urllib.parse, urllib.request
+          from collections import Counter, defaultdict
+          from datetime import date
+          from pathlib import Path
+
+          API='https://es.wikipedia.org/w/api.php'
+          UA='FootballIntelligence/0.1 (+https://github.com/franciscovitar/football-intelligence)'
+          CUTOFF='2016-02-09T00:00:00Z'
+          CLUB_TITLES={
+            'Aldosivi':['Club Atlético Aldosivi'],
+            'Argentinos Juniors':['Asociación Atlética Argentinos Juniors'],
+            'Arsenal de Sarandí':['Arsenal Fútbol Club','Arsenal de Sarandí'],
+            'Atlético de Rafaela':['Asociación Mutual Social y Deportiva Atlético de Rafaela','Atlético de Rafaela'],
+            'Atlético Tucumán':['Club Atlético Tucumán'],
+            'Banfield':['Club Atlético Banfield'],
+            'Belgrano de Córdoba':['Club Atlético Belgrano'],
+            'Boca Juniors':['Club Atlético Boca Juniors'],
+            'Colón':['Club Atlético Colón'],
+            'Defensa y Justicia':['Club Social y Deportivo Defensa y Justicia'],
+            'Estudiantes':['Club Estudiantes de La Plata','Estudiantes de La Plata'],
+            'Gimnasia de La Plata':['Club de Gimnasia y Esgrima La Plata'],
+            'Godoy Cruz':['Club Deportivo Godoy Cruz Antonio Tomba','Godoy Cruz Antonio Tomba'],
+            'Huracán':['Club Atlético Huracán'],
+            'Independiente':['Club Atlético Independiente'],
+            'Lanús':['Club Atlético Lanús'],
+            "Newell's Old Boys":["Club Atlético Newell's Old Boys"],
+            'Olimpo':['Club Olimpo'],
+            'Patronato':['Club Atlético Patronato de la Juventud Católica'],
+            'Quilmes':['Quilmes Atlético Club'],
+            'Racing Club':['Racing Club'],
+            'River Plate':['Club Atlético River Plate'],
+            'Rosario Central':['Club Atlético Rosario Central'],
+            'San Lorenzo':['Club Atlético San Lorenzo de Almagro'],
+            'San Martín de San Juan':['Club Atlético San Martín (San Juan)','Club Atlético San Martín de San Juan'],
+            'Sarmiento de Junín':['Club Atlético Sarmiento (Junín)','Club Atlético Sarmiento de Junín'],
+            'Temperley':['Club Atlético Temperley'],
+            'Tigre':['Club Atlético Tigre'],
+            'Unión de Santa Fe':['Club Atlético Unión (Santa Fe)','Club Atlético Unión'],
+            'Vélez Sarsfield':['Club Atlético Vélez Sarsfield'],
+          }
+          TAIL_MARKERS=('reserva','juvenil','inferior','altas y bajas','transferencias','bajas y altas')
+
+          def fold(v):
+              d=unicodedata.normalize('NFKD',v or '')
+              return ''.join(c for c in d if not unicodedata.combining(c)).casefold()
+          def norm(v): return re.sub(r'[^a-z0-9]+',' ',fold(v)).strip()
+
+          def request(params):
+              url=f"{API}?{urllib.parse.urlencode(params)}"
+              req=urllib.request.Request(url,headers={'User-Agent':UA,'Accept':'application/json'})
+              for attempt in range(1,5):
+                  try:
+                      with urllib.request.urlopen(req,timeout=40) as resp: payload=json.loads(resp.read())
+                      if not isinstance(payload,dict): raise RuntimeError('non-object MediaWiki payload')
+                      if 'error' in payload: raise RuntimeError(f"MediaWiki error: {payload['error']}")
+                      return payload
+                  except Exception:
+                      if attempt==4: raise
+                      time.sleep(attempt*1.5)
+              raise AssertionError('unreachable')
+
+          def get_revision(titles):
+              for title in titles:
+                  p=request({'action':'query','prop':'revisions','titles':title,'redirects':'1','rvstart':CUTOFF,'rvdir':'older','rvlimit':'1','rvprop':'ids|timestamp|content','rvslots':'main','format':'json','formatversion':'2'})
+                  pages=p.get('query',{}).get('pages',[])
+                  if not isinstance(pages,list) or len(pages)!=1: continue
+                  page=pages[0]; revs=page.get('revisions') or []
+                  if page.get('missing') is True or not revs: continue
+                  rv=revs[0]; text=((rv.get('slots') or {}).get('main') or {}).get('content')
+                  if isinstance(text,str): return {'page_title':page.get('title'),'pageid':page.get('pageid'),'revid':rv.get('revid'),'timestamp':rv.get('timestamp'),'text':text}
+              return None
+
+          def heading_rows(text):
+              hs=[]
+              for m in re.finditer(r'^(={2,6})\s*(.*?)\s*\1\s*$',text,re.M): hs.append({'level':len(m.group(1)),'label':m.group(2).strip(),'start':m.start(),'content_start':m.end()})
+              for i,h in enumerate(hs):
+                  end=len(text)
+                  for n in hs[i+1:]:
+                      if n['level']<=h['level']: end=n['start']; break
+                  h['end']=end
+              return hs
+
+          def matching_template_end(text,start):
+              depth=0;i=start
+              while i<len(text)-1:
+                  pair=text[i:i+2]
+                  if pair=='{{': depth+=1;i+=2;continue
+                  if pair=='}}':
+                      depth-=1;i+=2
+                      if depth==0:return i
+                      continue
+                  i+=1
+              return None
+
+          def iter_player_templates(text):
+              i=0
+              while True:
+                  start=text.find('{{',i)
+                  if start<0:return
+                  ends=[p for p in (text.find('|',start+2),text.find('}}',start+2)) if p>=0]
+                  if not ends:return
+                  name=fold(text[start+2:min(ends)].strip()).replace(' ','')
+                  if name not in {'jugadordefutbol','futbolista'}: i=start+2;continue
+                  end=matching_template_end(text,start)
+                  if end is None:i=start+2;continue
+                  yield text[start:end];i=end
+
+          def roster_section(text):
+              candidates=[]
+              hs=heading_rows(text)
+              for h in hs:
+                  label=fold(h['label'])
+                  if not any(x in label for x in ('plantel','plantilla','equipo actual')): continue
+                  section_end=h['end']
+                  for n in hs:
+                      if not (h['content_start']<=n['start']<h['end']) or n['level']<=h['level']: continue
+                      if any(marker in fold(n['label']) for marker in TAIL_MARKERS): section_end=n['start'];break
+                  sec=text[h['content_start']:section_end]
+                  template_count=sum(1 for _ in iter_player_templates(sec))
+                  table_hint=('|Nº' in sec or '|N°' in sec or 'Partidos jugados' in sec) and '{|' in sec
+                  score=template_count*10+(25 if table_hint else 0)+(5 if '2016' in label else 0)
+                  candidates.append({'sec':sec,'label':h['label'],'score':score,'start':h['start']})
+              return sorted(candidates,key=lambda x:(-x['score'],x['start']))[0] if candidates else None
+
+          def split_top(inner):
+              out=[];buf=[];brace=0;bracket=0;i=0
+              while i<len(inner):
+                  pair=inner[i:i+2]
+                  if pair=='{{':brace+=1;buf.append(pair);i+=2;continue
+                  if pair=='}}' and brace:brace-=1;buf.append(pair);i+=2;continue
+                  if pair=='[[':bracket+=1;buf.append(pair);i+=2;continue
+                  if pair==']]' and bracket:bracket-=1;buf.append(pair);i+=2;continue
+                  if inner[i]=='|' and brace==0 and bracket==0:out.append(''.join(buf));buf=[];i+=1;continue
+                  buf.append(inner[i]);i+=1
+              out.append(''.join(buf));return out
+
+          def fields(template):
+              parts=split_top(template[2:-2]);d={}
+              for part in parts[1:]:
+                  if '=' not in part:continue
+                  k,v=part.split('=',1);d[fold(k.strip()).replace(' ','')]=v.strip()
+              return d
+
+          def player_link(raw):
+              if not raw:return None,None
+              for link in re.findall(r'\[\[([^\]]+)\]\]',raw):
+                  target=link.split('|')[0].strip()
+                  if fold(target).startswith(('archivo:','file:','imagen:')):continue
+                  label=re.sub(r"''+",'',link.split('|')[-1]).strip()
+                  return target,label or target
+              x=re.sub(r'<ref\b.*?</ref>','',raw,flags=re.I|re.S);x=re.sub(r'\{\{.*?\}\}','',x,flags=re.S);x=re.sub(r'<[^>]+>','',x);x=re.sub(r"''+",'',x);x=re.sub(r'\s+',' ',x).strip()
+              return None,x or None
+
+          def template_players(sec):
+              out=[]
+              for t in iter_player_templates(sec):
+                  f=fields(t);target,name=player_link(f.get('name') or f.get('nombre'))
+                  if name:out.append({'name':name,'target':target,'parser':'player_template'})
+              return out
+
+          def table_cell(line):
+              x=line[1:].strip()
+              if '|' in x:x=x.split('|',1)[1]
+              return x.strip()
+
+          def table_players(sec):
+              best=[]
+              for table in re.findall(r'(?ms)^\{\|.*?^\|\}',sec):
+                  if 'Nombre' not in table or ('Posición' not in table and 'Posicion' not in table):continue
+                  parsed=[]
+                  for row in re.split(r'(?m)^\|-.*$',table):
+                      cells=[table_cell(line) for line in row.splitlines() if line.startswith(('!','|')) and not line.startswith(('|-','|}'))]
+                      if len(cells)<4:continue
+                      first=re.sub(r"''+",'',re.sub(r'<[^>]+>','',cells[0])).strip()
+                      if not (re.fullmatch(r'\d+',first) or first=='?'):continue
+                      target,name=player_link(cells[1])
+                      if name:parsed.append({'name':name,'target':target,'parser':'wikitable'})
+                  if len(parsed)>len(best):best=parsed
+              return best
+
+          roster=[];club_meta=[]
+          for club,titles in CLUB_TITLES.items():
+              rev=get_revision(titles)
+              if not rev:club_meta.append({'club':club,'state':'no_revision'});continue
+              cand=roster_section(rev['text'])
+              if not cand:club_meta.append({'club':club,'state':'no_roster','revid':rev['revid']});continue
+              rows=template_players(cand['sec']);parser='player_template'
+              if len(rows)<15:rows=table_players(cand['sec']);parser='wikitable'
+              seen=set();ded=[]
+              for r in rows:
+                  k=norm(r['name'])
+                  if not k or k in seen:continue
+                  seen.add(k);ded.append(r)
+              for r in ded:r.update({'club':club,'club_revision_id':rev['revid'],'club_revision_timestamp':rev['timestamp'],'club_page_title':rev['page_title']});roster.append(r)
+              club_meta.append({'club':club,'state':'parsed','revid':rev['revid'],'section':cand['label'],'parser':parser,'rows':len(ded),'linked':sum(bool(r['target']) for r in ded)})
+
+          linked=[r for r in roster if r.get('target')];targets=[];seen=set()
+          for r in linked:
+              if r['target'] not in seen:seen.add(r['target']);targets.append(r['target'])
+
+          pages={}
+          for i in range(0,len(targets),40):
+              batch=targets[i:i+40]
+              # Important: omit rvlimit for multi-title revision queries; MediaWiki rejects rvlimit with multiple pages.
+              p=request({'action':'query','prop':'revisions','titles':'|'.join(batch),'redirects':'1','rvprop':'ids|timestamp|content','rvslots':'main','format':'json','formatversion':'2'})
+              q=p.get('query',{});normalized={x['from']:x['to'] for x in q.get('normalized',[]) if isinstance(x,dict)};redirects={x['from']:x['to'] for x in q.get('redirects',[]) if isinstance(x,dict)};by_title={pg.get('title'):pg for pg in q.get('pages',[]) if isinstance(pg,dict)}
+              for t in batch:
+                  n=normalized.get(t,t);resolved=redirects.get(n,n);pg=by_title.get(resolved)
+                  if not pg:pages[t]={'state':'unresolved','resolved_title':resolved};continue
+                  revs=pg.get('revisions') or [];text=None;rid=None;ts=None
+                  if revs:
+                      rv=revs[0];rid=rv.get('revid');ts=rv.get('timestamp');text=((rv.get('slots') or {}).get('main') or {}).get('content')
+                  pages[t]={'state':'resolved' if isinstance(text,str) else ('missing' if pg.get('missing') else 'no_content'),'resolved_title':pg.get('title'),'pageid':pg.get('pageid'),'revid':rid,'timestamp':ts,'text':text}
+              time.sleep(.15)
+
+          CLUB_ALIASES={
+            'Aldosivi':['aldosivi'],'Argentinos Juniors':['argentinos juniors'],'Arsenal de Sarandí':['arsenal'],'Atlético de Rafaela':['atletico de rafaela','rafaela'],'Atlético Tucumán':['atletico tucuman'],'Banfield':['banfield'],'Belgrano de Córdoba':['belgrano'],'Boca Juniors':['boca juniors','boca'],'Colón':['colon'],'Defensa y Justicia':['defensa y justicia'],'Estudiantes':['estudiantes'],'Gimnasia de La Plata':['gimnasia'],'Godoy Cruz':['godoy cruz'],'Huracán':['huracan'],'Independiente':['independiente'],'Lanús':['lanus'],"Newell's Old Boys":["newell's","newells"],'Olimpo':['olimpo'],'Patronato':['patronato'],'Quilmes':['quilmes'],'Racing Club':['racing'],'River Plate':['river plate','river'],'Rosario Central':['rosario central'],'San Lorenzo':['san lorenzo'],'San Martín de San Juan':['san martin'],'Sarmiento de Junín':['sarmiento'],'Temperley':['temperley'],'Tigre':['tigre'],'Unión de Santa Fe':['union'],'Vélez Sarsfield':['velez']}
+
+          def candidate_excerpts(text,club):
+              if not isinstance(text,str):return []
+              lines=text.splitlines();out=[];aliases=[fold(a) for a in CLUB_ALIASES[club]]
+              for idx,line in enumerate(lines):
+                  if '2016' not in fold(line):continue
+                  window='\n'.join(lines[max(0,idx-5):min(len(lines),idx+6)]);fw=fold(window)
+                  if not any(a in fw for a in aliases):continue
+                  nums=re.findall(r'(?<!\d)\d{1,3}(?!\d)',window)
+                  if len(nums)<2:continue
+                  out.append({'line':idx+1,'excerpt':window[:2000],'numeric_tokens':nums[:25]})
+              return out[:10]
+
+          slots=[]
+          for r in roster:
+              pg=pages.get(r.get('target')) if r.get('target') else None;ex=candidate_excerpts(pg.get('text') if pg else None,r['club']) if pg else []
+              slots.append({'club':r['club'],'name':r['name'],'player_target':r.get('target'),'club_revision_id':r['club_revision_id'],'club_revision_timestamp':r['club_revision_timestamp'],'player_page_state':pg.get('state') if pg else 'unlinked','player_page_title':pg.get('resolved_title') if pg else None,'player_pageid':pg.get('pageid') if pg else None,'player_revision_id':pg.get('revid') if pg else None,'player_revision_timestamp':pg.get('timestamp') if pg else None,'candidate_2016_club_stat_contexts':len(ex),'candidate_excerpts':ex})
+
+          state_counts=Counter(s['player_page_state'] for s in slots);candidates=[s for s in slots if s['candidate_2016_club_stat_contexts']]
+          by_club=defaultdict(lambda:{'slots':0,'linked':0,'page_resolved':0,'candidate':0})
+          for s in slots:
+              x=by_club[s['club']];x['slots']+=1;x['linked']+=int(bool(s['player_target']));x['page_resolved']+=int(s['player_page_state']=='resolved');x['candidate']+=int(bool(s['candidate_2016_club_stat_contexts']))
+          summary={'status':'PASS','decision_question':'Can linked individual Wikipedia player pages provide dense, provenance-preserving 2016 league-appearance evidence for the ARG_LPF roster snapshot without fuzzy identity matching?','scope':{'competition_code':'ARG_LPF','season_label':'2016','roster_cutoff':CUTOFF},'roster_slots':len(slots),'linked_slots':len(linked),'unique_player_targets':len(targets),'player_page_state_counts':dict(state_counts),'candidate_slots':len(candidates),'candidate_slot_rate':round(len(candidates)/len(slots),4) if slots else 0,'club_coverage':dict(sorted(by_club.items())),'method':{'identity':'historical roster hyperlink target only; no fuzzy player matching','player_page_revision':'current revision recorded by revision ID','candidate_detection':'2016 + roster-club + numeric context; candidates are not accepted statistics'},'non_claims':['Candidate contexts are not accepted appearances.','Current pages may mix league/cup/career totals.','No PlayerCrosswalk or production row is created.']}
+          Path('probe_out/summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2,sort_keys=True)+'\n');Path('probe_out/slots.json').write_text(json.dumps(slots,ensure_ascii=False,indent=2,sort_keys=True)+'\n');Path('probe_out/club_meta.json').write_text(json.dumps(club_meta,ensure_ascii=False,indent=2,sort_keys=True)+'\n')
+          print(json.dumps({k:summary[k] for k in ('roster_slots','linked_slots','unique_player_targets','player_page_state_counts','candidate_slots','candidate_slot_rate')},ensure_ascii=False,sort_keys=True))
+          PY
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: wikipedia-arg-2016-player-appearance-coverage-v2-${{ github.run_id }}
+          path: probe_out
+          if-no-files-found: error
+          retention-days: 7
