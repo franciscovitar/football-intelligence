@@ -212,9 +212,7 @@ def _match_external_id(
 ) -> str:
     # Result is deliberately excluded: a later source correction to the score
     # must not manufacture a new provider-local match identity.
-    stable_key = (
-        f"{match_date.isoformat()}|{round_number}|{phase}|{home_team}|{away_team}"
-    )
+    stable_key = f"{match_date.isoformat()}|{round_number}|{phase}|{home_team}|{away_team}"
     digest = hashlib.sha256(stable_key.encode("utf-8")).hexdigest()[:20]
     return f"rsssf-arg2016-{digest}"
 
