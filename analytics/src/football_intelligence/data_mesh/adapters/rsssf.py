@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any
 
 from football_intelligence.data_mesh.models import EntityType, NormalizedObservation, SourceType
+from football_intelligence.data_mesh.timeparse import calendar_year_season_label
 from football_intelligence.metric_catalog.types import MetricGranularity
 from football_intelligence.providers.rsssf import (
     RSSSF_ARGENTINA_2016_COMPETITION_ID,
@@ -64,7 +65,11 @@ def _adapt_match(
     match_hints = {
         "match_external_id": match.external_id,
         "competition_external_id": RSSSF_ARGENTINA_2016_COMPETITION_ID,
-        "season_label": RSSSF_ARGENTINA_2016_SEASON_LABEL,
+        # Bare YYYY labels historically mean "split-season start year" in
+        # Data Mesh. RSSSF's short tournament is genuinely calendar-year
+        # 2016, so encode that semantic explicitly; generic normalization
+        # resolves it back to canonical "2016" without a provider special-case.
+        "season_label": calendar_year_season_label(RSSSF_ARGENTINA_2016_SEASON_LABEL),
         "home_team_external_id": match.home_team,
         "home_team_name": match.home_team,
         "away_team_external_id": match.away_team,
