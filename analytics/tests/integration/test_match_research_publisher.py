@@ -104,7 +104,8 @@ def test_same_run_key_with_changed_payload_fails_closed() -> None:
 
             changed = deepcopy(payload)
             changed["match_review"]["summary"] = (  # type: ignore[index]
-                "Mismo run key pero contenido distinto, que debe considerarse un conflicto de idempotencia."
+                "Mismo run key pero contenido distinto, que debe considerarse "
+                "un conflicto de idempotencia."
             )
             with pytest.raises(IdempotencyConflictError):
                 publish_match_research(connection, changed)

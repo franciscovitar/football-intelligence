@@ -245,7 +245,10 @@ def valid_publish_payload() -> dict[str, object]:
         "fan_themes": [],
         "match_review": {
             "review_version": 1,
-            "summary": "Alpha produjo la actuación más completa y ganó un partido que también dominó en ocasiones.",
+            "summary": (
+                "Alpha produjo la actuación más completa y ganó un partido que "
+                "también dominó en ocasiones."
+            ),
             "key_takeaways": ["Alpha generó mejores ocasiones."],
             "source_document_keys": ["match-page"],
         },
@@ -309,7 +312,10 @@ def valid_publish_payload() -> dict[str, object]:
                 "team_slug": "beta-fc",
                 "facts_score": 5.8,
                 "final_score": 5.8,
-                "summary": "El plan sostuvo el partido por momentos, pero no redujo suficiente la amenaza rival.",
+                "summary": (
+                    "El plan sostuvo el partido por momentos, pero no redujo "
+                    "suficiente la amenaza rival."
+                ),
                 "initial_plan_score": 6.0,
                 "adaptation_score": 5.8,
                 "substitutions_score": 6.0,

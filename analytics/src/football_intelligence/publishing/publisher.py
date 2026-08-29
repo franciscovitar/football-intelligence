@@ -773,7 +773,9 @@ def _upsert_appearances(
               minutes = excluded.minutes,
               broad_position = coalesce(excluded.broad_position, player_appearances.broad_position),
               role_label = coalesce(excluded.role_label, player_appearances.role_label),
-              role_confidence = coalesce(excluded.role_confidence, player_appearances.role_confidence),
+              role_confidence = coalesce(
+                excluded.role_confidence, player_appearances.role_confidence
+              ),
               captain = coalesce(excluded.captain, player_appearances.captain),
               updated_at = now()
             """,
@@ -1142,7 +1144,10 @@ def _load_current_reviews(
     player_ids: dict[str, UUID],
 ) -> _CurrentReviews:
     row = connection.execute(
-        "select id, review_version from public.match_reviews where match_id = %s and status = 'PUBLISHED'",
+        (
+            "select id, review_version from public.match_reviews "
+            "where match_id = %s and status = 'PUBLISHED'"
+        ),
         (match_id,),
     ).fetchone()
     match_review_id = _as_uuid(row[0]) if row is not None else None
@@ -1171,7 +1176,8 @@ def _current_entity_reviews(
 ) -> dict[str, UUID]:
     slug_by_id = {value: key for key, value in ids_by_slug.items()}
     query = sql.SQL(
-        "select {entity_column}, id from public.{table} where match_id = %s and status = 'PUBLISHED'"
+        "select {entity_column}, id from public.{table} "
+        "where match_id = %s and status = 'PUBLISHED'"
     ).format(entity_column=sql.Identifier(entity_column), table=sql.Identifier(table))
     rows = connection.execute(query, (match_id,)).fetchall()
     result: dict[str, UUID] = {}
@@ -1199,7 +1205,8 @@ def _validate_revision_transition(
         return
     if incoming_version <= current.match_version:
         raise RevisionConflictError(
-            f"incoming review_version {incoming_version} must be greater than current {current.match_version}"
+            f"incoming review_version {incoming_version} must be greater than current "
+            f"{current.match_version}"
         )
     if not revision_reason or not revision_reason.strip():
         raise RevisionConflictError("replacing published intelligence requires --revision-reason")
@@ -1426,7 +1433,10 @@ def _pre_publish_integrity_gate(
     document_ids: dict[str, UUID],
 ) -> None:
     row = connection.execute(
-        "select status, identity_verified, home_goals, away_goals from public.matches where id = %s",
+        (
+            "select status, identity_verified, home_goals, away_goals "
+            "from public.matches where id = %s"
+        ),
         (match_id,),
     ).fetchone()
     match = _object(payload, "match")
@@ -1496,7 +1506,10 @@ def _finalize_publication(
             revision_pairs.append((entity_type, old_id, new_id))
 
     connection.execute(
-        "update public.match_reviews set status = 'PUBLISHED', published_at = now(), updated_at = now() where id = %s",
+        (
+            "update public.match_reviews set status = 'PUBLISHED', "
+            "published_at = now(), updated_at = now() where id = %s"
+        ),
         (inserted.match_id,),
     )
     for table, ids in (
@@ -1507,7 +1520,8 @@ def _finalize_publication(
         for review_id in ids:
             connection.execute(
                 sql.SQL(
-                    "update public.{table} set status = 'PUBLISHED', published_at = now(), updated_at = now() where id = %s"
+                    "update public.{table} set status = 'PUBLISHED', "
+                    "published_at = now(), updated_at = now() where id = %s"
                 ).format(table=sql.Identifier(table)),
                 (review_id,),
             )
@@ -1570,7 +1584,8 @@ def _post_publish_integrity_gate(
         ).fetchone()
         if row is None or int(row[0]) != expected:
             raise IntegrityGateError(
-                f"post-publish current count for {table} is {None if row is None else row[0]}, expected {expected}"
+                f"post-publish current count for {table} is "
+                f"{None if row is None else row[0]}, expected {expected}"
             )
     row = connection.execute(
         "select status, qa_status, completed_at from public.research_runs where id = %s",

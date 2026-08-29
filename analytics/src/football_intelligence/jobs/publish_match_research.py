@@ -37,7 +37,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--validate-only",
         action="store_true",
-        help="Validate schema, cross references and QA status without opening a database connection.",
+        help=(
+            "Validate schema, cross references and QA status without opening a database connection."
+        ),
     )
     parser.add_argument(
         "--dry-run",
@@ -47,7 +49,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--revision-reason",
         default=None,
-        help="Required when replacing already-published match intelligence with a higher review version.",
+        help=(
+            "Required when replacing already-published match intelligence with a "
+            "higher review version."
+        ),
     )
     parser.add_argument("--allow-remote-write", action="store_true")
     parser.add_argument("--confirm-target", default=None)
