@@ -12,7 +12,7 @@ import re
 from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, TypeGuard
 from urllib.parse import urlsplit
 
 
@@ -166,8 +166,8 @@ def _validate_string(value: str, node: Mapping[str, Any], path: str, issues: lis
         return
     if format_name == "date-time":
         try:
-            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-            if parsed.tzinfo is None:
+            parsed_datetime = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed_datetime.tzinfo is None:
                 raise ValueError("timezone required")
         except ValueError:
             issues.append(f"{path}: invalid RFC3339-style date-time {value!r}")
@@ -177,8 +177,10 @@ def _validate_string(value: str, node: Mapping[str, Any], path: str, issues: lis
         except ValueError:
             issues.append(f"{path}: invalid ISO date {value!r}")
     elif format_name == "uri":
-        parsed = urlsplit(value)
-        if not parsed.scheme or (parsed.scheme in {"http", "https"} and not parsed.netloc):
+        parsed_uri = urlsplit(value)
+        if not parsed_uri.scheme or (
+            parsed_uri.scheme in {"http", "https"} and not parsed_uri.netloc
+        ):
             issues.append(f"{path}: invalid URI {value!r}")
     else:
         raise RuntimeError(f"unsupported JSON Schema format: {format_name!r}")
@@ -231,7 +233,7 @@ def _matches_single_type(value: Any, expected: str) -> bool:
     raise RuntimeError(f"unsupported JSON Schema primitive type: {expected!r}")
 
 
-def _is_number(value: Any) -> bool:
+def _is_number(value: Any) -> TypeGuard[int | float]:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
