@@ -72,9 +72,10 @@ class _InsertedReviews:
     players: dict[str, UUID]
 
 
-@dataclass(frozen=True, slots=True)
 class _DryRunRollback(Exception):
-    result: MatchPublishResult
+    def __init__(self, result: MatchPublishResult) -> None:
+        super().__init__("dry-run rollback")
+        self.result = result
 
 
 def publish_match_research(
