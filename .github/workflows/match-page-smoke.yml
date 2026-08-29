@@ -1,0 +1,99 @@
+name: Match Page Smoke
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: match-page-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  match-page:
+    name: Match Page
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: football_intelligence_match_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: football_intelligence_match_smoke
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/football_intelligence_match_smoke
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Apply migrations from zero
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in database/migrations/*.sql; do
+            echo "Applying $migration"
+            psql -v ON_ERROR_STOP=1 -f "$migration"
+          done
+
+      - name: Seed published match fixture
+        run: psql -v ON_ERROR_STOP=1 -f database/fixtures/008_match_page_smoke.sql
+
+      - uses: actions/setup-node@v6.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Verify Match Page runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          npm --workspace @football-intelligence/web run dev -- \
+            --hostname 127.0.0.1 \
+            --port 3000 \
+            > "$RUNNER_TEMP/match-page.log" 2>&1 &
+          WEB_PID=$!
+
+          cleanup() {
+            kill "$WEB_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          MATCH_URL="http://127.0.0.1:3000/matches/81000000-0000-0000-0000-000000000050"
+          READY=0
+          for attempt in $(seq 1 45); do
+            if curl -fsS "$MATCH_URL" > "$RUNNER_TEMP/match.html"; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$READY" -ne 1 ]; then
+            cat "$RUNNER_TEMP/match-page.log"
+            exit 1
+          fi
+
+          grep -q "Match Smoke Home" "$RUNNER_TEMP/match.html"
+          grep -q "Match Smoke Away" "$RUNNER_TEMP/match.html"
+          grep -q "Smoke Home Player" "$RUNNER_TEMP/match.html"
+          grep -q "Smoke Away Manager" "$RUNNER_TEMP/match.html"
+          grep -q "Qué cuenta el partido" "$RUNNER_TEMP/match.html"
+          grep -q "Fuentes y evidencia" "$RUNNER_TEMP/match.html"
+          grep -q "Match Smoke Source" "$RUNNER_TEMP/match.html"
+          ! grep -q "No disponible" "$RUNNER_TEMP/match.html"

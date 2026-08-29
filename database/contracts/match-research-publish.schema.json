@@ -1,0 +1,364 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://football-intelligence.local/contracts/match-research-publish-v1.schema.json",
+  "title": "Football Intelligence Match Research Publish V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "research",
+    "match",
+    "teams",
+    "managers",
+    "players",
+    "appearances",
+    "team_stats",
+    "player_stats",
+    "sources",
+    "documents",
+    "evidence",
+    "fan_themes",
+    "match_review",
+    "team_reviews",
+    "manager_reviews",
+    "player_reviews"
+  ],
+  "properties": {
+    "contract_version": { "const": "MATCH_RESEARCH_PUBLISH_V1" },
+    "research": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_key", "methodology_sha", "search_protocol_version", "output_contract_version", "rating_scale_version", "benchmark_version", "data_cutoff", "qa_status"],
+      "properties": {
+        "run_key": { "type": "string", "minLength": 8 },
+        "methodology_sha": { "type": "string", "minLength": 7 },
+        "search_protocol_version": { "type": "string", "minLength": 1 },
+        "output_contract_version": { "type": "string", "minLength": 1 },
+        "rating_scale_version": { "type": "string", "minLength": 1 },
+        "benchmark_version": { "type": "string", "minLength": 1 },
+        "data_cutoff": { "type": "string", "format": "date-time" },
+        "qa_status": { "enum": ["PASS", "FAIL", "NEEDS_RESEARCH", "DATA_CONFLICT", "IDENTITY_BLOCKED"] },
+        "notes": { "type": ["string", "null"] }
+      }
+    },
+    "match": { "$ref": "#/$defs/match" },
+    "teams": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/team" } },
+    "managers": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/manager" } },
+    "players": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/player" } },
+    "appearances": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/appearance" } },
+    "team_stats": { "type": "array", "items": { "$ref": "#/$defs/teamStats" } },
+    "player_stats": { "type": "array", "items": { "$ref": "#/$defs/playerStats" } },
+    "sources": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } },
+    "documents": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/document" } },
+    "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } },
+    "fan_themes": { "type": "array", "items": { "$ref": "#/$defs/fanTheme" } },
+    "match_review": { "$ref": "#/$defs/matchReview" },
+    "team_reviews": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/teamReview" } },
+    "manager_reviews": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/managerReview" } },
+    "player_reviews": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/playerReview" } },
+    "signals": { "type": "array", "default": [], "items": { "$ref": "#/$defs/signal" } }
+  },
+  "$defs": {
+    "score10": { "type": ["number", "null"], "minimum": 0, "maximum": 10, "multipleOf": 0.1 },
+    "confidence100": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+    "slug": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity_key", "competition_slug", "season_label", "round_label", "home_team_slug", "away_team_slug", "kickoff_at", "status", "home_goals", "away_goals", "identity_verified"],
+      "properties": {
+        "identity_key": { "type": "string", "minLength": 8 },
+        "competition_slug": { "$ref": "#/$defs/slug" },
+        "season_label": { "type": "string" },
+        "stage_name": { "type": ["string", "null"] },
+        "round_label": { "type": ["string", "null"] },
+        "home_team_slug": { "$ref": "#/$defs/slug" },
+        "away_team_slug": { "$ref": "#/$defs/slug" },
+        "kickoff_at": { "type": "string", "format": "date-time" },
+        "status": { "const": "FINAL" },
+        "home_goals": { "type": "integer", "minimum": 0 },
+        "away_goals": { "type": "integer", "minimum": 0 },
+        "venue": { "type": ["string", "null"] },
+        "attendance": { "type": ["integer", "null"], "minimum": 0 },
+        "referee": { "type": ["string", "null"] },
+        "identity_verified": { "const": true },
+        "context": { "type": "object" }
+      }
+    },
+    "team": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slug", "name"],
+      "properties": {
+        "slug": { "$ref": "#/$defs/slug" },
+        "name": { "type": "string" },
+        "short_name": { "type": ["string", "null"] },
+        "country_code": { "type": ["string", "null"] },
+        "crest_url": { "type": ["string", "null"], "format": "uri" }
+      }
+    },
+    "manager": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slug", "display_name", "team_slug"],
+      "properties": {
+        "slug": { "$ref": "#/$defs/slug" },
+        "display_name": { "type": "string" },
+        "team_slug": { "$ref": "#/$defs/slug" },
+        "nationality": { "type": ["string", "null"] }
+      }
+    },
+    "player": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slug", "display_name", "team_slug"],
+      "properties": {
+        "slug": { "$ref": "#/$defs/slug" },
+        "display_name": { "type": "string" },
+        "full_name": { "type": ["string", "null"] },
+        "team_slug": { "$ref": "#/$defs/slug" },
+        "birth_date": { "type": ["string", "null"], "format": "date" },
+        "nationality": { "type": ["string", "null"] },
+        "preferred_foot": { "type": ["string", "null"] }
+      }
+    },
+    "appearance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["player_slug", "team_slug", "starter", "minutes"],
+      "properties": {
+        "player_slug": { "$ref": "#/$defs/slug" },
+        "team_slug": { "$ref": "#/$defs/slug" },
+        "starter": { "type": "boolean" },
+        "minute_on": { "type": ["integer", "null"], "minimum": 0 },
+        "minute_off": { "type": ["integer", "null"], "minimum": 0 },
+        "minutes": { "type": "integer", "minimum": 0, "maximum": 130 },
+        "broad_position": { "type": ["string", "null"] },
+        "role_label": { "type": ["string", "null"] },
+        "role_confidence": { "$ref": "#/$defs/confidence100" },
+        "captain": { "type": ["boolean", "null"] }
+      }
+    },
+    "teamStats": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["team_slug", "source_key", "evidence_class"],
+      "properties": {
+        "team_slug": { "$ref": "#/$defs/slug" },
+        "source_key": { "type": "string" },
+        "provider_model": { "type": ["string", "null"] },
+        "definition_version": { "type": ["string", "null"] },
+        "evidence_class": { "enum": ["OBSERVED", "PROVIDER_DERIVED", "FI_DERIVED", "MODEL_ESTIMATE", "QUALITATIVE_CONTEXT", "HUMAN_INTELLIGENCE", "INFERENCE"] },
+        "goals": { "type": ["integer", "null"] },
+        "xg": { "type": ["number", "null"], "minimum": 0 },
+        "npxg": { "type": ["number", "null"], "minimum": 0 },
+        "shots": { "type": ["integer", "null"], "minimum": 0 },
+        "shots_on_target": { "type": ["integer", "null"], "minimum": 0 },
+        "possession_pct": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "big_chances": { "type": ["integer", "null"], "minimum": 0 },
+        "box_touches": { "type": ["integer", "null"], "minimum": 0 },
+        "corners": { "type": ["integer", "null"], "minimum": 0 },
+        "fouls": { "type": ["integer", "null"], "minimum": 0 },
+        "extra_stats": { "type": "object" },
+        "coverage_notes": { "type": ["string", "null"] }
+      }
+    },
+    "playerStats": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["player_slug", "team_slug", "source_key", "evidence_class"],
+      "properties": {
+        "player_slug": { "$ref": "#/$defs/slug" },
+        "team_slug": { "$ref": "#/$defs/slug" },
+        "source_key": { "type": "string" },
+        "provider_model": { "type": ["string", "null"] },
+        "definition_version": { "type": ["string", "null"] },
+        "evidence_class": { "type": "string" },
+        "minutes": { "type": ["integer", "null"] },
+        "goals": { "type": ["integer", "null"] },
+        "assists": { "type": ["integer", "null"] },
+        "xg": { "type": ["number", "null"] },
+        "xa": { "type": ["number", "null"] },
+        "shots": { "type": ["integer", "null"] },
+        "shots_on_target": { "type": ["integer", "null"] },
+        "chances_created": { "type": ["integer", "null"] },
+        "touches": { "type": ["integer", "null"] },
+        "dribbles_attempted": { "type": ["integer", "null"] },
+        "dribbles_completed": { "type": ["integer", "null"] },
+        "extra_stats": { "type": "object" },
+        "coverage_notes": { "type": ["string", "null"] }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "name", "source_type"],
+      "properties": {
+        "key": { "type": "string" },
+        "name": { "type": "string" },
+        "source_type": { "type": "string" },
+        "domain": { "type": ["string", "null"] },
+        "base_url": { "type": ["string", "null"], "format": "uri" },
+        "rights_notes": { "type": ["string", "null"] }
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "source_key", "url", "document_type", "retrieved_at"],
+      "properties": {
+        "key": { "type": "string" },
+        "source_key": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "title": { "type": ["string", "null"] },
+        "author": { "type": ["string", "null"] },
+        "published_at": { "type": ["string", "null"], "format": "date-time" },
+        "retrieved_at": { "type": "string", "format": "date-time" },
+        "document_type": { "type": "string" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity_type", "entity_key", "channel", "evidence_class", "claim_type", "normalized_claim"],
+      "properties": {
+        "document_key": { "type": ["string", "null"] },
+        "entity_type": { "enum": ["PLAYER", "TEAM", "MANAGER", "MATCH"] },
+        "entity_key": { "type": "string" },
+        "channel": { "enum": ["FACT", "EXPERT", "FAN", "TACTICAL", "OFFICIAL", "MODEL"] },
+        "domain": { "type": ["string", "null"] },
+        "evidence_class": { "type": "string" },
+        "claim_type": { "type": "string" },
+        "normalized_claim": { "type": "string", "minLength": 3 },
+        "direction": { "type": ["string", "null"] },
+        "confidence": { "$ref": "#/$defs/confidence100" }
+      }
+    },
+    "fanTheme": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity_type", "entity_key", "theme", "direction", "community_cohort"],
+      "properties": {
+        "entity_type": { "enum": ["PLAYER", "TEAM", "MANAGER", "MATCH"] },
+        "entity_key": { "type": "string" },
+        "theme": { "type": "string" },
+        "direction": { "type": "string" },
+        "community_cohort": { "type": "string" },
+        "coverage": { "type": ["string", "null"] },
+        "repeated_signal_count": { "type": ["integer", "null"], "minimum": 0 },
+        "document_keys": { "type": "array", "items": { "type": "string" } },
+        "caveats": { "type": ["string", "null"] }
+      }
+    },
+    "reviewBase": {
+      "type": "object",
+      "required": ["review_version", "final_score", "confidence", "evidence_status", "summary", "evidence_mix"],
+      "properties": {
+        "review_version": { "type": "integer", "minimum": 1 },
+        "facts_score": { "$ref": "#/$defs/score10" },
+        "expert_score": { "$ref": "#/$defs/score10" },
+        "fan_score": { "$ref": "#/$defs/score10" },
+        "final_score": { "$ref": "#/$defs/score10" },
+        "confidence": { "$ref": "#/$defs/confidence100" },
+        "evidence_status": { "enum": ["MODEL_SCORE", "EXTERNAL_VALIDATED_SCORE", "DATA_ESTIMATE", "TRIANGULATED_ESTIMATE", "EXPERT_ESTIMATE", "LOW_COVERAGE_ESTIMATE"] },
+        "summary": { "type": "string", "minLength": 3 },
+        "evidence_mix": { "type": "object" }
+      }
+    },
+    "matchReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["review_version", "summary", "key_takeaways", "source_document_keys"],
+      "properties": {
+        "review_version": { "type": "integer", "minimum": 1 },
+        "summary": { "type": "string", "minLength": 20 },
+        "key_takeaways": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "source_document_keys": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } }
+      }
+    },
+    "teamReview": {
+      "allOf": [
+        { "$ref": "#/$defs/reviewBase" },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["team_slug", "strengths", "concerns"],
+          "properties": {
+            "team_slug": { "$ref": "#/$defs/slug" },
+            "facts_coverage": { "$ref": "#/$defs/confidence100" },
+            "expert_coverage": { "$ref": "#/$defs/confidence100" },
+            "fan_coverage": { "$ref": "#/$defs/confidence100" },
+            "tactical_coverage": { "$ref": "#/$defs/confidence100" },
+            "attack_score": { "$ref": "#/$defs/score10" },
+            "creation_score": { "$ref": "#/$defs/score10" },
+            "control_score": { "$ref": "#/$defs/score10" },
+            "defence_score": { "$ref": "#/$defs/score10" },
+            "pressing_score": { "$ref": "#/$defs/score10" },
+            "offensive_transition_score": { "$ref": "#/$defs/score10" },
+            "defensive_transition_score": { "$ref": "#/$defs/score10" },
+            "set_pieces_score": { "$ref": "#/$defs/score10" },
+            "strengths": { "type": "array", "items": { "type": "string" } },
+            "concerns": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      ]
+    },
+    "managerReview": {
+      "allOf": [
+        { "$ref": "#/$defs/reviewBase" },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["manager_slug", "team_slug"],
+          "properties": {
+            "manager_slug": { "$ref": "#/$defs/slug" },
+            "team_slug": { "$ref": "#/$defs/slug" },
+            "initial_plan_score": { "$ref": "#/$defs/score10" },
+            "adaptation_score": { "$ref": "#/$defs/score10" },
+            "substitutions_score": { "$ref": "#/$defs/score10" },
+            "initial_plan": { "type": ["string", "null"] },
+            "adjustments": { "type": ["string", "null"] },
+            "what_worked": { "type": "array", "items": { "type": "string" } },
+            "what_failed": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      ]
+    },
+    "playerReview": {
+      "allOf": [
+        { "$ref": "#/$defs/reviewBase" },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["player_slug", "team_slug", "positive_notes", "negative_notes"],
+          "properties": {
+            "player_slug": { "$ref": "#/$defs/slug" },
+            "team_slug": { "$ref": "#/$defs/slug" },
+            "facts_coverage": { "$ref": "#/$defs/confidence100" },
+            "expert_coverage": { "$ref": "#/$defs/confidence100" },
+            "fan_coverage": { "$ref": "#/$defs/confidence100" },
+            "tactical_coverage": { "$ref": "#/$defs/confidence100" },
+            "role_label": { "type": ["string", "null"] },
+            "positive_notes": { "type": "array", "items": { "type": "string" } },
+            "negative_notes": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      ]
+    },
+    "signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity_type", "entity_key", "signal_type", "status", "confidence", "baseline_description", "rationale"],
+      "properties": {
+        "entity_type": { "enum": ["PLAYER", "TEAM", "MANAGER"] },
+        "entity_key": { "type": "string" },
+        "signal_type": { "type": "string" },
+        "status": { "enum": ["CANDIDATE", "SUPPORTED", "PARTIAL", "MIXED", "NOT_SUPPORTED", "EXPIRED"] },
+        "score_or_strength": { "type": ["number", "null"] },
+        "confidence": { "$ref": "#/$defs/confidence100" },
+        "baseline_description": { "type": "string" },
+        "rationale": { "type": "string" }
+      }
+    }
+  }
+}
