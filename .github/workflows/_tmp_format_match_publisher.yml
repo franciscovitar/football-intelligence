@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
 
+# Triggered only to apply the diagnosed four-line rollback-sentinel correction.
 jobs:
   format:
     if: github.actor != 'github-actions[bot]'
