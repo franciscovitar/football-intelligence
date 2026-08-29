@@ -152,9 +152,7 @@ def _validate_array(
             _validate(item, items, root, f"{path}[{index}]", issues)
 
 
-def _validate_string(
-    value: str, node: Mapping[str, Any], path: str, issues: list[str]
-) -> None:
+def _validate_string(value: str, node: Mapping[str, Any], path: str, issues: list[str]) -> None:
     min_length = node.get("minLength")
     if isinstance(min_length, int) and len(value) < min_length:
         issues.append(f"{path}: expected length >= {min_length}")

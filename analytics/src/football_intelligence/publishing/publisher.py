@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, replace
 from datetime import date, datetime
 from typing import Any, Literal
@@ -392,7 +391,11 @@ def _upsert_teams(connection: Connection[Any], teams: list[JsonObject]) -> dict[
             raise IdentityConflictError(
                 f"team slug {slug!r} already maps to name {row[1]!r}, not {team.get('name')!r}"
             )
-        if row[2] is not None and team.get("country_code") is not None and row[2] != team["country_code"]:
+        if (
+            row[2] is not None
+            and team.get("country_code") is not None
+            and row[2] != team["country_code"]
+        ):
             raise IdentityConflictError(f"team {slug!r} country_code conflicts with catalog")
         team_id = _as_uuid(row[0])
         connection.execute(
@@ -410,9 +413,7 @@ def _upsert_teams(connection: Connection[Any], teams: list[JsonObject]) -> dict[
     return ids
 
 
-def _upsert_players(
-    connection: Connection[Any], players: list[JsonObject]
-) -> dict[str, UUID]:
+def _upsert_players(connection: Connection[Any], players: list[JsonObject]) -> dict[str, UUID]:
     ids: dict[str, UUID] = {}
     for player in players:
         slug = _required_str(player, "slug")
@@ -467,9 +468,7 @@ def _upsert_players(
     return ids
 
 
-def _upsert_managers(
-    connection: Connection[Any], managers: list[JsonObject]
-) -> dict[str, UUID]:
+def _upsert_managers(connection: Connection[Any], managers: list[JsonObject]) -> dict[str, UUID]:
     ids: dict[str, UUID] = {}
     for manager in managers:
         slug = _required_str(manager, "slug")
@@ -500,9 +499,7 @@ def _upsert_managers(
     return ids
 
 
-def _upsert_sources(
-    connection: Connection[Any], sources: list[JsonObject]
-) -> dict[str, UUID]:
+def _upsert_sources(connection: Connection[Any], sources: list[JsonObject]) -> dict[str, UUID]:
     ids: dict[str, UUID] = {}
     for source in sources:
         key = _required_str(source, "key")
@@ -841,7 +838,16 @@ _PLAYER_STAT_COLUMNS = (
     "pressures",
 )
 _STAT_CONTROL_KEYS = frozenset(
-    {"team_slug", "player_slug", "source_key", "provider_model", "definition_version", "evidence_class", "extra_stats", "coverage_notes"}
+    {
+        "team_slug",
+        "player_slug",
+        "source_key",
+        "provider_model",
+        "definition_version",
+        "evidence_class",
+        "extra_stats",
+        "coverage_notes",
+    }
 )
 
 
@@ -1144,7 +1150,9 @@ def _load_current_reviews(
     return _CurrentReviews(
         match_id=match_review_id,
         match_version=match_version,
-        teams=_current_entity_reviews(connection, "team_match_reviews", "team_id", match_id, team_ids),
+        teams=_current_entity_reviews(
+            connection, "team_match_reviews", "team_id", match_id, team_ids
+        ),
         managers=_current_entity_reviews(
             connection, "manager_match_reviews", "manager_id", match_id, manager_ids
         ),
@@ -1480,9 +1488,9 @@ def _finalize_publication(
         for slug, old_id in old_map.items():
             new_id = new_map[slug]
             connection.execute(
-                sql.SQL("update public.{table} set status = 'REVISED', updated_at = now() where id = %s").format(
-                    table=sql.Identifier(table)
-                ),
+                sql.SQL(
+                    "update public.{table} set status = 'REVISED', updated_at = now() where id = %s"
+                ).format(table=sql.Identifier(table)),
                 (old_id,),
             )
             revision_pairs.append((entity_type, old_id, new_id))
@@ -1579,7 +1587,9 @@ def _normalize_url(value: str) -> str:
     scheme = parsed.scheme.lower()
     host = (parsed.hostname or "").lower()
     port = parsed.port
-    if port is not None and not ((scheme == "https" and port == 443) or (scheme == "http" and port == 80)):
+    if port is not None and not (
+        (scheme == "https" and port == 443) or (scheme == "http" and port == 80)
+    ):
         host = f"{host}:{port}"
     path = parsed.path or "/"
     return urlunsplit((scheme, host, path, parsed.query, ""))

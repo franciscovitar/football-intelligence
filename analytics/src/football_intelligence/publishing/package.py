@@ -120,7 +120,9 @@ def _domain_issues(payload: JsonObject) -> list[str]:
     manager_team: dict[Any, Any] = {item.get("slug"): item.get("team_slug") for item in managers}
 
     for index, manager in enumerate(managers):
-        _require_member(manager.get("team_slug"), team_slugs, f"managers[{index}].team_slug", issues)
+        _require_member(
+            manager.get("team_slug"), team_slugs, f"managers[{index}].team_slug", issues
+        )
     for index, player in enumerate(players):
         _require_member(player.get("team_slug"), team_slugs, f"players[{index}].team_slug", issues)
 
@@ -227,7 +229,9 @@ def _domain_issues(payload: JsonObject) -> list[str]:
     for index, review in enumerate(manager_reviews):
         manager_slug = review.get("manager_slug")
         team_slug = review.get("team_slug")
-        _require_member(manager_slug, manager_slugs, f"manager_reviews[{index}].manager_slug", issues)
+        _require_member(
+            manager_slug, manager_slugs, f"manager_reviews[{index}].manager_slug", issues
+        )
         _require_member(team_slug, team_slugs, f"manager_reviews[{index}].team_slug", issues)
         if manager_slug in manager_team and manager_team[manager_slug] != team_slug:
             issues.append(f"manager_reviews[{index}]: manager/team affiliation disagrees")
@@ -310,9 +314,7 @@ def _validate_entity_reference(
     _require_member(entity_key, members, f"{path}.entity_key", issues)
 
 
-def _unique_values(
-    items: list[JsonObject], field: str, label: str, issues: list[str]
-) -> set[Any]:
+def _unique_values(items: list[JsonObject], field: str, label: str, issues: list[str]) -> set[Any]:
     values: set[Any] = set()
     for index, item in enumerate(items):
         value = item.get(field)
