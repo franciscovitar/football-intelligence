@@ -22,11 +22,88 @@ jobs:
       - uses: astral-sh/setup-uv@v9.0.0
       - working-directory: analytics
         run: uv sync --dev --locked
+      - name: Wrap remaining long lines
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              Path("analytics/src/football_intelligence/jobs/publish_match_research.py"): [
+                  (
+                      '        help="Validate schema, cross references and QA status without opening a database connection.",',
+                      '        help=(\n            "Validate schema, cross references and QA status without opening a "\n            "database connection."\n        ),',
+                  ),
+                  (
+                      '        help="Required when replacing already-published match intelligence with a higher review version.",',
+                      '        help=(\n            "Required when replacing already-published match intelligence with a "\n            "higher review version."\n        ),',
+                  ),
+              ],
+              Path("analytics/src/football_intelligence/publishing/publisher.py"): [
+                  (
+                      '              role_confidence = coalesce(excluded.role_confidence, player_appearances.role_confidence),',
+                      '              role_confidence = coalesce(\n                excluded.role_confidence, player_appearances.role_confidence\n              ),',
+                  ),
+                  (
+                      '        "select id, review_version from public.match_reviews where match_id = %s and status = \'PUBLISHED\'",',
+                      '        (\n            "select id, review_version from public.match_reviews "\n            "where match_id = %s and status = \'PUBLISHED\'"\n        ),',
+                  ),
+                  (
+                      '        "select {entity_column}, id from public.{table} where match_id = %s and status = \'PUBLISHED\'"',
+                      '        "select {entity_column}, id from public.{table} "\n        "where match_id = %s and status = \'PUBLISHED\'"',
+                  ),
+                  (
+                      '            f"incoming review_version {incoming_version} must be greater than current {current.match_version}"',
+                      '            f"incoming review_version {incoming_version} must be greater than current "\n            f"{current.match_version}"',
+                  ),
+                  (
+                      '        "select status, identity_verified, home_goals, away_goals from public.matches where id = %s",',
+                      '        (\n            "select status, identity_verified, home_goals, away_goals "\n            "from public.matches where id = %s"\n        ),',
+                  ),
+                  (
+                      '        "update public.match_reviews set status = \'PUBLISHED\', published_at = now(), updated_at = now() where id = %s",',
+                      '        (\n            "update public.match_reviews set status = \'PUBLISHED\', "\n            "published_at = now(), updated_at = now() where id = %s"\n        ),',
+                  ),
+                  (
+                      '                    "update public.{table} set status = \'PUBLISHED\', published_at = now(), updated_at = now() where id = %s"',
+                      '                    "update public.{table} set status = \'PUBLISHED\', "\n                    "published_at = now(), updated_at = now() where id = %s"',
+                  ),
+                  (
+                      '                f"post-publish current count for {table} is {None if row is None else row[0]}, expected {expected}"',
+                      '                f"post-publish current count for {table} is "\n                f"{None if row is None else row[0]}, expected {expected}"',
+                  ),
+              ],
+              Path("analytics/tests/integration/test_match_research_publisher.py"): [
+                  (
+                      '                "Mismo run key pero contenido distinto, que debe considerarse un conflicto de idempotencia."',
+                      '                "Mismo run key pero contenido distinto, que debe considerarse "\n                "un conflicto de idempotencia."',
+                  ),
+              ],
+              Path("analytics/tests/test_match_publish_package.py"): [
+                  (
+                      '            "summary": "Alpha produjo la actuación más completa y ganó un partido que también dominó en ocasiones.",',
+                      '            "summary": (\n                "Alpha produjo la actuación más completa y ganó un partido que "\n                "también dominó en ocasiones."\n            ),',
+                  ),
+                  (
+                      '                "summary": "El plan sostuvo el partido por momentos, pero no redujo suficiente la amenaza rival.",',
+                      '                "summary": (\n                    "El plan sostuvo el partido por momentos, pero no redujo "\n                    "suficiente la amenaza rival."\n                ),',
+                  ),
+              ],
+          }
+
+          for path, pairs in replacements.items():
+              text = path.read_text(encoding="utf-8")
+              for old, new in pairs:
+                  if old not in text:
+                      raise SystemExit(f"expected replacement target missing in {path}: {old}")
+                  text = text.replace(old, new, 1)
+              path.write_text(text, encoding="utf-8")
+          PY
       - working-directory: analytics
         run: uv run ruff format .
       - working-directory: analytics
-        run: uv run ruff check --fix . || true
-      - name: Commit formatter output
+        run: uv run ruff check .
+      - name: Commit lint fixes
         shell: bash
         run: |
           set -euo pipefail
@@ -36,5 +113,5 @@ jobs:
           if git diff --cached --quiet; then
             exit 0
           fi
-          git commit -m "style: format match research publisher"
+          git commit -m "style: fix remaining publisher lint"
           git push origin HEAD:feat/match-research-publisher-v1
