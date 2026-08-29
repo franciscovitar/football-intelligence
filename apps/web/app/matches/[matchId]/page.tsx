@@ -141,12 +141,11 @@ export default async function MatchPage({ params }: { params: Promise<{ matchId:
   const { matchId } = await params;
   const result = await getMatchDetail(matchId);
 
-  if (result.status === "ready" && !result.data) notFound();
   if (result.status !== "ready") {
     return <main className="page-shell"><section className="panel not-found"><p className="eyebrow">MATCH PAGE</p><h1>No disponible</h1><p>{result.message}</p></section></main>;
   }
 
-  const match = result.data;
+  const match = result.data ?? notFound();
   const homeStats = match.stats.find((item) => item.teamId === match.home.id);
   const awayStats = match.stats.find((item) => item.teamId === match.away.id);
   const homeReview = match.teamReviews.find((item) => item.teamId === match.home.id);
