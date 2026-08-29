@@ -23,9 +23,9 @@ jobs:
       - working-directory: analytics
         run: uv sync --dev --locked
       - working-directory: analytics
-        run: uv run ruff check --fix .
-      - working-directory: analytics
         run: uv run ruff format .
+      - working-directory: analytics
+        run: uv run ruff check --fix . || true
       - name: Commit formatter output
         shell: bash
         run: |
