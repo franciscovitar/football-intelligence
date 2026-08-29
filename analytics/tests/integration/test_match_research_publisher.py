@@ -12,7 +12,7 @@ from football_intelligence.publishing.publisher import (
     RevisionConflictError,
     publish_match_research,
 )
-from test_match_publish_package import valid_publish_payload
+from tests.test_match_publish_package import valid_publish_payload
 
 
 def _database_url() -> str:
