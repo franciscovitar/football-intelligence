@@ -1,8 +1,17 @@
 # Football Intelligence
 
+> [!IMPORTANT]
+> **LEGACY / HISTORICAL**
+>
+> This public repository is a historical implementation and is **not** the current Football Intelligence App. The active implementation lives in a separate private repository while it is being built.
+>
+> For the current product and its sanitized engineering story, see the [Football Intelligence App case study](https://franciscovitar.vercel.app/work/football-intelligence).
+>
+> This repository remains public only as historical/reference engineering evidence.
+
 Personal football intelligence app that combines quantitative performance, context, and external perception to explain who is playing well, who is underperforming, which teams' results match their process, and where perception diverges from evidence.
 
-## Current status
+## Historical status at the last active checkpoint
 
 **Blocks 1-20 complete and certified.** Block 20 (multi-source Data Mesh expansion: Wyscout Open + StatsBomb Open historical/deep adapters, entity resolution V2, granularity-safe reconciliation V2) is closed -- see `docs/BLOCK20_MULTI_SOURCE.md`'s exit contract.
 
